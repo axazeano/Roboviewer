@@ -17,6 +17,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+SYSTEM_OVERRIDE = "_system.md"
+
+
 @dataclass
 class ChecklistItem:
     id: str
@@ -25,6 +28,11 @@ class ChecklistItem:
     enabled: bool = True
     order: int = 100
     path: Path | None = None
+    # Filled from the directory's _system.md, when present. Lets a checklist state
+    # how many aspects an agent is holding at once — the default system prompt says
+    # "exactly one, other reviewers cover the rest", which is wrong for a set that
+    # groups several aspects into one agent.
+    system: str | None = None
 
 
 def _parse_frontmatter(raw: str) -> tuple[dict[str, str], str]:
@@ -60,8 +68,13 @@ def load_checklist(directory: Path, only: list[str] | None = None) -> list[Check
     if not directory.is_dir():
         raise FileNotFoundError(f"Каталог чек-листа не найден: {directory}")
 
+    override = directory / SYSTEM_OVERRIDE
+    system = override.read_text(encoding="utf-8").strip() if override.is_file() else None
+
     items: list[ChecklistItem] = []
     for path in sorted(directory.glob("*.md")):
+        if path.name.startswith("_"):
+            continue  # not an item: _system.md and anything else auxiliary
         raw = path.read_text(encoding="utf-8")
         meta, body = _parse_frontmatter(raw)
         if not body.strip():
@@ -75,6 +88,7 @@ def load_checklist(directory: Path, only: list[str] | None = None) -> list[Check
                 enabled=_as_bool(meta.get("enabled")),
                 order=int(meta["order"]) if meta.get("order", "").isdigit() else 100,
                 path=path,
+                system=system,
             )
         )
 

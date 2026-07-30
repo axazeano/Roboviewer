@@ -231,7 +231,7 @@ class ReviewPipeline:
         result = ItemResult(item_id=item.id, item_title=item.title, status="running")
 
         request = AgentRequest(
-            system=ITEM_SYSTEM,
+            system=item.system or ITEM_SYSTEM,
             prompt=build_item_prompt(item, self._diff),
             tools=self._tools,
             terminal_tool=SUBMIT_FINDINGS_TOOL,

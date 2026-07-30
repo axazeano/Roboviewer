@@ -112,7 +112,23 @@ order: 10
 ```
 
 Adding a check means adding a file — no code involved. A `checklists/` directory
-inside the repository being reviewed overrides the built-in set.
+inside the repository being reviewed overrides the built-in set. An optional
+`_system.md` in the directory replaces the system prompt for its items.
+
+Three sets ship with the tool, differing only in how the aspects are distributed
+between agents — the aspect texts themselves are identical, so running the same
+MR through each compares structure rather than wording:
+
+```bash
+roboviewer develop                              # default: 8 aspects, one agent each
+roboviewer develop --checklist checklists/grouped  # 3 agents over related aspects
+roboviewer develop --checklist checklists/single   # one agent for everything
+```
+
+Fewer agents means the context block is resent fewer times, which is most of the
+token bill — at the cost of each agent holding more objectives at once. Smaller
+models tend to lose the later aspects when asked to hold many. Compare the
+`report.md` tables to see how the trade lands on your model.
 
 ## Output
 
