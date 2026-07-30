@@ -1,0 +1,115 @@
+# Copy to .robotviewer/config.toml inside the reviewed repository,
+# or to ~/.config/robotviewer/config.toml.
+
+[provider]
+# OpenAI-compatible endpoint of the custom provider
+base_url = "https://your-gateway.example.com/v1"
+# By default the key comes from an environment variable
+api_key_env = "ROBOTVIEWER_API_KEY"
+# ...or is set right here, which takes precedence over the variable.
+# Handy while debugging; make sure a file holding the key never reaches git.
+# api_key = "sk-..."
+model = "your-model-name"
+# The judge may be a stronger model; defaults to the same `model`
+# judge_model = "your-stronger-model"
+temperature = 0.1
+max_tokens = 8000
+timeout_s = 300
+max_retries = 3
+# Set to false if the gateway cannot handle several tool_calls in one response
+parallel_tool_calls = true
+
+# How to pass the key. Defaults to the OpenAI way: Authorization: Bearer <key>.
+# Valid key + valid address but still 401 — almost always this.
+#   auth_header = "api-key"    + auth_scheme = ""      → api-key: <key>
+#   auth_header = "X-Api-Key"  + auth_scheme = ""      → X-Api-Key: <key>
+#   auth_scheme = "Token"                              → Authorization: Token <key>
+# When auth_header is not Authorization, the built-in Bearer header is not sent at all.
+auth_header = "Authorization"
+auth_scheme = "Bearer"
+
+# How the agent is pushed to submit its result on the final turn.
+#   "forced"   — tool_choice = {"type": "function", ...}, names the exact tool
+#   "required" — tool_choice = "required", any tool but at least one
+#   "auto"     — no pressure; relies on the plain-text JSON fallback
+# Lower it only if `robotviewer --check-provider` reports the gateway rejects the
+# stronger mode — it prints the recommended value.
+terminal_tool_choice = "forced"
+
+# Extra headers, if the gateway requires them
+# [provider.extra_headers]
+# X-Project = "robotviewer"
+
+[run]
+# Branches are not configurable: the target is a CLI argument, the source defaults
+# to the current branch.
+#   robotviewer develop
+#   robotviewer develop feature/login
+checklist_dir = "checklists/default"
+# A relative path lands inside the reviewed repository.
+# An absolute one lands outside, nested by repository name; overridden by -o/--output
+# and by ROBOTVIEWER_OUTPUT.
+output_dir = ".robotviewer/runs"
+# How many checklist items are reviewed at the same time — concurrent requests to
+# the model, not OS threads. The judge runs afterwards, on its own.
+concurrency = 4
+# Cap on agent turns (tool calls) per checklist item
+max_turns = 25
+# Changed files go to the agent in full, with changed lines marked up.
+# A file longer than inline_max_lines falls back to hunks — the agent reads the
+# rest via read_file.
+inline_max_lines = 600
+# Overall cap on inlined files. The budget goes to the most heavily changed ones.
+inline_max_total_chars = 400000
+# Hunk context for files that were not inlined in full
+diff_context_lines = 12
+diff_max_chars = 300000
+min_confidence = 0.0
+enable_judge = true
+max_read_lines = 800
+
+# Files kept out of the review entirely. Defaults are stack-agnostic: lockfiles,
+# generated code, vendored dependencies, snapshots.
+#
+# NOTE: this list REPLACES the defaults, it does not extend them. If you set it,
+# copy over whatever you still want from the block below.
+exclude_globs = [
+    "*.lock",
+    "**/*.generated.*",
+    "**/generated/**",
+    "**/node_modules/**",
+    "**/vendor/**",
+    "**/*.snap",
+    "**/__snapshots__/**",
+    # Our own reports — keep these, or a run will end up reviewing its own output
+    ".robotviewer/**",
+    "**/.robotviewer/**",
+]
+
+# Ready-made additions per stack — append the ones that match your project.
+#
+# iOS / Swift:
+#     "*.pbxproj",
+#     "*.xcworkspacedata",
+#     "*.strings",
+#     "**/Package.resolved",
+#     "**/*Sourcery.swift",
+#     "**/Pods/**",
+#
+# Android / Kotlin:
+#     "**/build/**",
+#     "**/*.pro",
+#     "**/gradle/wrapper/**",
+#
+# JS / TypeScript:
+#     "**/dist/**",
+#     "**/*.min.js",
+#     "**/*.d.ts",
+#
+# Python:
+#     "**/migrations/**",
+#     "**/*_pb2.py",
+#
+# Go:
+#     "**/*.pb.go",
+#     "**/mock_*.go",

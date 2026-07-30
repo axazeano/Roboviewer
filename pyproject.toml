@@ -1,0 +1,38 @@
+[project]
+name = "robotviewer"
+version = "0.1.0"
+description = "Локальный автоматический ревьюер merge request'ов на агентах"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+keywords = ["code-review", "llm", "agents", "git", "tui", "merge-request"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+dependencies = [
+    "openai>=1.40",
+    "pydantic>=2.7",
+    "textual>=0.80",
+]
+
+[project.scripts]
+robotviewer = "robotviewer.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["robotviewer*"]
+
+[tool.setuptools.package-data]
+robotviewer = ["checklists/**/*.md"]
