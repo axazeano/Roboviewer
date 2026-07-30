@@ -155,10 +155,8 @@ def _print_summary(run: ReviewRun, report_path: Path) -> None:
     if not confirmed:
         print("  Замечаний нет.")
     print()
-    usage = run.total_usage
-    cache = f" · из кэша {usage.cache_hit_rate:.0%}" if usage.cached_tokens else " · кэш не сработал"
     print(f"Подтверждено {len(confirmed)} из {len(run.findings)} · "
-          f"{usage.total_tokens} токенов{cache}")
+          f"{run.total_usage.total_tokens} токенов")
     print(f"Отчёт: {report_path}")
 
 

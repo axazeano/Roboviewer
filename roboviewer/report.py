@@ -36,22 +36,6 @@ def _render_finding(run: ReviewRun, finding: Finding) -> str:
     return "\n".join(lines)
 
 
-def _cache_lines(run: ReviewRun) -> list[str]:
-    """Prefix-cache stats. The same context block is resent on every turn, so a
-    run either costs full price or a fraction of it depending on this number."""
-    usage = run.total_usage
-    if not usage.prompt_tokens:
-        return []
-    if usage.cached_tokens:
-        share = f"{usage.cache_hit_rate:.0%}"
-        saved = f"{usage.cached_tokens:,}".replace(",", " ")
-        return [f"- Из кэша: {saved} токенов промпта ({share} входящих)"]
-    return [
-        "- Из кэша: 0 — кеширование промпта не сработало ни разу.",
-        "  Провайдер его не поддерживает, не отдаёт статистику либо префикс каждый раз разный.",
-    ]
-
-
 def render_markdown(run: ReviewRun) -> str:
     confirmed = run.confirmed()
     rejected = run.rejected()
@@ -66,7 +50,6 @@ def render_markdown(run: ReviewRun) -> str:
         f"- Файлов изменено: {len(run.files)} "
         f"(+{sum(f.added for f in run.files)} / -{sum(f.removed for f in run.files)})",
         f"- Токенов: {run.total_usage.total_tokens:,}".replace(",", " "),
-        *_cache_lines(run),
         "",
         "## Итог",
         "",
@@ -101,18 +84,12 @@ def render_markdown(run: ReviewRun) -> str:
             out.append(f"- `{finding.location}` {finding.title} ({verdict.verdict if verdict else '?'}){reason}")
         out += ["", "</details>", ""]
 
-    out += [
-        "## Пункты проверки",
-        "",
-        "| Пункт | Статус | Замечаний | Ходов | Токенов | Из кэша | Время |",
-        "|---|---|---|---|---|---|---|",
-    ]
+    out += ["## Пункты проверки", "", "| Пункт | Статус | Замечаний | Ходов | Токенов | Время |", "|---|---|---|---|---|---|"]
     for item in run.items:
         status = {"ok": "✅", "failed": "❌", "skipped": "⏭", "pending": "…", "running": "…"}[item.status]
-        cache = f"{item.usage.cache_hit_rate:.0%}" if item.usage.cached_tokens else "—"
         out.append(
             f"| {item.item_title} | {status} | {len(item.findings)} | {item.turns} | "
-            f"{item.usage.total_tokens} | {cache} | {item.duration_s:.0f}с |"
+            f"{item.usage.total_tokens} | {item.duration_s:.0f}с |"
         )
     out.append("")
 

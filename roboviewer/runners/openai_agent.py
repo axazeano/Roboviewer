@@ -211,39 +211,13 @@ def _describe(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
-def _field(obj: Any, name: str, default: int = 0) -> int:
-    """Gateways return usage either as objects or as plain dicts."""
-    if obj is None:
-        return default
-    value = obj.get(name, default) if isinstance(obj, dict) else getattr(obj, name, default)
-    try:
-        return int(value or default)
-    except (TypeError, ValueError):
-        return default
-
-
-def _cached_tokens(raw: Any) -> int:
-    """Prefix-cache hits, under whichever name this gateway reports them."""
-    details = raw.get("prompt_tokens_details") if isinstance(raw, dict) else getattr(
-        raw, "prompt_tokens_details", None
-    )
-    if (hit := _field(details, "cached_tokens")) > 0:
-        return hit
-    # Anthropic-style shims and DeepSeek use their own field names
-    for alias in ("cache_read_input_tokens", "prompt_cache_hit_tokens"):
-        if (hit := _field(raw, alias)) > 0:
-            return hit
-    return 0
-
-
 def _extract_usage(completion: Any) -> Usage:
     raw = getattr(completion, "usage", None)
     if raw is None:
         return Usage()
     return Usage(
-        prompt_tokens=_field(raw, "prompt_tokens"),
-        completion_tokens=_field(raw, "completion_tokens"),
-        cached_tokens=_cached_tokens(raw),
+        prompt_tokens=getattr(raw, "prompt_tokens", 0) or 0,
+        completion_tokens=getattr(raw, "completion_tokens", 0) or 0,
     )
 
 
