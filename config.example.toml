@@ -1,11 +1,11 @@
-# Copy to .robotviewer/config.toml inside the reviewed repository,
-# or to ~/.config/robotviewer/config.toml.
+# Copy to .roboviewer/config.toml inside the reviewed repository,
+# or to ~/.config/roboviewer/config.toml.
 
 [provider]
 # OpenAI-compatible endpoint of the custom provider
 base_url = "https://your-gateway.example.com/v1"
 # By default the key comes from an environment variable
-api_key_env = "ROBOTVIEWER_API_KEY"
+api_key_env = "ROBOVIEWER_API_KEY"
 # ...or is set right here, which takes precedence over the variable.
 # Handy while debugging; make sure a file holding the key never reaches git.
 # api_key = "sk-..."
@@ -32,24 +32,24 @@ auth_scheme = "Bearer"
 #   "forced"   — tool_choice = {"type": "function", ...}, names the exact tool
 #   "required" — tool_choice = "required", any tool but at least one
 #   "auto"     — no pressure; relies on the plain-text JSON fallback
-# Lower it only if `robotviewer --check-provider` reports the gateway rejects the
+# Lower it only if `roboviewer --check-provider` reports the gateway rejects the
 # stronger mode — it prints the recommended value.
 terminal_tool_choice = "forced"
 
 # Extra headers, if the gateway requires them
 # [provider.extra_headers]
-# X-Project = "robotviewer"
+# X-Project = "roboviewer"
 
 [run]
 # Branches are not configurable: the target is a CLI argument, the source defaults
 # to the current branch.
-#   robotviewer develop
-#   robotviewer develop feature/login
+#   roboviewer develop
+#   roboviewer develop feature/login
 checklist_dir = "checklists/default"
 # A relative path lands inside the reviewed repository.
 # An absolute one lands outside, nested by repository name; overridden by -o/--output
-# and by ROBOTVIEWER_OUTPUT.
-output_dir = ".robotviewer/runs"
+# and by ROBOVIEWER_OUTPUT.
+output_dir = ".roboviewer/runs"
 # How many checklist items are reviewed at the same time — concurrent requests to
 # the model, not OS threads. The judge runs afterwards, on its own.
 concurrency = 4
@@ -82,8 +82,8 @@ exclude_globs = [
     "**/*.snap",
     "**/__snapshots__/**",
     # Our own reports — keep these, or a run will end up reviewing its own output
-    ".robotviewer/**",
-    "**/.robotviewer/**",
+    ".roboviewer/**",
+    "**/.roboviewer/**",
 ]
 
 # Ready-made additions per stack — append the ones that match your project.

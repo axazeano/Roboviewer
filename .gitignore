@@ -11,7 +11,7 @@ build/
 .pytest_cache/
 
 # Review runs and the local provider config (may hold an API key)
-.robotviewer/
+.roboviewer/
 
 # Local tooling settings
 .claude/settings.local.json

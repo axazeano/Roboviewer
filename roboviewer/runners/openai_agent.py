@@ -203,7 +203,7 @@ def _describe(exc: Exception) -> str:
         if status in (401, 403):
             return (
                 f"HTTP {status}: провайдер не принял ключ ({detail}). "
-                "Разбирайся через `robotviewer --check-provider`"
+                "Разбирайся через `roboviewer --check-provider`"
             )
         if status == 404:
             return f"HTTP 404: эндпоинт или модель не найдены ({detail}). Проверь base_url и model"

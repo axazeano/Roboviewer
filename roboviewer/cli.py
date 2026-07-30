@@ -19,18 +19,18 @@ from .runners import OpenAIAgentRunner
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="robotviewer",
+        prog="roboviewer",
         description="Локальный автоматический ревьюер merge request'ов на агентах.",
         epilog=(
             "Примеры:\n"
-            "  robotviewer develop                     ревью текущей ветки в develop\n"
-            "  robotviewer develop feature/login       ревью указанной ветки, выкачивать её не нужно\n"
-            "  robotviewer release/2.0 develop         develop в релизную ветку\n"
-            "  robotviewer -C ~/work/app develop       репозиторий в другом месте\n"
+            "  roboviewer develop                     ревью текущей ветки в develop\n"
+            "  roboviewer develop feature/login       ревью указанной ветки, выкачивать её не нужно\n"
+            "  roboviewer release/2.0 develop         develop в релизную ветку\n"
+            "  roboviewer -C ~/work/app develop       репозиторий в другом месте\n"
             "\n"
             "Переменные окружения:\n"
-            "  ROBOTVIEWER_REPO    репозиторий по умолчанию (если не задан -C)\n"
-            "  ROBOTVIEWER_OUTPUT  куда складывать отчёты (если не задан --output)\n"
+            "  ROBOVIEWER_REPO    репозиторий по умолчанию (если не задан -C)\n"
+            "  ROBOVIEWER_OUTPUT  куда складывать отчёты (если не задан --output)\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -47,17 +47,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-C",
         "--repo",
-        default=os.environ.get("ROBOTVIEWER_REPO", "."),
+        default=os.environ.get("ROBOVIEWER_REPO", "."),
         metavar="ПУТЬ",
-        help="Путь к проверяемому репозиторию (по умолчанию $ROBOTVIEWER_REPO или текущий каталог)",
+        help="Путь к проверяемому репозиторию (по умолчанию $ROBOVIEWER_REPO или текущий каталог)",
     )
     parser.add_argument(
         "-o",
         "--output",
-        default=os.environ.get("ROBOTVIEWER_OUTPUT"),
+        default=os.environ.get("ROBOVIEWER_OUTPUT"),
         metavar="ПУТЬ",
         help=(
-            "Куда складывать отчёты. По умолчанию .robotviewer/runs внутри проверяемого "
+            "Куда складывать отчёты. По умолчанию .roboviewer/runs внутри проверяемого "
             "репозитория; укажи путь вне него, чтобы не сорить в рабочем дереве"
         ),
     )
@@ -182,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     informational = args.list_items or args.show_config or args.check_provider
 
     if not args.target and not informational:
-        parser.error("не указана целевая ветка: robotviewer <целевая> [исходная]")
+        parser.error("не указана целевая ветка: roboviewer <целевая> [исходная]")
 
     requested = Path(args.repo).expanduser().resolve()
     try:
@@ -191,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         if not informational:
             print(f"Ошибка: {exc}", file=sys.stderr)
             print(
-                "Укажи репозиторий через -C ПУТЬ или переменную ROBOTVIEWER_REPO.",
+                "Укажи репозиторий через -C ПУТЬ или переменную ROBOVIEWER_REPO.",
                 file=sys.stderr,
             )
             return 2

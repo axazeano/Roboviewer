@@ -1,305 +1,126 @@
-# RobotViewer
+# Roboviewer
 
-Локальный автоматический ревьюер merge request'ов. Дифф текущей ветки к целевой
-разбирается набором узкоспециализированных агентов — по одному на каждый пункт
-чек-листа, параллельно. Результаты сливаются, дедуплицируются и проходят через
-финального агента-судью, который отсеивает ложные срабатывания.
+Automated code review for merge requests, running entirely on your machine.
 
-Работает с любым OpenAI-совместимым API — `base_url` настраивается в конфиге.
-
-## Установка
+Point it at two branches and it comes back with a ranked list of problems worth
+fixing — not a wall of style nitpicks. Works with any OpenAI-compatible endpoint,
+including a corporate gateway, so your code never has to leave the network you
+already trust.
 
 ```bash
+roboviewer develop
+```
+
+```
+▸ feature/discount → develop: 12 файлов, 8 пунктов проверки
+✓ Корректность и логические ошибки: 3 замечания
+✓ Обработка ошибок: 1 замечание
+...
+⚖ Подтверждено 4 из 11
+
+  F001  [Блокер]      src/cart.py:42  — гонка при параллельном обновлении корзины
+  F002  [Существенно] src/api.py:118  — изменение ломает старых клиентов
+
+Отчёт: .roboviewer/runs/20260730-172900/report.md
+```
+
+> Prompts, checklist items and generated reports are in Russian. To change that,
+> edit `roboviewer/prompts.py` and the files under `roboviewer/checklists/`.
+
+## Install
+
+```bash
+git clone git@github.com:axazeano/Roboviewer.git && cd Roboviewer
 python3 -m venv .venv && .venv/bin/pip install -e .
+ln -sf "$PWD/.venv/bin/roboviewer" ~/.local/bin/roboviewer
 ```
 
-Команда `robotviewer` объявлена в `[project.scripts]` и создаётся при установке
-внутри venv — `.venv/bin/robotviewer`. Чтобы звать её откуда угодно, не активируя
-venv, положи симлинк в каталог из PATH:
+## Configure
 
 ```bash
-ln -sf "$PWD/.venv/bin/robotviewer" ~/.local/bin/robotviewer
+mkdir -p ~/.config/roboviewer
+cp config.example.toml ~/.config/roboviewer/config.toml
+export ROBOVIEWER_API_KEY=...
 ```
 
-Шебанг у скрипта абсолютный и указывает на python внутри venv, так что зависимости
-подхватятся из любого каталога. Альтернатива — `pipx install -e .`, он делает то же
-самое сам.
+Set `provider.base_url` and `provider.model`. Everything else has working
+defaults and is documented inline in [config.example.toml](config.example.toml).
 
-## Настройка
+Then check the gateway actually works:
 
 ```bash
-mkdir -p ~/.config/robotviewer && cp config.example.toml ~/.config/robotviewer/config.toml
-export ROBOTVIEWER_API_KEY=...
+roboviewer --check-provider
 ```
 
-Минимум, что нужно указать в конфиге: `provider.base_url` и `provider.model`.
+It makes a handful of targeted requests and names what is wrong — wrong auth
+scheme, a `base_url` missing `/v1`, a gateway that cannot do tool calling —
+instead of leaving you to infer it from eight agents failing at once.
 
-Конфиг собирается **наложением слоёв**, от общего к частному:
-
-```
-значения по умолчанию
-→ ~/.config/robotviewer/config.toml     провайдер, общий для всех репозиториев
-→ <репозиторий>/.robotviewer/config.toml   частности конкретного проекта
-→ --config ПУТЬ                         явно заданный файл
-→ флаги CLI
-```
-
-Каждый следующий слой перекрывает предыдущий **по отдельным ключам**, а не файл
-целиком. Поэтому в домашнем конфиге держат провайдера, а в репозиторном — только
-то, что отличается (свой чек-лист, исключения, параллельность), и провайдер при
-этом не теряется.
-
-Посмотреть, что реально подхватилось:
+## Use
 
 ```bash
-robotviewer --show-config
+roboviewer <target> [source]
 ```
 
-### Ключ
-
-По умолчанию берётся из `$ROBOTVIEWER_API_KEY`. Можно положить прямо в конфиг —
-`provider.api_key`, это приоритетнее переменной:
-
-```toml
-[provider]
-api_key = "sk-..."
-```
-
-Удобно при отладке; следи, чтобы такой файл не уехал в git.
-
-### Когда провайдер отвечает не так
+The target branch is required. The source defaults to your current branch, and
+naming it explicitly lets you review someone else's branch without checking it
+out.
 
 ```bash
-robotviewer --check-provider
+roboviewer develop                    # current branch into develop
+roboviewer develop feature/login      # someone else's branch
+roboviewer -C ~/projects/app develop  # a repository living elsewhere
 ```
 
-Вместо восьми параллельных агентов делает несколько точечных запросов и разбирает
-ответы: показывает base_url, модель, маскированный ключ с его источником, затем
-сырой HTTP-статус, тело ответа и вероятную причину.
+Set `ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` once and you can drop `-C`/`-o`.
+`--diff-only` shows what would be reviewed without spending tokens,
+`--only correctness,tests` narrows the checklist, `--no-tui` is for CI.
+`--help` has the rest.
 
-Вторым шагом прогоняет три режима `tool_choice` — на них держится вся утилита,
-поскольку агент сдаёт результат вызовом тула:
+## Why the findings are worth reading
 
-```
-2. Вызов тула — так ревьюер сдаёт результат
-   ✓ tool_choice = "auto"      tool_calls: pong
-   ✓ tool_choice = "required"  tool_calls: pong
-   ✗ tool_choice = {функция}   ошибка — HTTP 400
+Three decisions do most of the work:
 
-Итог: шлюз поддерживает tool calling.
-  Но режим "forced" не поддерживается. Пропиши в конфиг:
-    [provider]
-    terminal_tool_choice = "required"
-```
+**Whole files, not hunks.** The agent gets each changed file in full, with changed
+lines marked up. A diff with a few lines of context is the main reason automated
+reviewers claim "there is no error handling here" when the guard sits twenty
+lines above.
 
-Различает настоящий `tool_calls`, устаревшее поле `function_call` и текст, лишь
-похожий на вызов, — последнее означает, что шлюз не разбирает tool calling, а
-пересказывает вызов словами. Код возврата 0, только если шлюз пригоден.
+**One agent per concern.** Eight specialised reviewers run in parallel — one for
+correctness, one for concurrency, one for tests — rather than one generalist
+holding everything at once. Each gets read-only tools to dig through the rest of
+the repository on its own.
 
-Что ловится сразу:
+**A judge at the end.** Every finding is re-checked against the code by a final
+agent that discards false positives and downgrades inflated severities. Rejecting
+a third of them is a normal outcome.
 
-| Симптом | Обычная причина |
-|---|---|
-| 401 при рабочем ключе и адресе | шлюз ждёт другую форму авторизации — см. ниже |
-| 401 | не тот ключ, пробел или `\n` на конце |
-| 404 | `base_url` без `/v1` либо с лишним `/chat/completions` |
-| 400 | шлюз не переварил поле — попробуй `parallel_tool_calls = false` |
-| `APIConnectionError` | первопричина печатается отдельной строкой: DNS, TLS, битый заголовок |
+Comparison is against the **merge base**, so commits that landed on the target
+branch after you forked stay out of the review.
 
-### Схема авторизации
+## Customise the checklist
 
-Ключ рабочий, адрес рабочий, а в ответ 401 — почти всегда дело в форме передачи
-ключа. SDK по умолчанию шлёт `Authorization: Bearer <ключ>`, шлюзы часто хотят
-иначе:
-
-```toml
-[provider]
-auth_header = "api-key"      # Azure OpenAI
-auth_scheme = ""
-```
-
-```toml
-[provider]
-auth_header = "X-Api-Key"
-auth_scheme = ""
-```
-
-```toml
-[provider]
-auth_scheme = "Token"        # Authorization: Token <ключ>
-```
-
-Когда `auth_header` не `Authorization`, штатный `Bearer` **не отправляется вовсе** —
-лишний `Authorization` сам по себе даёт 401 на части шлюзов. Заголовки, не
-связанные с авторизацией, добавляются через `provider.extra_headers`.
-
-`--check-provider` при неудаче печатает запрос, реально ушедший на провод, с
-маскированным ключом (`api-key: sk-v…1234` — видно схему и хвост) и заголовки
-ответа, включая `WWW-Authenticate`. Сравни с запросом, который у тебя проходит
-вручную: расхождение обычно видно сразу.
-
-## Запуск
-
-```
-robotviewer <целевая ветка> [исходная ветка]
-```
-
-Целевая ветка обязательна — в конфиге её нет, чтобы нельзя было отревьюить не то,
-что думаешь. Исходная по умолчанию — текущая.
-
-```bash
-robotviewer develop                    # текущая ветка в develop
-robotviewer develop feature/login      # указанная ветка, выкачивать её не нужно
-robotviewer release/2.0 develop        # develop в релизную ветку
-```
-
-Обе ветки ищутся сначала локально, потом как `origin/<имя>`.
-
-### Репозиторий и отчёты
-
-Утилита живёт отдельно от проверяемых репозиториев, поэтому путь задаётся флагом
-или переменной окружения:
-
-```bash
-robotviewer -C ~/projects/my-app develop
-```
-
-```bash
-export ROBOTVIEWER_REPO=~/projects/my-app
-export ROBOTVIEWER_OUTPUT=~/reviews
-```
-
-`ROBOTVIEWER_OUTPUT` (он же `-o/--output`) уводит отчёты из рабочего дерева —
-иначе они лягут в `.robotviewer/runs` внутри проверяемого репозитория и будут
-маячить в `git status`. Внешний каталог раскладывается по имени репозитория:
-`~/reviews/my-app/<timestamp>/`, так что один каталог обслуживает
-несколько проектов.
-
-Если отчёты всё же удобнее держать рядом с кодом — добавь `.robotviewer/` в
-`.gitignore` проверяемого репозитория.
-
-Полезные флаги:
-
-```bash
-robotviewer develop --diff-only              # что попадёт в ревью, без запуска агентов
-robotviewer --list-items                     # пункты чек-листа
-robotviewer develop --only correctness,tests # только выбранные пункты
-robotviewer develop --no-judge               # без финального прогона судьи
-robotviewer develop --no-tui                 # текстовый вывод, для CI и отладки
-robotviewer develop -j 8                     # параллельность
-```
-
-Отчёт: `.robotviewer/runs/<timestamp>/report.md`, симлинк на последний прогон —
-`.robotviewer/runs/latest`.
-
-## Контекст, который видит агент
-
-Агенту отдаётся не дифф с хунками, а **изменённые файлы целиком** с пометкой
-изменённых строк:
-
-```
-===== src/cart.py [M, +8/-2, 11 строк] =====
-      - | def total(items):
-    1 + | def total(items, discount=None):
-    2   |     result = 0
-    3   |     for item in items:
-      - |         result += item["price"]
-    4 + |         result += item["price"] * item["qty"]
-    7   |     return result
-```
-
-Так снимается главный источник ложных срабатываний: по хунку с контекстом в
-несколько строк агент не видит проверку, стоящую двадцатью строками выше, и
-пишет «здесь не хватает обработки». Теперь весь файл перед ним, а помеченные
-строки говорят, что именно ревьюить.
-
-Файлы длиннее `inline_max_lines` (600) и удалённые уходят хунками — их агент
-дочитывает через `read_file`. Общий бюджет `inline_max_total_chars` достаётся
-самым изменённым файлам. Всё, что за пределами изменённых файлов — вызывающий
-код, реализации протоколов, тесты, — агент ищет тулами сам.
-
-Всё читается из git по ref'у исходной ветки, а не с диска — включая `grep`
-(`git grep` по дереву ветки) и `list_files` (`git ls-tree`). Поэтому ревьюить
-можно ветку, которая не выкачена, а незакоммиченные правки в рабочей копии не
-сдвигают номера строк относительно приложенных файлов.
-
-## Как это устроено
-
-```
-git diff (merge-base target source)
-        │
-        ├─► агент: корректность      ─┐
-        ├─► агент: обработка ошибок   │  параллельно,
-        ├─► агент: многопоточность    │  по одному на пункт
-        ├─► ...                      ─┘
-        │
-        ▼
-   слияние + дедупликация по (файл, строка, схожесть текста)
-        │
-        ▼
-   агент-судья: confirmed / false_positive / nitpick / duplicate
-        │
-        ▼
-   report.md + findings.json + items/*.json
-```
-
-Каждый агент общается терминальным тулом `submit_findings` со строгой JSON-схемой —
-между стадиями свободный текст не ходит, иначе слияние и судья работают ненадёжно.
-
-Сравнение идёт от **merge-base**, а не напрямую от целевой ветки: иначе в дифф
-попали бы чужие коммиты, ушедшие в `develop` после ответвления.
-
-## Чек-лист
-
-Встроенный набор — markdown-файлы в `robotviewer/checklists/default/` с frontmatter:
+One markdown file per concern, in `roboviewer/checklists/default/`:
 
 ```markdown
 ---
 id: correctness
 title: Корректность и логические ошибки
 order: 10
-enabled: true
 ---
-Текст задачи для агента...
+Задача для агента...
 ```
 
-Свой набор: скопируй каталог в проверяемый репозиторий, поправь файлы, укажи путь
-в `run.checklist_dir` или флагом `--checklist`. Путь ищется по порядку в корне
-репозитория, в текущем каталоге и внутри пакета — поэтому одноимённый каталог в
-репозитории перекрывает встроенный.
+Adding a check means adding a file — no code involved. A `checklists/` directory
+inside the repository being reviewed overrides the built-in set.
 
-Один файл = один агент = один параллельный запуск. Добавить проверку — значит
-добавить .md-файл, код трогать не нужно.
+## Output
 
-## Тулы агента
+`.roboviewer/runs/<timestamp>/` holds `report.md` for humans, plus
+`findings.json` and per-item raw results for tuning prompts. `latest` symlinks to
+the most recent run. Point `-o` somewhere outside the repository to keep it out
+of `git status`.
 
-Ревьюеру доступны только read-only операции — он не должен править код, который
-проверяет. Все пути ограничены корнем репозитория.
+## License
 
-| Тул | Назначение |
-|---|---|
-| `read_file` | файл на исходной ветке с нумерацией строк |
-| `git_show` | состояние файла до изменений (на merge-base) |
-| `grep` | `git grep -E` по дереву исходной ветки |
-| `list_files` | `git ls-tree` — содержимое каталога на исходной ветке |
-
-## Раннеры
-
-`robotviewer/runners/base.py` задаёт интерфейс `Runner`. Сейчас реализован один —
-`OpenAIAgentRunner` (свой цикл tool-calling поверх `AsyncOpenAI`). Добавить
-исполнение через сторонний CLI (codex, opencode) можно, реализовав тот же
-интерфейс: пайплайн от раннера ничего, кроме payload терминального тула, не ждёт.
-
-## Структура вывода
-
-```
-.robotviewer/runs/20260729-181500/
-├── report.md        # для человека
-├── run.json         # метаданные прогона
-├── findings.json    # замечания с вердиктами судьи
-└── items/*.json     # сырой результат каждого пункта — для отладки промптов
-```
-
-## Лицензия
-
-MIT — см. [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

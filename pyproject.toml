@@ -1,5 +1,5 @@
 [project]
-name = "robotviewer"
+name = "roboviewer"
 version = "0.1.0"
 description = "Локальный автоматический ревьюер merge request'ов на агентах"
 readme = "README.md"
@@ -25,14 +25,14 @@ dependencies = [
 ]
 
 [project.scripts]
-robotviewer = "robotviewer.cli:main"
+roboviewer = "roboviewer.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["robotviewer*"]
+include = ["roboviewer*"]
 
 [tool.setuptools.package-data]
-robotviewer = ["checklists/**/*.md"]
+roboviewer = ["checklists/**/*.md"]

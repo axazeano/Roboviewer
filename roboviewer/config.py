@@ -3,8 +3,8 @@
 Layers are stacked from general to specific:
 
     built-in defaults
-    → ~/.config/robotviewer/config.toml     (provider, shared across repositories)
-    → <repo>/.robotviewer/config.toml       (per-project specifics)
+    → ~/.config/roboviewer/config.toml     (provider, shared across repositories)
+    → <repo>/.roboviewer/config.toml       (per-project specifics)
     → --config PATH                         (explicitly given file)
     → CLI flags
 
@@ -42,8 +42,8 @@ DEFAULT_EXCLUDES = [
     "**/__snapshots__/**",
     # Our own reports: the default output_dir sits inside the reviewed repository,
     # and once committed they would feed every later run its own past output.
-    ".robotviewer/**",
-    "**/.robotviewer/**",
+    ".roboviewer/**",
+    "**/.roboviewer/**",
 ]
 
 
@@ -51,7 +51,7 @@ class ProviderConfig(BaseModel):
     """OpenAI-compatible provider. base_url points at the custom gateway."""
 
     base_url: str = "https://api.openai.com/v1"
-    api_key_env: str = "ROBOTVIEWER_API_KEY"
+    api_key_env: str = "ROBOVIEWER_API_KEY"
     # Key inlined in the config: takes precedence over the environment variable.
     # Handy while debugging, but such a file must never reach git.
     api_key: str | None = None
@@ -138,7 +138,7 @@ class RunConfig(BaseModel):
     # Branches are deliberately absent: the target is always a CLI argument and
     # the source defaults to the current branch.
     checklist_dir: str = "checklists/default"
-    output_dir: str = ".robotviewer/runs"
+    output_dir: str = ".roboviewer/runs"
     # Checklist items reviewed at the same time — concurrent requests to the model,
     # not OS threads.
     concurrency: int = 4
@@ -169,11 +169,11 @@ class Config(BaseModel):
 
 
 def home_config_path() -> Path:
-    return Path.home() / ".config" / "robotviewer" / "config.toml"
+    return Path.home() / ".config" / "roboviewer" / "config.toml"
 
 
 def repo_config_path(repo_root: Path) -> Path:
-    return repo_root / ".robotviewer" / "config.toml"
+    return repo_root / ".roboviewer" / "config.toml"
 
 
 def _deep_merge(base: dict, overlay: dict) -> dict:

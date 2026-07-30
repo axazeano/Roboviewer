@@ -89,7 +89,7 @@ class ReviewApp(App[ReviewRun]):
         for item in self._items:
             key = table.add_row(STATUS_ICON["pending"], item.title, "", "", "", key=item.id)
             self._row_of[item.id] = table.get_row_index(key)
-        self.title = "RobotViewer"
+        self.title = "Roboviewer"
         self.sub_title = "автоматическое ревью MR"
         self.run_worker(self._execute(), exclusive=True, name="pipeline")
 
