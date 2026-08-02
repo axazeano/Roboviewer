@@ -66,6 +66,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checklist", help="Каталог с пунктами чек-листа")
     parser.add_argument("--only", help="Только указанные пункты, через запятую")
     parser.add_argument("--model", help="Переопределить модель")
+    parser.add_argument(
+        "--thinking",
+        choices=("on", "off"),
+        help=(
+            "Режим рассуждений модели на этот прогон, сразу для пунктов и для "
+            "судьи. Без флага — как задано в конфиге"
+        ),
+    )
     parser.add_argument("-j", "--concurrency", type=int, help="Сколько пунктов проверять параллельно")
     parser.add_argument("--no-judge", action="store_true", help="Пропустить финальный прогон судьи")
     parser.add_argument("--no-tui", action="store_true", help="Текстовый вывод вместо TUI")
@@ -91,6 +99,10 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
         cfg.run.checklist_dir = args.checklist
     if args.model:
         cfg.provider.model = args.model
+    if args.thinking:
+        # Overrides both stages; telling them apart is a config-level choice
+        cfg.provider.enable_thinking = args.thinking == "on"
+        cfg.provider.judge_enable_thinking = cfg.provider.enable_thinking
     if args.concurrency:
         cfg.run.concurrency = args.concurrency
     if args.no_judge:
@@ -149,6 +161,10 @@ def _print_prompt_sources(cfg: Config, root: Path) -> None:
         print(f"    {name:<14} {src}")
 
 
+def _thinking_label(value: bool | None) -> str:
+    return {None: "по умолчанию модели", True: "включены", False: "выключены"}[value]
+
+
 def _print_config(cfg: Config, root: Path) -> None:
     from .config import home_config_path, repo_config_path
 
@@ -168,6 +184,8 @@ def _print_config(cfg: Config, root: Path) -> None:
     print(f"  base_url     {cfg.provider.base_url}")
     print(f"  model        {cfg.provider.model}")
     print(f"  judge_model  {cfg.provider.resolve_judge_model()}")
+    print(f"  рассуждения  пункты: {_thinking_label(cfg.provider.enable_thinking)}, "
+          f"судья: {_thinking_label(cfg.provider.resolve_judge_enable_thinking())}")
     print(f"  ключ         {cfg.provider.masked_key()}")
     print(f"  источник     {key_source}")
     print()

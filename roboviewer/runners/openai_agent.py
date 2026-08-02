@@ -75,6 +75,7 @@ class OpenAIAgentRunner(Runner):
                     tools=all_tools,
                     # On the last turn leave no choice: submit the result
                     force_tool=request.terminal_name if last_turn else None,
+                    enable_thinking=request.enable_thinking,
                     emit=emit,
                 )
             except Exception as exc:  # noqa: BLE001 — surfaced upward as the item status
@@ -154,6 +155,7 @@ class OpenAIAgentRunner(Runner):
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         force_tool: str | None,
+        enable_thinking: bool | None,
         emit: Any,
     ) -> Any:
         kwargs: dict[str, Any] = {
@@ -164,6 +166,8 @@ class OpenAIAgentRunner(Runner):
             "max_tokens": self._provider.max_tokens,
             "extra_headers": self._headers,
         }
+        if body := self._provider.request_body(enable_thinking):
+            kwargs["extra_body"] = body
         if force_tool:
             kwargs["tool_choice"] = self._provider.terminal_tool_choice_value(force_tool)
         else:

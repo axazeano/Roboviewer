@@ -65,6 +65,22 @@ class ProviderConfig(BaseModel):
     parallel_tool_calls: bool = True
     extra_headers: dict[str, str] = Field(default_factory=dict)
 
+    # Reasoning ("thinking") tokens, for models that emit them. Thinking is
+    # decoded one token at a time and is usually the largest term in how long a
+    # run takes, while the context block resent on every turn tends to come back
+    # from the provider's prefix cache.
+    #   None  — send nothing, leaving the model on its own default
+    #   False — chat_template_kwargs.enable_thinking = false, understood by
+    #           Qwen-style chat templates; tool calling is unaffected
+    # Switching it off trades review depth for speed by a model-specific amount.
+    enable_thinking: bool | None = None
+    # The same setting for the judge, which checks stated claims against the
+    # code rather than looking for them. None follows `enable_thinking`.
+    judge_enable_thinking: bool | None = None
+    # Provider-specific request fields the SDK has no typed parameter for,
+    # merged into the body as-is. `enable_thinking` wins over a colliding key.
+    extra_body: dict[str, Any] = Field(default_factory=dict)
+
     # How to pass the key. Defaults to the OpenAI way: Authorization: Bearer <key>.
     # Gateways often want something else:
     #   auth_header = "api-key",   auth_scheme = ""        → api-key: <key>   (Azure)
@@ -127,6 +143,18 @@ class ProviderConfig(BaseModel):
 
     def resolve_judge_model(self) -> str:
         return self.judge_model or self.model
+
+    def resolve_judge_enable_thinking(self) -> bool | None:
+        return self.judge_enable_thinking if self.judge_enable_thinking is not None else self.enable_thinking
+
+    def request_body(self, enable_thinking: bool | None) -> dict[str, Any]:
+        """Provider-specific request body the SDK has no typed fields for."""
+        body: dict[str, Any] = {k: v for k, v in self.extra_body.items()}
+        if enable_thinking is not None:
+            template_kwargs = dict(body.get("chat_template_kwargs") or {})
+            template_kwargs["enable_thinking"] = enable_thinking
+            body["chat_template_kwargs"] = template_kwargs
+        return body
 
     def terminal_tool_choice_value(self, tool_name: str) -> Any:
         if self.terminal_tool_choice == "forced":

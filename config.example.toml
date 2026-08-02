@@ -19,6 +19,28 @@ max_retries = 3
 # Set to false if the gateway cannot handle several tool_calls in one response
 parallel_tool_calls = true
 
+# Reasoning ("thinking") tokens, for models that emit them. Unset leaves the
+# model on its own default; false sends chat_template_kwargs.enable_thinking =
+# false, which Qwen-style chat templates understand and which leaves tool calling
+# working.
+#
+# Thinking is decoded one token at a time and is usually the largest term in how
+# long a run takes — the context block resent on every turn comes back from the
+# provider's prefix cache. Switching it off trades review depth for speed by an
+# amount that depends on the model, so it is worth running both ways against a
+# merge request whose problems are already known.
+# `--thinking on|off` overrides this for a single run.
+# enable_thinking = false
+# The judge checks stated claims against the code rather than looking for them.
+# Defaults to `enable_thinking`.
+# judge_enable_thinking = false
+
+# Provider-specific request fields the OpenAI SDK has no parameter for, sent in
+# the body as-is. Gateways tend to accept unknown fields in silence, so check
+# that the model reacts to one before relying on it.
+# [provider.extra_body]
+# top_k = 20
+
 # How to pass the key. Defaults to the OpenAI way: Authorization: Bearer <key>.
 # Valid key + valid address but still 401 — almost always this.
 #   auth_header = "api-key"    + auth_scheme = ""      → api-key: <key>

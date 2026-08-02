@@ -239,6 +239,7 @@ class ReviewPipeline:
             terminal_tool=SUBMIT_FINDINGS_TOOL,
             model=self._cfg.provider.model,
             max_turns=self._cfg.run.max_turns,
+            enable_thinking=self._cfg.provider.enable_thinking,
             metadata={"item_id": item.id},
         )
 
@@ -270,6 +271,7 @@ class ReviewPipeline:
             terminal_tool=SUBMIT_VERDICTS_TOOL,
             model=self._cfg.provider.resolve_judge_model(),
             max_turns=self._cfg.run.max_turns,
+            enable_thinking=self._cfg.provider.resolve_judge_enable_thinking(),
             metadata={"stage": "judge"},
         )
 

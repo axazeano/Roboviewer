@@ -194,6 +194,13 @@ token bill — at the cost of each agent holding more objectives at once. Smalle
 models tend to lose the later aspects when asked to hold many. Compare the
 `report.md` tables to see how the trade lands on your model.
 
+A slow run is rarely slow for the reason it looks like. Resending the same
+context block to eight agents is the visible cost and usually not the real one:
+providers serve a repeated prefix from cache. The time goes into the model
+thinking, token by token, on every turn. `--thinking off` runs a reasoning model
+with that switched off — a large speedup, and a large risk to depth, so it
+belongs on a merge request whose problems are already known.
+
 Beyond that, `--model` swaps the model for a single run, `-j` changes how many
 items run concurrently, and `--no-judge` skips the verification pass — useful
 when you are iterating on a prompt and want the raw output.

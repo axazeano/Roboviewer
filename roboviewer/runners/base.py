@@ -24,6 +24,9 @@ class AgentRequest:
     terminal_tool: dict[str, Any]
     model: str
     max_turns: int = 25
+    # Reasoning mode for this agent; the judge and the reviewers may differ.
+    # None leaves the model on its own default.
+    enable_thinking: bool | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
