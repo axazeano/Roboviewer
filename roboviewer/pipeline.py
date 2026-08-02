@@ -22,7 +22,7 @@ from .models import (
     Usage,
     Verdict,
 )
-from .prompts import ITEM_SYSTEM, JUDGE_SYSTEM, build_item_prompt, build_judge_prompt
+from .prompts import Prompts
 from .runners import AgentRequest, Runner
 from .tools import SUBMIT_FINDINGS_TOOL, SUBMIT_VERDICTS_TOOL, tool_schemas
 
@@ -151,12 +151,14 @@ class ReviewPipeline:
         items: list[ChecklistItem],
         runner: Runner,
         on_event: EventSink | None = None,
+        prompts: Prompts | None = None,
     ) -> None:
         self._cfg = config
         self._diff = diff
         self._items = items
         self._runner = runner
         self._emit = on_event or _noop
+        self._prompts = prompts or Prompts.load()
         self._tools = tool_schemas(diff.base_sha)
 
     async def execute(self) -> ReviewRun:
@@ -231,8 +233,8 @@ class ReviewPipeline:
         result = ItemResult(item_id=item.id, item_title=item.title, status="running")
 
         request = AgentRequest(
-            system=item.system or ITEM_SYSTEM,
-            prompt=build_item_prompt(item, self._diff),
+            system=item.system or self._prompts.item_system,
+            prompt=self._prompts.build_item_prompt(item, self._diff),
             tools=self._tools,
             terminal_tool=SUBMIT_FINDINGS_TOOL,
             model=self._cfg.provider.model,
@@ -262,8 +264,8 @@ class ReviewPipeline:
         self._emit(Event("judge_start", f"Судья проверяет {len(run.findings)} замечаний"))
 
         request = AgentRequest(
-            system=JUDGE_SYSTEM,
-            prompt=build_judge_prompt(run.findings, self._diff),
+            system=self._prompts.judge_system,
+            prompt=self._prompts.build_judge_prompt(run.findings, self._diff),
             tools=self._tools,
             terminal_tool=SUBMIT_VERDICTS_TOOL,
             model=self._cfg.provider.resolve_judge_model(),

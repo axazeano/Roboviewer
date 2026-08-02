@@ -138,6 +138,10 @@ class RunConfig(BaseModel):
     # Branches are deliberately absent: the target is always a CLI argument and
     # the source defaults to the current branch.
     checklist_dir: str = "checklists/default"
+    # Where the four prompt templates come from. Empty → the bundled set, plus
+    # .roboviewer/prompts/ inside the reviewed repository when it exists. A set
+    # need only carry the files it changes; the rest fall back to the bundled ones.
+    prompts_dir: str = ""
     output_dir: str = ".roboviewer/runs"
     # Checklist items reviewed at the same time — concurrent requests to the model,
     # not OS threads.

@@ -14,6 +14,7 @@ from ..config import Config
 from ..gitdiff import DiffBundle
 from ..models import SEVERITY_LABEL_RU, SEVERITY_ORDER, ReviewRun
 from ..pipeline import Event, ReviewPipeline, output_dir_for
+from ..prompts import Prompts
 from ..report import save
 from ..runners import Runner
 
@@ -49,12 +50,14 @@ class ReviewApp(App[ReviewRun]):
         diff: DiffBundle,
         items: list[ChecklistItem],
         runner: Runner,
+        prompts: Prompts | None = None,
     ) -> None:
         super().__init__()
         self._cfg = config
         self._diff = diff
         self._items = items
         self._runner = runner
+        self._prompts = prompts
         self._row_of: dict[str, int] = {}
         self._report_path: Path | None = None
         self.run_result: ReviewRun | None = None
@@ -152,7 +155,9 @@ class ReviewApp(App[ReviewRun]):
     # --------------------------------------------------------------- pipeline
 
     async def _execute(self) -> None:
-        pipeline = ReviewPipeline(self._cfg, self._diff, self._items, self._runner, self._on_event)
+        pipeline = ReviewPipeline(
+            self._cfg, self._diff, self._items, self._runner, self._on_event, self._prompts
+        )
         try:
             run = await pipeline.execute()
         except Exception as exc:  # noqa: BLE001 — a crash must not take the TUI down

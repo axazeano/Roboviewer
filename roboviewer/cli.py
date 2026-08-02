@@ -13,6 +13,7 @@ from .checklist import load_checklist
 from .config import Config, load_config
 from .models import SEVERITY_LABEL_RU, ReviewRun
 from .pipeline import Event, ReviewPipeline, output_dir_for
+from .prompts import DEFAULT_DIR as PROMPTS_DEFAULT_DIR, PromptError, Prompts
 from .report import save
 from .runners import OpenAIAgentRunner
 
@@ -110,6 +111,44 @@ def _resolve_checklist_dir(cfg: Config, root: Path) -> Path:
     return root / candidate
 
 
+def _resolve_prompts_dir(cfg: Config, root: Path) -> Path | None:
+    """An explicit `prompts_dir` wins; otherwise a set living inside the reviewed
+    repository is picked up on its own. None means the bundled texts."""
+    if cfg.run.prompts_dir:
+        candidate = Path(cfg.run.prompts_dir).expanduser()
+        return candidate if candidate.is_absolute() else root / candidate
+    in_repo = root / ".roboviewer" / "prompts"
+    return in_repo if in_repo.is_dir() else None
+
+
+def _load_prompts(cfg: Config, root: Path) -> Prompts:
+    directory = _resolve_prompts_dir(cfg, root)
+    # A configured directory that does not exist is a typo, not a request for the
+    # defaults: the loader would fall back file by file and the run would quietly
+    # go out with prompts nobody chose.
+    if cfg.run.prompts_dir and (directory is None or not directory.is_dir()):
+        raise PromptError(f"Каталог промптов не найден: {directory}")
+    return Prompts.load(directory)
+
+
+def _print_prompt_sources(cfg: Config, root: Path) -> None:
+    """Only the overridden templates are named: listing four bundled paths every
+    time buries the one line that says the run is not on the default texts."""
+    try:
+        prompts = _load_prompts(cfg, root)
+    except PromptError as exc:
+        print(f"  промпты        ошибка: {exc}")
+        return
+
+    custom = {name: src for name, src in prompts.sources.items() if Path(src).parent != PROMPTS_DEFAULT_DIR}
+    if not custom:
+        print("  промпты        из комплекта")
+        return
+    print(f"  промпты        {_resolve_prompts_dir(cfg, root)}, свои: {len(custom)} из {len(prompts.sources)}")
+    for name, src in custom.items():
+        print(f"    {name:<14} {src}")
+
+
 def _print_config(cfg: Config, root: Path) -> None:
     from .config import home_config_path, repo_config_path
 
@@ -134,6 +173,7 @@ def _print_config(cfg: Config, root: Path) -> None:
     print()
     print("Прогон:")
     print(f"  checklist_dir  {_resolve_checklist_dir(cfg, root)}")
+    _print_prompt_sources(cfg, root)
     print(f"  output_dir     {cfg.run.output_dir}")
     print(f"  concurrency    {cfg.run.concurrency}")
     print(f"  max_turns      {cfg.run.max_turns}")
@@ -162,10 +202,12 @@ def _print_summary(run: ReviewRun, report_path: Path) -> None:
     print(f"Отчёт: {report_path}")
 
 
-async def _run_headless(cfg: Config, diff: gitdiff.DiffBundle, items: list, runner) -> int:
+async def _run_headless(
+    cfg: Config, diff: gitdiff.DiffBundle, items: list, runner, prompts: Prompts
+) -> int:
     origin = cfg.provider.base_url.split("//", 1)[-1].split("/", 1)[0]
     print(f"▸ {cfg.provider.model} @ {origin} · конфигов подхвачено: {len(cfg.sources)}")
-    pipeline = ReviewPipeline(cfg, diff, items, runner, _print_event)
+    pipeline = ReviewPipeline(cfg, diff, items, runner, _print_event, prompts)
     try:
         run = await pipeline.execute()
     finally:
@@ -255,6 +297,15 @@ def main(argv: list[str] | None = None) -> int:
     if diff.detached:
         print(f"Ревью ветки {diff.branch} ({diff.head[:12]}); рабочая копия не затрагивается.")
 
+    # Before the runner, so a broken template costs a second rather than a
+    # provider connection and eight agents failing one by one
+    try:
+        prompts = _load_prompts(cfg, root)
+        prompts.validate(items, diff)
+    except PromptError as exc:
+        print(f"Ошибка промптов: {exc}", file=sys.stderr)
+        return 2
+
     try:
         runner = OpenAIAgentRunner(cfg.provider, cfg.run, root, diff.base_sha, diff.source_ref)
     except RuntimeError as exc:
@@ -262,11 +313,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.no_tui:
-        return asyncio.run(_run_headless(cfg, diff, items, runner))
+        return asyncio.run(_run_headless(cfg, diff, items, runner, prompts))
 
     from .tui import ReviewApp
 
-    app = ReviewApp(cfg, diff, items, runner)
+    app = ReviewApp(cfg, diff, items, runner, prompts)
     app.run()
     run = app.run_result
     if run is None:

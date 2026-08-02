@@ -46,6 +46,11 @@ terminal_tool_choice = "forced"
 #   roboviewer develop
 #   roboviewer develop feature/login
 checklist_dir = "checklists/default"
+# Каталог с промптами. Пусто — комплектные тексты, плюс .roboviewer/prompts/
+# внутри проверяемого репозитория, если он там есть. В своём наборе достаточно
+# тех файлов, которые вы правите: остальные берутся из комплекта.
+# Список файлов и плейсхолдеров — roboviewer/prompts/default/README.md
+prompts_dir = ""
 # A relative path lands inside the reviewed repository.
 # An absolute one lands outside, nested by repository name; overridden by -o/--output
 # and by ROBOVIEWER_OUTPUT.

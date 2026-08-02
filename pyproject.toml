@@ -35,4 +35,4 @@ build-backend = "setuptools.build_meta"
 include = ["roboviewer*"]
 
 [tool.setuptools.package-data]
-roboviewer = ["checklists/**/*.md"]
+roboviewer = ["checklists/**/*.md", "prompts/**/*.md"]

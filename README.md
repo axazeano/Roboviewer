@@ -23,7 +23,7 @@ roboviewer develop
 ```
 
 *Prompts, checklist items and generated reports are in Russian. To change that,
-edit `roboviewer/prompts.py` and the files under `roboviewer/checklists/`.*
+edit the markdown under `roboviewer/prompts/` and `roboviewer/checklists/`.*
 
 ## The problem
 
@@ -171,6 +171,13 @@ inside the repository being reviewed overrides the built-in set. An optional
 `_system.md` in the directory replaces the system prompt for its items.
 
 ## Tuning
+
+The four texts the agents actually run on — the reviewer's system prompt and
+task, the judge's — are markdown files in `roboviewer/prompts/default/`. Drop a
+changed copy of any of them into `.roboviewer/prompts/` inside the repository
+being reviewed and it wins; the rest keep coming from the bundled set.
+`--show-config` prints which file came from where, and a typo in a placeholder
+fails the run before the first request instead of eight agents deep.
 
 Three checklist sets ship with the tool, differing only in how the aspects are
 distributed between agents — the aspect texts themselves are identical, so
