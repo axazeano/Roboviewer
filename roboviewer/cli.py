@@ -68,7 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", help="Переопределить модель")
     parser.add_argument("-j", "--concurrency", type=int, help="Сколько пунктов проверять параллельно")
     parser.add_argument("--no-judge", action="store_true", help="Пропустить финальный прогон судьи")
-    parser.add_argument("--no-tui", action="store_true", help="Текстовый вывод вместо TUI")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Показывать ход работы агентов: вызовы инструментов, повторы, ошибки",
+    )
     parser.add_argument("--list-items", action="store_true", help="Показать пункты чек-листа и выйти")
     parser.add_argument(
         "--show-config",
@@ -180,11 +185,17 @@ def _print_config(cfg: Config, root: Path) -> None:
     print(f"  судья          {'включён' if cfg.run.enable_judge else 'выключен'}")
 
 
-def _print_event(event: Event) -> None:
+def _print_event(event: Event, verbose: bool = False) -> None:
     if event.kind == "item_progress":
-        return  # too noisy for the console
+        if verbose:
+            print(f"    {event.item_id or '-'} · {event.message}", flush=True)
+        return
     prefix = {"error": "✗", "item_done": "•", "run_done": "✔"}.get(event.kind, "▸")
-    print(f"{prefix} {event.message}", flush=True)
+    line = f"{prefix} {event.message}"
+    if event.kind == "item_done":
+        result = event.data["result"]
+        line += f" · {result.usage.total_tokens} токенов · {result.duration_s:.0f}с"
+    print(line, flush=True)
 
 
 def _print_summary(run: ReviewRun, report_path: Path) -> None:
@@ -202,12 +213,19 @@ def _print_summary(run: ReviewRun, report_path: Path) -> None:
     print(f"Отчёт: {report_path}")
 
 
-async def _run_headless(
-    cfg: Config, diff: gitdiff.DiffBundle, items: list, runner, prompts: Prompts
+async def _run_review(
+    cfg: Config,
+    diff: gitdiff.DiffBundle,
+    items: list,
+    runner,
+    prompts: Prompts,
+    verbose: bool,
 ) -> int:
     origin = cfg.provider.base_url.split("//", 1)[-1].split("/", 1)[0]
     print(f"▸ {cfg.provider.model} @ {origin} · конфигов подхвачено: {len(cfg.sources)}")
-    pipeline = ReviewPipeline(cfg, diff, items, runner, _print_event, prompts)
+    pipeline = ReviewPipeline(
+        cfg, diff, items, runner, lambda event: _print_event(event, verbose), prompts
+    )
     try:
         run = await pipeline.execute()
     finally:
@@ -312,17 +330,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Ошибка провайдера: {exc}", file=sys.stderr)
         return 2
 
-    if args.no_tui:
-        return asyncio.run(_run_headless(cfg, diff, items, runner, prompts))
-
-    from .tui import ReviewApp
-
-    app = ReviewApp(cfg, diff, items, runner, prompts)
-    app.run()
-    run = app.run_result
-    if run is None:
-        return 1
-    return 1 if any(i.status == "failed" for i in run.items) else 0
+    return asyncio.run(_run_review(cfg, diff, items, runner, prompts, args.verbose))
 
 
 if __name__ == "__main__":

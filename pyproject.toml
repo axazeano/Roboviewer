@@ -6,7 +6,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
-keywords = ["code-review", "llm", "agents", "git", "tui", "merge-request"]
+keywords = ["code-review", "llm", "agents", "git", "merge-request"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -21,7 +21,6 @@ classifiers = [
 dependencies = [
     "openai>=1.40",
     "pydantic>=2.7",
-    "textual>=0.80",
 ]
 
 [project.scripts]
