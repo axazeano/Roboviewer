@@ -42,7 +42,7 @@ class OpenAIAgentRunner(Runner):
             api_key=provider.resolve_api_key(),
             base_url=provider.base_url,
             timeout=provider.timeout_s,
-            max_retries=0,  # we retry ourselves so attempts can be logged in the TUI
+            max_retries=0,  # we retry ourselves so attempts can be logged
         )
         # Auth headers go per-request: that is the only way to drop the Bearer header
         self._headers = provider.request_headers()
