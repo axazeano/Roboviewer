@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 from ..models import Usage
 
-# (event, detail) — forwarded to the TUI: tool calls, retries, errors
+# (event, detail) — forwarded to the console: tool calls, retries, errors
 ProgressHook = Callable[[str, str], None]
 
 

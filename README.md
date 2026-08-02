@@ -120,6 +120,7 @@ roboviewer -C ~/projects/app develop  # a repository living elsewhere
 | `-o, --output` | Where reports go; point it outside the repository to keep `git status` clean |
 | `--diff-only` | Show what would be reviewed and stop, without spending tokens |
 | `--only correctness,tests` | Run just these checklist items |
+| `-v, --verbose` | Stream agent activity: tool calls, retries, errors |
 | `--format md,html` | Which reports to write; HTML is one self-contained file |
 | `--no-tui` | Plain text output, for CI |
 | `--check-provider` | Diagnose the gateway and stop |
