@@ -3,9 +3,7 @@
 Automated code review for merge requests, running entirely on your machine.
 
 Point it at two branches and it comes back with a ranked list of problems worth
-fixing — not a wall of style nitpicks. Works with any OpenAI-compatible endpoint,
-including a corporate gateway, so your code never has to leave the network you
-already trust.
+fixing — not a wall of style nitpicks.
 
 ```bash
 roboviewer develop
@@ -24,8 +22,52 @@ roboviewer develop
 Отчёт: .roboviewer/runs/20260730-172900/report.md
 ```
 
-> Prompts, checklist items and generated reports are in Russian. To change that,
-> edit `roboviewer/prompts.py` and the files under `roboviewer/checklists/`.
+*Prompts, checklist items and generated reports are in Russian. To change that,
+edit `roboviewer/prompts.py` and the files under `roboviewer/checklists/`.*
+
+## The problem
+
+**Review arrives late, and tired.** A merge request waits hours or days, and by
+the time someone opens it they are on their fourth review of the afternoon. The
+blocker ships under three comments about whitespace.
+
+**Hosted reviewers want your code.** CodeRabbit, Copilot and the rest do good
+work, but every one of them means uploading the repository to somebody else's
+infrastructure. Inside a corporate network that is where the conversation ends.
+
+**They also want your forge.** They plug into GitHub or GitLab and review what is
+already a merge request. Looking over your own branch *before* you open it, or
+reviewing a mirror that lives nowhere but your laptop, is not something they do.
+
+**Pasting a diff into a chat window invents problems.** Given a few lines of
+context, a model will confidently report a missing nil check that sits twenty
+lines above the hunk. Nothing is ranked, nothing is verified, and a real blocker
+arrives in the same flat list as a naming preference.
+
+## What you get
+
+**Your code stays where it is.** Roboviewer talks to any OpenAI-compatible
+endpoint — including a corporate gateway — so reviews never leave the network you
+already trust. Nothing is uploaded anywhere else, and there is no service to sign
+up for.
+
+**Any git repository, no integration.** It reads two branches through plain git.
+No app to install on your organisation, no webhooks, no permissions to request.
+
+**Review before you open the MR.** Run it on your own branch, fix what it finds,
+and let the humans spend their attention on design instead of on the bug you
+would have caught yourself.
+
+**A ranked list you can act on.** Findings carry a severity, a file and a line,
+and a final judge pass throws out the ones that do not survive a second look.
+
+## Requirements
+
+- Python 3.11+
+- git
+- An OpenAI-compatible endpoint **with tool calling** — the agents drive the
+  review through tools, so a completions-only gateway will not work.
+  `roboviewer --check-provider` tells you which side of that line yours is on.
 
 ## Install
 
@@ -72,19 +114,25 @@ roboviewer develop feature/login      # someone else's branch
 roboviewer -C ~/projects/app develop  # a repository living elsewhere
 ```
 
-Set `ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` once and you can drop `-C`/`-o`.
-`--diff-only` shows what would be reviewed without spending tokens,
-`--only correctness,tests` narrows the checklist, `--no-tui` is for CI.
+| Flag | What it does |
+| --- | --- |
+| `-C, --repo` | Repository to review; defaults to `$ROBOVIEWER_REPO` or the current directory |
+| `-o, --output` | Where reports go; point it outside the repository to keep `git status` clean |
+| `--diff-only` | Show what would be reviewed and stop, without spending tokens |
+| `--only correctness,tests` | Run just these checklist items |
+| `--no-tui` | Plain text output, for CI |
+| `--check-provider` | Diagnose the gateway and stop |
+
+`ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` cover `-C`/`-o` if you set them once.
 `--help` has the rest.
 
-## Why the findings are worth reading
+## How it works
 
 Three decisions do most of the work:
 
 **Whole files, not hunks.** The agent gets each changed file in full, with changed
-lines marked up. A diff with a few lines of context is the main reason automated
-reviewers claim "there is no error handling here" when the guard sits twenty
-lines above.
+lines marked up, and falls back to hunks only for files past
+`inline_max_lines` — where it can still pull the rest in with `read_file`.
 
 **One agent per concern.** Eight specialised reviewers run in parallel — one for
 correctness, one for concurrency, one for tests — rather than one generalist
@@ -97,6 +145,13 @@ a third of them is a normal outcome.
 
 Comparison is against the **merge base**, so commits that landed on the target
 branch after you forked stay out of the review.
+
+## Output
+
+`.roboviewer/runs/<timestamp>/` holds `report.md` for humans, plus
+`findings.json` and per-item raw results for tuning prompts. `latest` symlinks to
+the most recent run. Point `-o` somewhere outside the repository to keep it out
+of `git status`.
 
 ## Customise the checklist
 
@@ -115,12 +170,14 @@ Adding a check means adding a file — no code involved. A `checklists/` directo
 inside the repository being reviewed overrides the built-in set. An optional
 `_system.md` in the directory replaces the system prompt for its items.
 
-Three sets ship with the tool, differing only in how the aspects are distributed
-between agents — the aspect texts themselves are identical, so running the same
-MR through each compares structure rather than wording:
+## Tuning
+
+Three checklist sets ship with the tool, differing only in how the aspects are
+distributed between agents — the aspect texts themselves are identical, so
+running the same MR through each compares structure rather than wording:
 
 ```bash
-roboviewer develop                              # default: 8 aspects, one agent each
+roboviewer develop                                 # default: 8 aspects, one agent each
 roboviewer develop --checklist checklists/grouped  # 3 agents over related aspects
 roboviewer develop --checklist checklists/single   # one agent for everything
 ```
@@ -130,12 +187,18 @@ token bill — at the cost of each agent holding more objectives at once. Smalle
 models tend to lose the later aspects when asked to hold many. Compare the
 `report.md` tables to see how the trade lands on your model.
 
-## Output
+Beyond that, `--model` swaps the model for a single run, `-j` changes how many
+items run concurrently, and `--no-judge` skips the verification pass — useful
+when you are iterating on a prompt and want the raw output.
 
-`.roboviewer/runs/<timestamp>/` holds `report.md` for humans, plus
-`findings.json` and per-item raw results for tuning prompts. `latest` symlinks to
-the most recent run. Point `-o` somewhere outside the repository to keep it out
-of `git status`.
+## What it doesn't do
+
+- It does not post comments on your merge request, and does not talk to GitHub or
+  GitLab at all. Output is files on disk.
+- It does not modify your code. The agents get read-only tools —
+  `read_file`, `grep`, `list_files`, `git_show` — and nothing else.
+- It does not replace a human reviewer. It catches the class of problem that
+  survives a tired read; it has no idea whether the feature was worth building.
 
 ## License
 
