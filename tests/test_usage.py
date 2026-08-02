@@ -10,7 +10,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from roboviewer.models import ItemResult, ReviewRun, Usage
-from roboviewer.report import render_markdown
+from roboviewer.report import render_report
 from roboviewer.runners.openai_agent import _extract_usage
 
 
@@ -73,7 +73,7 @@ def run_with(usage: Usage) -> ReviewRun:
 
 
 def test_silence_is_not_reported_as_a_failure_to_cache() -> None:
-    text = render_markdown(run_with(Usage(prompt_tokens=100, completion_tokens=5)))
+    text = render_report(run_with(Usage(prompt_tokens=100, completion_tokens=5)))
     assert "Из кэша: неизвестно" in text
     assert "не отдаёт статистику" in text
     assert "| н/д |" in text, "в таблице пунктов тоже не должно быть уверенного нуля"
@@ -81,12 +81,12 @@ def test_silence_is_not_reported_as_a_failure_to_cache() -> None:
 
 def test_reported_zero_says_the_cache_really_did_not_fire() -> None:
     usage = Usage(prompt_tokens=100, completion_tokens=5, cache_reported=True)
-    text = render_markdown(run_with(usage))
+    text = render_report(run_with(usage))
     assert "Из кэша: 0" in text
     assert "префикс каждый раз разный" in text
 
 
 def test_hits_are_shown_with_their_share() -> None:
     usage = Usage(prompt_tokens=100, completion_tokens=5, cached_tokens=64, cache_reported=True)
-    text = render_markdown(run_with(usage))
+    text = render_report(run_with(usage))
     assert "Из кэша: 64 токенов промпта (64% входящих)" in text

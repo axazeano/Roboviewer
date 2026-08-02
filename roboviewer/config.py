@@ -170,6 +170,14 @@ class RunConfig(BaseModel):
     # .roboviewer/prompts/ inside the reviewed repository when it exists. A set
     # need only carry the files it changes; the rest fall back to the bundled ones.
     prompts_dir: str = ""
+    # Where report templates come from, resolved the same way as prompts_dir:
+    # empty → the bundled set plus .roboviewer/templates/ inside the reviewed
+    # repository. A custom set need only carry the templates it changes.
+    templates_dir: str = ""
+    # Which reports a run writes. Names are templates, not formats, so a custom
+    # one from templates_dir is listed here as-is; the output file is named after
+    # the template minus `.j2`. Overridden by --format.
+    report_templates: list[str] = Field(default_factory=lambda: ["report.md.j2"])
     output_dir: str = ".roboviewer/runs"
     # Checklist items reviewed at the same time — concurrent requests to the model,
     # not OS threads.
@@ -198,6 +206,19 @@ class Config(BaseModel):
     run: RunConfig = Field(default_factory=RunConfig)
     # Which files took part, in stacking order.
     sources: list[str] = Field(default_factory=list)
+
+
+def templates_dir_for(cfg: "Config", root: Path) -> Path | None:
+    """Where report templates come from, or None for the bundled set.
+
+    Lives here rather than in the CLI because both entry points write reports —
+    the TUI would otherwise need its own copy of the same rule.
+    """
+    if cfg.run.templates_dir:
+        candidate = Path(cfg.run.templates_dir).expanduser()
+        return candidate if candidate.is_absolute() else root / candidate
+    in_repo = root / ".roboviewer" / "templates"
+    return in_repo if in_repo.is_dir() else None
 
 
 def home_config_path() -> Path:

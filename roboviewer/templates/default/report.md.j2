@@ -1,0 +1,77 @@
+{% import "_finding.md.j2" as parts %}
+# Ревью {{ meta.branch }} → {{ meta.target }}
+
+- Прогон: `{{ meta.run_id }}`
+- База сравнения: `{{ meta.base_sha[:12] }}` · HEAD: `{{ meta.head_sha[:12] }}`
+- Модель: `{{ meta.model }}`
+- Файлов изменено: {{ stats.files_changed }} (+{{ stats.added }} / -{{ stats.removed }})
+- Токенов: {{ stats.total_tokens | thousands }}
+{% if cache.prompt_tokens %}
+{% if cache.state == "hit" %}
+- Из кэша: {{ cache.cached_tokens | thousands }} токенов промпта ({{ cache.hit_rate | percent }} входящих)
+{% elif cache.state == "unknown" %}
+- Из кэша: неизвестно — провайдер не отдаёт статистику (`usage.prompt_tokens_details` пуст).
+  Это не значит, что кэша нет: провайдер может отдавать общий префикс из кэша молча. Проверяется
+  латентностью — повтор того же префикса приходит заметно быстрее холодного.
+{% else %}
+- Из кэша: 0 — провайдер статистику отдаёт, но ни одного попадания.
+  Значит, префикс каждый раз разный либо кэширование на стороне провайдера выключено.
+{% endif %}
+{% endif %}
+
+## Итог
+
+{% if not findings %}
+Замечаний нет.
+
+{% else %}
+{% for row in stats.by_severity %}
+- {{ SEVERITY_ICON[row.severity] }} {{ SEVERITY_LABEL[row.severity] }}: {{ row.count }}
+{% endfor %}
+
+{% endif %}
+{% if judge_summary %}
+{{ judge_summary | blockquote }}
+
+{% endif %}
+{% if findings %}
+## Замечания
+
+{% for finding in findings %}
+{{ parts.finding(finding) }}
+{% endfor %}
+{% endif %}
+{% if rejected %}
+<details>
+<summary>Отклонено судьёй ({{ rejected | length }})</summary>
+
+{% for finding in rejected %}
+- `{{ finding.location }}` {{ finding.title }} ({{ finding.verdict or "?" }}){{ " — " ~ finding.verdict_reason if finding.verdict_reason else "" }}
+{% endfor %}
+
+</details>
+
+{% endif %}
+## Пункты проверки
+
+| Пункт | Статус | Замечаний | Ходов | Токенов | Из кэша | Время |
+|---|---|---|---|---|---|---|
+{% for item in items %}
+| {{ item.title }} | {{ STATUS_ICON[item.status] }} | {{ item.findings_count }} | {{ item.turns }} | {{ item.total_tokens }} | {{ (item.cache.hit_rate | percent) if item.cache.state == "hit" else ("н/д" if item.cache.state == "unknown" else "0%") }} | {{ item.duration_s | fixed }}с |
+{% endfor %}
+
+{% if failed_items %}
+### Упавшие пункты
+
+{% for item in failed_items %}
+- **{{ item.title }}**: {{ item.error }}
+{% endfor %}
+
+{% endif %}
+## Изменённые файлы
+
+```
+{% for file in files %}
+{{ "%-3s +%-5s -%-5s %s" | format(file.status, file.added, file.removed, file.file) }}
+{% endfor %}
+```

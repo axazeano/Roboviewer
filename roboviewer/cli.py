@@ -10,12 +10,22 @@ from pathlib import Path
 
 from . import gitdiff
 from .checklist import load_checklist
-from .config import Config, load_config
+from .config import Config, load_config, templates_dir_for
 from .models import SEVERITY_LABEL_RU, ReviewRun
 from .pipeline import Event, ReviewPipeline, output_dir_for
 from .prompts import DEFAULT_DIR as PROMPTS_DEFAULT_DIR, PromptError, Prompts
 from .report import save
 from .runners import OpenAIAgentRunner
+
+
+def report_templates(value: str) -> list[str]:
+    """`md,html` → template names. A format is the shorthand for the CLI; the
+    config stores template names, so a custom template can be listed there
+    without inventing a format for it."""
+    formats = [fmt.strip() for fmt in value.split(",") if fmt.strip()]
+    if not formats:
+        raise argparse.ArgumentTypeError("перечисли форматы через запятую, например md,html")
+    return [f"report.{fmt}.j2" for fmt in formats]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -74,6 +84,15 @@ def build_parser() -> argparse.ArgumentParser:
             "судьи. Без флага — как задано в конфиге"
         ),
     )
+    parser.add_argument(
+        "--format",
+        type=report_templates,
+        metavar="СПИСОК",
+        help=(
+            "Форматы отчёта через запятую: md, html. Заменяет report_templates "
+            "из конфига целиком; без флага — как там задано"
+        ),
+    )
     parser.add_argument("-j", "--concurrency", type=int, help="Сколько пунктов проверять параллельно")
     parser.add_argument("--no-judge", action="store_true", help="Пропустить финальный прогон судьи")
     parser.add_argument("--no-tui", action="store_true", help="Текстовый вывод вместо TUI")
@@ -99,6 +118,11 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
         cfg.run.checklist_dir = args.checklist
     if args.model:
         cfg.provider.model = args.model
+    if args.format:
+        # Replaces the configured list rather than extending it: --format md is a
+        # way to say "just markdown this time", and appending would make that
+        # impossible.
+        cfg.run.report_templates = args.format
     if args.thinking:
         # Overrides both stages; telling them apart is a config-level choice
         cfg.provider.enable_thinking = args.thinking == "on"
@@ -192,6 +216,9 @@ def _print_config(cfg: Config, root: Path) -> None:
     print("Прогон:")
     print(f"  checklist_dir  {_resolve_checklist_dir(cfg, root)}")
     _print_prompt_sources(cfg, root)
+    templates_dir = templates_dir_for(cfg, root)
+    print(f"  шаблоны        {templates_dir or 'из комплекта'}")
+    print(f"  отчёты         {', '.join(cfg.run.report_templates)}")
     print(f"  output_dir     {cfg.run.output_dir}")
     print(f"  concurrency    {cfg.run.concurrency}")
     print(f"  max_turns      {cfg.run.max_turns}")
@@ -205,7 +232,7 @@ def _print_event(event: Event) -> None:
     print(f"{prefix} {event.message}", flush=True)
 
 
-def _print_summary(run: ReviewRun, report_path: Path) -> None:
+def _print_summary(run: ReviewRun, reports: list[Path]) -> None:
     print()
     confirmed = run.confirmed()
     for finding in confirmed:
@@ -217,7 +244,7 @@ def _print_summary(run: ReviewRun, report_path: Path) -> None:
     cache = f" · из кэша {usage.cache_hit_rate:.0%}" if usage.cached_tokens else " · кэш не сработал"
     print(f"Подтверждено {len(confirmed)} из {len(run.findings)} · "
           f"{usage.total_tokens} токенов{cache}")
-    print(f"Отчёт: {report_path}")
+    print(f"Отчёт: {', '.join(str(p) for p in reports)}")
 
 
 async def _run_headless(
@@ -231,8 +258,13 @@ async def _run_headless(
     finally:
         await runner.aclose()
 
-    report_path = save(run, output_dir_for(cfg, diff.root, run.run_id))
-    _print_summary(run, report_path)
+    reports = save(
+        run,
+        output_dir_for(cfg, diff.root, run.run_id),
+        cfg.run.report_templates,
+        templates_dir_for(cfg, diff.root),
+    )
+    _print_summary(run, reports)
     return 1 if any(i.status == "failed" for i in run.items) else 0
 
 

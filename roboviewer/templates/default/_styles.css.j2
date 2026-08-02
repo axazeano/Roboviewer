@@ -1,0 +1,95 @@
+{# Included by _layout.html.j2 rather than written inside it: the comparison
+   document extends the same layout and must not carry a second copy.
+   Included, not linked — a report is one file that opens by double click and
+   attaches to a ticket, so there is nothing to fetch. #}
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1c1e21;
+  --muted: #6b7280;
+  --line: #e3e5e8;
+  --card: #f7f8fa;
+  --code-bg: #f0f1f4;
+  --blocker: #d1242f;
+  --major: #bc4c00;
+  --minor: #0969da;
+  --nit: #6b7280;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c;
+    --fg: #e6e8eb;
+    --muted: #9aa3ad;
+    --line: #2c3037;
+    --card: #1d2026;
+    --code-bg: #23262c;
+    --blocker: #ff7b72;
+    --major: #ffa657;
+    --minor: #79c0ff;
+    --nit: #9aa3ad;
+  }
+}
+
+body {
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+  max-width: 56rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+h1 { font-size: 1.6rem; margin: 0 0 1rem; }
+h2 { font-size: 1.2rem; margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1rem; margin: 0 0 .75rem; }
+
+a { color: var(--minor); }
+
+code, pre {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: .875em;
+}
+code { background: var(--code-bg); padding: .1em .35em; border-radius: 3px; }
+pre { background: var(--card); padding: .875rem 1rem; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+
+/* Отбивка прогона: пары «что — значение», а не список */
+.meta { display: grid; grid-template-columns: auto 1fr; gap: .25rem 1rem; margin: 0 0 1.5rem; color: var(--muted); font-size: .875rem; }
+.meta dt { font-weight: 500; }
+.meta dd { margin: 0; }
+
+.tally { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.tally li { padding: .25rem .75rem; border: 1px solid var(--line); border-radius: 999px; font-size: .875rem; }
+
+.judge { margin: 0 0 2rem; padding: .75rem 1rem; background: var(--card); border-left: 3px solid var(--minor); border-radius: 0 6px 6px 0; }
+.judge p { margin: 0; }
+.judge p + p { margin-top: .5rem; }
+
+.finding { margin: 0 0 1.75rem; padding: 1rem 1.25rem; background: var(--card); border-radius: 8px; border-left: 3px solid var(--sev, var(--line)); }
+.finding.blocker { --sev: var(--blocker); }
+.finding.major   { --sev: var(--major); }
+.finding.minor   { --sev: var(--minor); }
+.finding.nit     { --sev: var(--nit); }
+.finding h3 .id { color: var(--muted); font-weight: 400; }
+.finding .where { display: block; margin: 0 0 .75rem; color: var(--muted); font-size: .8125rem; }
+.finding .where code { background: none; padding: 0; }
+.finding .rationale > :first-child { margin-top: 0; }
+.finding .rationale > :last-child { margin-bottom: 0; }
+.finding .suggestion { margin: .75rem 0 0; }
+.finding .suggestion strong { display: block; margin-bottom: .25rem; }
+.finding .suggestion > :last-child { margin-bottom: 0; }
+.finding .verdict { margin: .75rem 0 0; padding-left: .75rem; border-left: 2px solid var(--line); color: var(--muted); font-size: .875rem; }
+
+.empty { color: var(--muted); }
+
+details { margin: 0 0 2rem; }
+summary { cursor: pointer; color: var(--muted); }
+details ul { margin: .75rem 0 0; padding-left: 1.25rem; }
+
+table { width: 100%; border-collapse: collapse; margin: 0 0 1.5rem; font-size: .875rem; }
+th, td { padding: .5rem .625rem; text-align: left; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.failed { color: var(--blocker); }

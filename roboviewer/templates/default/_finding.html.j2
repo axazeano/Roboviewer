@@ -1,0 +1,23 @@
+{# The HTML twin of _finding.md.j2. Deliberately a separate file: the two
+   formats share the view model, not the markup.
+   `| markdown` is what makes backticks in the model's prose come out as code
+   rather than as backticks; raw HTML inside that prose stays escaped. #}
+{% macro finding(f) %}
+<article class="finding {{ f.severity.value }}" id="{{ f.id }}">
+<h3><span class="id">{{ SEVERITY_ICON[f.severity] }} {{ f.id }}</span> · {{ f.title }}</h3>
+<span class="where">
+<code>{{ f.location }}</code> ·
+{{ SEVERITY_LABEL[f.severity] }} ·
+{{ f.category }} ·
+уверенность {{ f.confidence | percent }} ·
+{{ f.sources | join(", ") or "вне чек-листа" }}
+</span>
+<div class="rationale">{{ f.rationale | markdown }}</div>
+{% if f.suggestion %}
+<div class="suggestion"><strong>Что сделать</strong>{{ f.suggestion | markdown }}</div>
+{% endif %}
+{% if f.verdict_reason %}
+<p class="verdict">Судья ({{ f.verdict }}): {{ f.verdict_reason }}</p>
+{% endif %}
+</article>
+{% endmacro %}

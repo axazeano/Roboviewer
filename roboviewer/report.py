@@ -1,155 +1,57 @@
-"""Persisting run results: markdown for humans, JSON for debugging."""
+"""Persisting run results: a rendered report for humans, JSON for debugging.
+
+Nothing here knows what a report looks like. The numbers are counted once in
+`view`, the layout lives in `templates`, and this module only decides what gets
+written to disk. Adding a format means adding a template, not editing this file.
+"""
 
 from __future__ import annotations
 
 import json
-from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
 
-from .models import SEVERITY_LABEL_RU, SEVERITY_ORDER, Finding, ReviewRun, Severity
+from .models import ReviewRun
+from .templates import render
+from .view import build_view
 
-SEVERITY_ICON = {
-    Severity.BLOCKER: "🛑",
-    Severity.MAJOR: "⚠️",
-    Severity.MINOR: "🔹",
-    Severity.NIT: "💬",
-}
+DEFAULT_TEMPLATE = "report.md.j2"
+DEFAULT_TEMPLATES: tuple[str, ...] = (DEFAULT_TEMPLATE,)
 
 
-def _render_finding(run: ReviewRun, finding: Finding) -> str:
-    verdict = run.verdicts.get(finding.id)
-    lines = [
-        f"### {SEVERITY_ICON[finding.severity]} {finding.id} · {finding.title}",
-        "",
-        f"**Где:** `{finding.location}`  ",
-        f"**Важность:** {SEVERITY_LABEL_RU[finding.severity]} · "
-        f"**Категория:** {finding.category} · "
-        f"**Уверенность:** {finding.confidence:.0%}  ",
-        f"**Пункты чек-листа:** {', '.join(finding.sources) or '—'}",
-        "",
-        finding.rationale,
-    ]
-    if finding.suggestion:
-        lines += ["", f"**Что сделать:** {finding.suggestion}"]
-    if verdict and verdict.reason and verdict.verdict != "unreviewed":
-        lines += ["", f"> Судья ({verdict.verdict}): {verdict.reason}"]
-    return "\n".join(lines)
+def render_report(
+    run: ReviewRun,
+    template: str = DEFAULT_TEMPLATE,
+    templates_dir: Path | None = None,
+) -> str:
+    """Renders a run with the named template. `templates_dir` overrides the
+    bundled templates file by file, the way a custom prompt set does."""
+    return render(template, build_view(run), templates_dir)
 
 
-def _cache_lines(run: ReviewRun) -> list[str]:
-    """Prefix-cache stats. The same context block is resent on every turn, so a
-    run either costs full price or a fraction of it depending on this number.
-
-    Three states rather than two: hits, a reported zero, and a provider that
-    keeps no count. Only the middle one means the cache failed, so a provider
-    that says nothing gets its own wording instead of an invented zero.
-    """
-    usage = run.total_usage
-    if not usage.prompt_tokens:
-        return []
-    if usage.cached_tokens:
-        share = f"{usage.cache_hit_rate:.0%}"
-        saved = f"{usage.cached_tokens:,}".replace(",", " ")
-        return [f"- Из кэша: {saved} токенов промпта ({share} входящих)"]
-    if not usage.cache_reported:
-        return [
-            "- Из кэша: неизвестно — провайдер не отдаёт статистику "
-            "(`usage.prompt_tokens_details` пуст).",
-            "  Это не значит, что кэша нет: провайдер может отдавать общий префикс из кэша "
-            "молча. Проверяется",
-            "  латентностью — повтор того же префикса приходит заметно быстрее холодного.",
-        ]
-    return [
-        "- Из кэша: 0 — провайдер статистику отдаёт, но ни одного попадания.",
-        "  Значит, префикс каждый раз разный либо кэширование на стороне провайдера выключено.",
-    ]
+def output_name(template: str) -> str:
+    """`report.md.j2` → `report.md`: the file is named after what the template
+    produces, so a second format needs no second mapping to maintain."""
+    return Path(template).name.removesuffix(".j2")
 
 
-def render_markdown(run: ReviewRun) -> str:
-    confirmed = run.confirmed()
-    rejected = run.rejected()
-    by_severity = Counter(f.severity for f in confirmed)
-
-    out: list[str] = [
-        f"# Ревью {run.branch} → {run.target}",
-        "",
-        f"- Прогон: `{run.run_id}`",
-        f"- База сравнения: `{run.base_sha[:12]}` · HEAD: `{run.head_sha[:12]}`",
-        f"- Модель: `{run.model}`",
-        f"- Файлов изменено: {len(run.files)} "
-        f"(+{sum(f.added for f in run.files)} / -{sum(f.removed for f in run.files)})",
-        f"- Токенов: {run.total_usage.total_tokens:,}".replace(",", " "),
-        *_cache_lines(run),
-        "",
-        "## Итог",
-        "",
-    ]
-
-    if not confirmed:
-        out += ["Замечаний нет.", ""]
-    else:
-        for severity in sorted(by_severity, key=lambda s: SEVERITY_ORDER[s]):
-            out.append(
-                f"- {SEVERITY_ICON[severity]} {SEVERITY_LABEL_RU[severity]}: {by_severity[severity]}"
-            )
-        out.append("")
-
-    if run.judge_summary:
-        out += ["> " + run.judge_summary.replace("\n", "\n> "), ""]
-
-    if confirmed:
-        out += ["## Замечания", ""]
-        for finding in confirmed:
-            out += [_render_finding(run, finding), ""]
-
-    if rejected:
-        out += [
-            "<details>",
-            f"<summary>Отклонено судьёй ({len(rejected)})</summary>",
-            "",
-        ]
-        for finding in rejected:
-            verdict = run.verdicts.get(finding.id)
-            reason = f" — {verdict.reason}" if verdict and verdict.reason else ""
-            out.append(f"- `{finding.location}` {finding.title} ({verdict.verdict if verdict else '?'}){reason}")
-        out += ["", "</details>", ""]
-
-    out += [
-        "## Пункты проверки",
-        "",
-        "| Пункт | Статус | Замечаний | Ходов | Токенов | Из кэша | Время |",
-        "|---|---|---|---|---|---|---|",
-    ]
-    for item in run.items:
-        status = {"ok": "✅", "failed": "❌", "skipped": "⏭", "pending": "…", "running": "…"}[item.status]
-        if item.usage.cached_tokens:
-            cache = f"{item.usage.cache_hit_rate:.0%}"
-        else:
-            cache = "0%" if item.usage.cache_reported else "н/д"
-        out.append(
-            f"| {item.item_title} | {status} | {len(item.findings)} | {item.turns} | "
-            f"{item.usage.total_tokens} | {cache} | {item.duration_s:.0f}с |"
-        )
-    out.append("")
-
-    failed = [i for i in run.items if i.status == "failed"]
-    if failed:
-        out += ["### Упавшие пункты", ""]
-        out += [f"- **{i.item_title}**: {i.error}" for i in failed]
-        out.append("")
-
-    out += ["## Изменённые файлы", "", "```"]
-    out += [f"{f.status:<3} +{f.added:<5} -{f.removed:<5} {f.file}" for f in run.files]
-    out += ["```", ""]
-
-    return "\n".join(out)
-
-
-def save(run: ReviewRun, directory: Path) -> Path:
+def save(
+    run: ReviewRun,
+    directory: Path,
+    templates: Sequence[str] = DEFAULT_TEMPLATES,
+    templates_dir: Path | None = None,
+) -> list[Path]:
+    """Writes a report per template plus the raw JSON. Returns the written
+    reports in the order asked for; the first one is what the CLI announces and
+    the TUI opens."""
     directory.mkdir(parents=True, exist_ok=True)
 
-    report_path = directory / "report.md"
-    report_path.write_text(render_markdown(run), encoding="utf-8")
+    reports = []
+    for template in templates:
+        path = directory / output_name(template)
+        path.write_text(render_report(run, template, templates_dir), encoding="utf-8")
+        reports.append(path)
+
     (directory / "run.json").write_text(
         run.model_dump_json(indent=2, exclude={"items": {"__all__": {"findings"}}}),
         encoding="utf-8",
@@ -186,4 +88,4 @@ def save(run: ReviewRun, directory: Path) -> Path:
     except OSError:
         pass  # the symlink is a convenience, not a requirement
 
-    return report_path
+    return reports

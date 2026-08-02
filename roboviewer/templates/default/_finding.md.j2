@@ -1,0 +1,21 @@
+{# One finding. Shared by the full report and the merge request comment, so it
+   is a macro rather than a block inside report.md.j2.
+   Trailing double spaces on two lines below are markdown hard breaks — an
+   editor stripping them merges the metadata into one paragraph. #}
+{% macro finding(f) %}
+### {{ SEVERITY_ICON[f.severity] }} {{ f.id }} · {{ f.title }}
+
+**Где:** `{{ f.location }}`  
+**Важность:** {{ SEVERITY_LABEL[f.severity] }} · **Категория:** {{ f.category }} · **Уверенность:** {{ f.confidence | percent }}  
+**Пункты чек-листа:** {{ f.sources | join(", ") or "—" }}
+
+{{ f.rationale }}
+{% if f.suggestion %}
+
+**Что сделать:** {{ f.suggestion }}
+{% endif %}
+{% if f.verdict_reason %}
+
+> Судья ({{ f.verdict }}): {{ f.verdict_reason }}
+{% endif %}
+{% endmacro %}

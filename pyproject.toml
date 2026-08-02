@@ -19,6 +19,8 @@ classifiers = [
     "Topic :: Software Development :: Version Control :: Git",
 ]
 dependencies = [
+    "jinja2>=3.1",
+    "markdown-it-py>=3.0",
     "openai>=1.40",
     "pydantic>=2.7",
     "textual>=0.80",
@@ -35,4 +37,4 @@ build-backend = "setuptools.build_meta"
 include = ["roboviewer*"]
 
 [tool.setuptools.package-data]
-roboviewer = ["checklists/**/*.md", "prompts/**/*.md"]
+roboviewer = ["checklists/**/*.md", "prompts/**/*.md", "templates/**/*.j2", "templates/**/*.md"]

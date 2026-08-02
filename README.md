@@ -120,6 +120,7 @@ roboviewer -C ~/projects/app develop  # a repository living elsewhere
 | `-o, --output` | Where reports go; point it outside the repository to keep `git status` clean |
 | `--diff-only` | Show what would be reviewed and stop, without spending tokens |
 | `--only correctness,tests` | Run just these checklist items |
+| `--format md,html` | Which reports to write; HTML is one self-contained file |
 | `--no-tui` | Plain text output, for CI |
 | `--check-provider` | Diagnose the gateway and stop |
 
@@ -152,6 +153,11 @@ branch after you forked stay out of the review.
 `findings.json` and per-item raw results for tuning prompts. `latest` symlinks to
 the most recent run. Point `-o` somewhere outside the repository to keep it out
 of `git status`.
+
+`--format md,html` adds `report.html` — one self-contained file with no external
+requests, so it opens by double click and attaches to a ticket as-is. Both
+formats are Jinja templates in `roboviewer/templates/default/`; drop a changed
+copy into `.roboviewer/templates/` to override any of them file by file.
 
 ## Customise the checklist
 

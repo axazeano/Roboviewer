@@ -10,7 +10,7 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Header, RichLog, Static
 
 from ..checklist import ChecklistItem
-from ..config import Config
+from ..config import Config, templates_dir_for
 from ..gitdiff import DiffBundle
 from ..models import SEVERITY_LABEL_RU, SEVERITY_ORDER, ReviewRun
 from ..pipeline import Event, ReviewPipeline, output_dir_for
@@ -169,10 +169,16 @@ class ReviewApp(App[ReviewRun]):
 
         self.run_result = run
         directory = output_dir_for(self._cfg, self._diff.root, run.run_id)
-        self._report_path = save(run, directory)
+        reports = save(
+            run,
+            directory,
+            self._cfg.run.report_templates,
+            templates_dir_for(self._cfg, self._diff.root),
+        )
+        self._report_path = reports[0]
 
         self._log("")
-        self._log(f"[b green]Отчёт:[/b green] {self._report_path}")
+        self._log(f"[b green]Отчёт:[/b green] {', '.join(str(p) for p in reports)}")
         confirmed = run.confirmed()
         if confirmed:
             self._log("")

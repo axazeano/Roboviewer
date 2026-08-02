@@ -1,0 +1,19 @@
+{# Skeleton shared by every HTML document. The comparison of several runs
+   extends this same file, so anything that would have to be identical in both
+   belongs here rather than in report.html.j2. #}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Roboviewer{% endblock %}</title>
+<style>
+{% block styles %}
+{% include "_styles.css.j2" %}
+{% endblock %}
+</style>
+</head>
+<body>
+{% block content %}{% endblock %}
+</body>
+</html>

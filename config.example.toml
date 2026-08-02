@@ -73,6 +73,14 @@ checklist_dir = "checklists/default"
 # тех файлов, которые вы правите: остальные берутся из комплекта.
 # Список файлов и плейсхолдеров — roboviewer/prompts/default/README.md
 prompts_dir = ""
+# Каталог с шаблонами отчёта — резолвится так же, как prompts_dir: пусто значит
+# комплектные, плюс .roboviewer/templates/ внутри проверяемого репозитория.
+# Поля, фильтры и соглашения — roboviewer/templates/default/README.md
+templates_dir = ""
+# Какие отчёты писать. Здесь имена шаблонов, а не форматов: свой шаблон из
+# templates_dir перечисляется как есть, имя файла получается отбрасыванием .j2.
+# Переопределяется флагом --format md,html
+report_templates = ["report.md.j2"]
 # A relative path lands inside the reviewed repository.
 # An absolute one lands outside, nested by repository name; overridden by -o/--output
 # and by ROBOVIEWER_OUTPUT.

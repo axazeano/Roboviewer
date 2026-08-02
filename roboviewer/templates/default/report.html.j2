@@ -1,0 +1,95 @@
+{% extends "_layout.html.j2" %}
+{% import "_finding.html.j2" as parts %}
+
+{% block title %}Ревью {{ meta.branch }} → {{ meta.target }}{% endblock %}
+
+{% block content %}
+<h1>Ревью {{ meta.branch }} → {{ meta.target }}</h1>
+
+<dl class="meta">
+<dt>Прогон</dt><dd><code>{{ meta.run_id }}</code></dd>
+<dt>База сравнения</dt><dd><code>{{ meta.base_sha[:12] }}</code> · HEAD <code>{{ meta.head_sha[:12] }}</code></dd>
+<dt>Модель</dt><dd><code>{{ meta.model }}</code></dd>
+<dt>Файлов изменено</dt><dd>{{ stats.files_changed }} (+{{ stats.added }} / −{{ stats.removed }})</dd>
+<dt>Токенов</dt><dd>{{ stats.total_tokens | thousands }}</dd>
+{% if cache.prompt_tokens %}
+<dt>Из кэша</dt>
+{% if cache.state == "hit" %}
+<dd>{{ cache.cached_tokens | thousands }} токенов промпта ({{ cache.hit_rate | percent }} входящих)</dd>
+{% elif cache.state == "unknown" %}
+<dd>неизвестно — провайдер не отдаёт статистику (<code>usage.prompt_tokens_details</code> пуст).
+Это не значит, что кэша нет: провайдер может отдавать общий префикс из кэша молча.
+Проверяется латентностью — повтор того же префикса приходит заметно быстрее холодного.</dd>
+{% else %}
+<dd>0 — провайдер статистику отдаёт, но ни одного попадания. Значит, префикс каждый
+раз разный либо кэширование на стороне провайдера выключено.</dd>
+{% endif %}
+{% endif %}
+</dl>
+
+{% if not findings %}
+<p class="empty">Замечаний нет.</p>
+{% else %}
+<ul class="tally">
+{% for row in stats.by_severity %}
+<li>{{ SEVERITY_ICON[row.severity] }} {{ SEVERITY_LABEL[row.severity] }}: {{ row.count }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+{% if judge_summary %}
+<div class="judge">{{ judge_summary | markdown }}</div>
+{% endif %}
+
+{% if findings %}
+<h2>Замечания</h2>
+{% for finding in findings %}
+{{ parts.finding(finding) }}
+{% endfor %}
+{% endif %}
+
+{% if rejected %}
+<details>
+<summary>Отклонено судьёй ({{ rejected | length }})</summary>
+<ul>
+{% for finding in rejected %}
+<li><code>{{ finding.location }}</code> {{ finding.title }} ({{ finding.verdict or "?" }}){{ " — " ~ finding.verdict_reason if finding.verdict_reason else "" }}</li>
+{% endfor %}
+</ul>
+</details>
+{% endif %}
+
+<h2>Пункты проверки</h2>
+<table>
+<thead>
+<tr><th>Пункт</th><th>Статус</th><th>Замечаний</th><th>Ходов</th><th>Токенов</th><th>Из кэша</th><th>Время</th></tr>
+</thead>
+<tbody>
+{% for item in items %}
+<tr>
+<td>{{ item.title }}</td>
+<td>{{ STATUS_ICON[item.status] }}</td>
+<td class="num">{{ item.findings_count }}</td>
+<td class="num">{{ item.turns }}</td>
+<td class="num">{{ item.total_tokens | thousands }}</td>
+<td class="num">{{ (item.cache.hit_rate | percent) if item.cache.state == "hit" else ("н/д" if item.cache.state == "unknown" else "0%") }}</td>
+<td class="num">{{ item.duration_s | fixed }}с</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+{% if failed_items %}
+<h2>Упавшие пункты</h2>
+<ul>
+{% for item in failed_items %}
+<li class="failed"><strong>{{ item.title }}</strong>: {{ item.error }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<h2>Изменённые файлы</h2>
+<pre><code>{% for file in files %}
+{{- "%-3s +%-5s -%-5s %s" | format(file.status, file.added, file.removed, file.file) }}
+{% endfor %}</code></pre>
+{% endblock %}
