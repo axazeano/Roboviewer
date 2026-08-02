@@ -41,6 +41,11 @@ class Usage(BaseModel):
     # ~24k context block is resent on every turn, so this is the single number
     # that says whether a run costs full price or a tenth of it.
     cached_tokens: int = 0
+    # Whether the provider reported the number above at all. No hits and no
+    # statistics are different states: a gateway may serve the shared prefix
+    # from its cache and still leave prompt_tokens_details empty, so silence
+    # says nothing about whether caching worked.
+    cache_reported: bool = False
 
     @property
     def total_tokens(self) -> int:
@@ -55,6 +60,7 @@ class Usage(BaseModel):
             prompt_tokens=self.prompt_tokens + other.prompt_tokens,
             completion_tokens=self.completion_tokens + other.completion_tokens,
             cached_tokens=self.cached_tokens + other.cached_tokens,
+            cache_reported=self.cache_reported or other.cache_reported,
         )
 
 

@@ -222,28 +222,44 @@ def _field(obj: Any, name: str, default: int = 0) -> int:
         return default
 
 
-def _cached_tokens(raw: Any) -> int:
-    """Prefix-cache hits, under whichever name this gateway reports them."""
+def _present(obj: Any, name: str) -> bool:
+    """Whether the field is there at all, as opposed to being there and zero."""
+    if obj is None:
+        return False
+    value = obj.get(name) if isinstance(obj, dict) else getattr(obj, name, None)
+    return value is not None
+
+
+def _cached_tokens(raw: Any) -> tuple[int, bool]:
+    """(prefix-cache hits, whether the provider reported them at all).
+
+    A gateway that leaves prompt_tokens_details empty still caches prefixes —
+    the absence of the field means the count is unknown, not that it is zero.
+    The two are returned apart rather than folded together, because a zero is a
+    reason to go looking for an unstable prefix and silence is not.
+    """
     details = raw.get("prompt_tokens_details") if isinstance(raw, dict) else getattr(
         raw, "prompt_tokens_details", None
     )
-    if (hit := _field(details, "cached_tokens")) > 0:
-        return hit
+    if _present(details, "cached_tokens"):
+        return _field(details, "cached_tokens"), True
     # Anthropic-style shims and DeepSeek use their own field names
     for alias in ("cache_read_input_tokens", "prompt_cache_hit_tokens"):
-        if (hit := _field(raw, alias)) > 0:
-            return hit
-    return 0
+        if _present(raw, alias):
+            return _field(raw, alias), True
+    return 0, False
 
 
 def _extract_usage(completion: Any) -> Usage:
     raw = getattr(completion, "usage", None)
     if raw is None:
         return Usage()
+    cached, reported = _cached_tokens(raw)
     return Usage(
         prompt_tokens=_field(raw, "prompt_tokens"),
         completion_tokens=_field(raw, "completion_tokens"),
-        cached_tokens=_cached_tokens(raw),
+        cached_tokens=cached,
+        cache_reported=reported,
     )
 
 

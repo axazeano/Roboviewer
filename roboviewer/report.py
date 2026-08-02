@@ -38,7 +38,12 @@ def _render_finding(run: ReviewRun, finding: Finding) -> str:
 
 def _cache_lines(run: ReviewRun) -> list[str]:
     """Prefix-cache stats. The same context block is resent on every turn, so a
-    run either costs full price or a fraction of it depending on this number."""
+    run either costs full price or a fraction of it depending on this number.
+
+    Three states rather than two: hits, a reported zero, and a provider that
+    keeps no count. Only the middle one means the cache failed, so a provider
+    that says nothing gets its own wording instead of an invented zero.
+    """
     usage = run.total_usage
     if not usage.prompt_tokens:
         return []
@@ -46,9 +51,17 @@ def _cache_lines(run: ReviewRun) -> list[str]:
         share = f"{usage.cache_hit_rate:.0%}"
         saved = f"{usage.cached_tokens:,}".replace(",", " ")
         return [f"- Из кэша: {saved} токенов промпта ({share} входящих)"]
+    if not usage.cache_reported:
+        return [
+            "- Из кэша: неизвестно — провайдер не отдаёт статистику "
+            "(`usage.prompt_tokens_details` пуст).",
+            "  Это не значит, что кэша нет: провайдер может отдавать общий префикс из кэша "
+            "молча. Проверяется",
+            "  латентностью — повтор того же префикса приходит заметно быстрее холодного.",
+        ]
     return [
-        "- Из кэша: 0 — кеширование промпта не сработало ни разу.",
-        "  Провайдер его не поддерживает, не отдаёт статистику либо префикс каждый раз разный.",
+        "- Из кэша: 0 — провайдер статистику отдаёт, но ни одного попадания.",
+        "  Значит, префикс каждый раз разный либо кэширование на стороне провайдера выключено.",
     ]
 
 
@@ -109,7 +122,10 @@ def render_markdown(run: ReviewRun) -> str:
     ]
     for item in run.items:
         status = {"ok": "✅", "failed": "❌", "skipped": "⏭", "pending": "…", "running": "…"}[item.status]
-        cache = f"{item.usage.cache_hit_rate:.0%}" if item.usage.cached_tokens else "—"
+        if item.usage.cached_tokens:
+            cache = f"{item.usage.cache_hit_rate:.0%}"
+        else:
+            cache = "0%" if item.usage.cache_reported else "н/д"
         out.append(
             f"| {item.item_title} | {status} | {len(item.findings)} | {item.turns} | "
             f"{item.usage.total_tokens} | {cache} | {item.duration_s:.0f}с |"
