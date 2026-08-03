@@ -26,25 +26,22 @@ SEVERITY_ORDER: dict[Severity, int] = {
     Severity.NIT: 3,
 }
 
-SEVERITY_LABEL_RU: dict[Severity, str] = {
-    Severity.BLOCKER: "Блокер",
-    Severity.MAJOR: "Существенно",
-    Severity.MINOR: "Незначительно",
-    Severity.NIT: "Придирка",
+SEVERITY_LABEL: dict[Severity, str] = {
+    Severity.BLOCKER: "Blocker",
+    Severity.MAJOR: "Major",
+    Severity.MINOR: "Minor",
+    Severity.NIT: "Nit",
 }
 
 
 class Usage(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    # Part of prompt_tokens the provider served from its prefix cache. The same
-    # ~24k context block is resent on every turn, so this is the single number
-    # that says whether a run costs full price or a tenth of it.
+    # Part of prompt_tokens served from the provider's prefix cache.
     cached_tokens: int = 0
-    # Whether the provider reported the number above at all. No hits and no
-    # statistics are different states: a gateway may serve the shared prefix
-    # from its cache and still leave prompt_tokens_details empty, so silence
-    # says nothing about whether caching worked.
+    # Whether the provider reported that number at all. A gateway may serve the
+    # prefix from cache and still leave prompt_tokens_details empty, so zero
+    # hits and no statistics are different states.
     cache_reported: bool = False
 
     @property

@@ -1,86 +1,86 @@
-# Ревью feature/CHATS-16018 → develop
+# Review feature/CHATS-16018 → develop
 
-- Прогон: `20260802-2104-3f1c`
-- База сравнения: `abcdef123456` · HEAD: `1234567890ab`
-- Модель: `qwen3.6-27b`
-- Файлов изменено: 3 (+50 / -191)
-- Токенов: 167 100
-- Из кэша: 108 000 токенов промпта (67% входящих)
+- Run: `20260802-2104-3f1c`
+- Merge base: `abcdef123456` · HEAD: `1234567890ab`
+- Model: `qwen3.6-27b`
+- Files changed: 3 (+50 / -191)
+- Tokens: 167 100
+- From cache: 108 000 prompt tokens (67% of input)
 
-## Итог
+## Summary
 
-- 🛑 Блокер: 1
-- ⚠️ Существенно: 1
-- 🔹 Незначительно: 1
-- 💬 Придирка: 1
+- 🛑 Blocker: 1
+- ⚠️ Major: 1
+- 🔹 Minor: 1
+- 💬 Nit: 1
 
 > Ключевое — расчёт ширины.
 > Остальное косметика.
 
-## Замечания
+## Findings
 
 ### 🛑 F1 · Половина ширины вместо обрезки
 
-**Где:** `Sources/UI/BubbleContentLayout.swift:88`  
-**Важность:** Блокер · **Категория:** correctness · **Уверенность:** 82%  
-**Пункты чек-листа:** 10-correctness, 80-architecture
+**Where:** `Sources/UI/BubbleContentLayout.swift:88`  
+**Severity:** Blocker · **Category:** correctness · **Confidence:** 82%  
+**Checklist items:** 10-correctness, 80-architecture
 
 `availableWidth / 2` считается до вычета инсетов, поэтому длинная
 строка обрезается вместо переноса.
 
-**Что сделать:** Считать ширину после `layoutMargins`.
+**Fix:** Считать ширину после `layoutMargins`.
 
-> Судья (confirmed): Подтверждено чтением файла целиком.
+> Judge (confirmed): Подтверждено чтением файла целиком.
 
 ### ⚠️ F2 · Жадный frame(maxWidth: .infinity)
 
-**Где:** `Sources/UI/BubbleReplyBlock.swift:31`  
-**Важность:** Существенно · **Категория:** performance · **Уверенность:** 60%  
-**Пункты чек-листа:** 60-performance
+**Where:** `Sources/UI/BubbleReplyBlock.swift:31`  
+**Severity:** Major · **Category:** performance · **Confidence:** 60%  
+**Checklist items:** 60-performance
 
 Блок растягивается на всю доступную ширину и ломает выравнивание ответа.
 
 ### 🔹 F3 · Нет теста на пустой reply
 
-**Где:** `Sources/UI/BubbleReplyBlock.swift`  
-**Важность:** Незначительно · **Категория:** tests · **Уверенность:** 45%  
-**Пункты чек-листа:** —
+**Where:** `Sources/UI/BubbleReplyBlock.swift`  
+**Severity:** Minor · **Category:** tests · **Confidence:** 45%  
+**Checklist items:** —
 
 Ветка с пустым текстом ответа не покрыта.
 
-**Что сделать:** Добавить кейс в `BubbleReplyBlockTests`.
+**Fix:** Добавить кейс в `BubbleReplyBlockTests`.
 
-> Судья (nitpick): Тест желателен, но не блокирует.
+> Judge (nitpick): Тест желателен, но не блокирует.
 
 ### 💬 F4 · Лишний import
 
-**Где:** `Sources/UI/BubbleContentLayout.swift:12`  
-**Важность:** Придирка · **Категория:** style · **Уверенность:** 90%  
-**Пункты чек-листа:** 80-architecture
+**Where:** `Sources/UI/BubbleContentLayout.swift:12`  
+**Severity:** Nit · **Category:** style · **Confidence:** 90%  
+**Checklist items:** 80-architecture
 
 `import Combine` не используется.
 
 <details>
-<summary>Отклонено судьёй (2)</summary>
+<summary>Rejected by the judge (2)</summary>
 
 - `Sources/UI/Legacy.swift:5` Ключ в исходниках (false_positive) — Это идентификатор ресурса, не ключ.
 - `Sources/UI/BubbleContentLayout.swift:90` Дубль про ширину (duplicate) — Совпадает с F1.
 
 </details>
 
-## Пункты проверки
+## Checklist items
 
-| Пункт | Статус | Замечаний | Ходов | Токенов | Из кэша | Время |
+| Item | Status | Findings | Turns | Tokens | Cached | Time |
 |---|---|---|---|---|---|---|
-| Корректность | ✅ | 1 | 9 | 124200 | 80% | 74с |
-| Многопоточность | ❌ | 0 | 2 | 24000 | 0% | 13с |
-| Тесты | ⏭ | 0 | 0 | 0 | н/д | 0с |
+| Корректность | ✅ | 1 | 9 | 124200 | 80% | 74s |
+| Многопоточность | ❌ | 0 | 2 | 24000 | 0% | 13s |
+| Тесты | ⏭ | 0 | 0 | 0 | n/a | 0s |
 
-### Упавшие пункты
+### Failed items
 
-- **Многопоточность**: провайдер вернул 502 после 3 попыток
+- **Многопоточность**: the provider returned 502 after 3 attempts
 
-## Изменённые файлы
+## Changed files
 
 ```
 M   +42    -7     Sources/UI/BubbleContentLayout.swift

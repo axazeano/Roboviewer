@@ -1,24 +1,24 @@
-# Ревью feature/CHATS-16018 → develop
+# Review feature/CHATS-16018 → develop
 
-- Прогон: `20260802-2104-3f1c`
-- База сравнения: `abcdef123456` · HEAD: `1234567890ab`
-- Модель: `qwen3.6-27b`
-- Файлов изменено: 3 (+50 / -191)
-- Токенов: 31 100
-- Из кэша: 0 — провайдер статистику отдаёт, но ни одного попадания.
-  Значит, префикс каждый раз разный либо кэширование на стороне провайдера выключено.
+- Run: `20260802-2104-3f1c`
+- Merge base: `abcdef123456` · HEAD: `1234567890ab`
+- Model: `qwen3.6-27b`
+- Files changed: 3 (+50 / -191)
+- Tokens: 31 100
+- From cache: 0 — the provider does report statistics, and there was not a single hit.
+  So either the prefix differs every time, or caching is off on the provider's side.
 
-## Итог
+## Summary
 
-Замечаний нет.
+No findings.
 
-## Пункты проверки
+## Checklist items
 
-| Пункт | Статус | Замечаний | Ходов | Токенов | Из кэша | Время |
+| Item | Status | Findings | Turns | Tokens | Cached | Time |
 |---|---|---|---|---|---|---|
-| Корректность | ✅ | 0 | 4 | 31100 | 0% | 23с |
+| Корректность | ✅ | 0 | 4 | 31100 | 0% | 23s |
 
-## Изменённые файлы
+## Changed files
 
 ```
 M   +42    -7     Sources/UI/BubbleContentLayout.swift

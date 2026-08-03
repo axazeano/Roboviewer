@@ -20,23 +20,24 @@ _SECRET_HEADERS = ("authorization", "api-key", "x-api-key", "token", "cookie", "
 
 _HINTS: dict[int, str] = {
     400: (
-        "Шлюз не принял запрос — обычно из-за поля, которого он не знает. "
-        "Кандидаты: parallel_tool_calls (выстави false) и tool_choice "
-        "(см. terminal_tool_choice ниже)."
+        "The gateway rejected the request, usually over a field it does not know. "
+        "Candidates: parallel_tool_calls (set it to false) and tool_choice "
+        "(see terminal_tool_choice below)."
     ),
     401: (
-        "Авторизация не прошла. Если ключ точно рабочий, дело обычно в форме его "
-        "передачи: SDK по умолчанию шлёт Authorization: Bearer <ключ>, а шлюз может "
-        "ждать api-key, X-Api-Key или другую схему — см. provider.auth_header и "
-        "provider.auth_scheme. Сравни дамп запроса ниже с тем, что проходит вручную."
+        "Authentication failed. If the key definitely works, it is usually how the key "
+        "is passed: the SDK sends Authorization: Bearer <key> by default, while the "
+        "gateway may expect api-key, X-Api-Key or another scheme — see "
+        "provider.auth_header and provider.auth_scheme. Compare the request dump below "
+        "with a request that works by hand."
     ),
-    403: "Ключ принят, но доступа к этой модели нет. Проверь имя модели и права ключа.",
+    403: "The key was accepted, but this model is not available to it. Check the model name and the key's permissions.",
     404: (
-        "Эндпоинт не найден. Чаще всего base_url указан без /v1 либо, наоборот, "
-        "с лишним /chat/completions на конце."
+        "Endpoint not found. Most often base_url is missing /v1, or conversely "
+        "carries a stray /chat/completions at the end."
     ),
-    422: "Шлюз не принял схему запроса. Проверь имя модели и max_tokens.",
-    429: "Лимит запросов. Ключ рабочий — дело в квоте.",
+    422: "The gateway rejected the request schema. Check the model name and max_tokens.",
+    429: "Rate limited. The key works — this is a quota.",
 }
 
 
@@ -46,7 +47,7 @@ def _mask_value(name: str, value: str) -> str:
     if not any(marker in name.lower() for marker in _SECRET_HEADERS):
         return value
     scheme, _, secret = value.partition(" ")
-    if not secret:  # header without a scheme, the whole value is the key
+    if not secret:  # header without a scheme: the whole value is the key
         return f"{value[:4]}…{value[-4:]}" if len(value) > 12 else "***"
     tail = f"{secret[:4]}…{secret[-4:]}" if len(secret) > 12 else "***"
     return f"{scheme} {tail}"
@@ -82,7 +83,7 @@ class _Wire:
         )
 
     def dump(self) -> None:
-        print("Запрос, ушедший на провод:")
+        print("Request as it went over the wire:")
         print(f"  {self.method} {self.url}")
         skip = ("host", "accept-encoding", "connection", "content-length", "accept", "user-agent")
         for name, value in _mask_headers(self.request_headers).items():
@@ -93,7 +94,7 @@ class _Wire:
             print(f"  {name}: {value}")
         if self.status is not None:
             print()
-            print(f"Ответ: HTTP {self.status}")
+            print(f"Response: HTTP {self.status}")
             for name in ("www-authenticate", "x-request-id", "x-error", "server", "content-type"):
                 if name in self.response_headers:
                     print(f"  {name}: {self.response_headers[name]}")
@@ -112,7 +113,7 @@ def _body_of(exc: Any) -> str:
             return response.text[:2000]
         except Exception:  # noqa: BLE001
             pass
-    return "(тело ответа пустое)"
+    return "(empty response body)"
 
 
 def _with_cause(exc: Exception) -> str:
@@ -121,7 +122,7 @@ def _with_cause(exc: Exception) -> str:
     text = f"{type(exc).__name__}: {exc}"
     cause = exc.__cause__ or exc.__context__
     if cause is not None and str(cause) and str(cause) not in str(exc):
-        text += f"\n    Первопричина: {type(cause).__name__}: {str(cause)[:300]}"
+        text += f"\n    Root cause: {type(cause).__name__}: {str(cause)[:300]}"
     return text
 
 
@@ -129,10 +130,10 @@ PONG_TOOL = {
     "type": "function",
     "function": {
         "name": "pong",
-        "description": "Вернуть ответ вызовом этого тула",
+        "description": "Answer by calling this tool",
         "parameters": {
             "type": "object",
-            "properties": {"text": {"type": "string", "description": "Любое слово"}},
+            "properties": {"text": {"type": "string", "description": "Any word"}},
             "required": ["text"],
         },
     },
@@ -142,7 +143,7 @@ PONG_TOOL = {
 TOOL_MODES: list[tuple[str, str, Any]] = [
     ("auto", 'tool_choice = "auto"', "auto"),
     ("required", 'tool_choice = "required"', "required"),
-    ("forced", "tool_choice = {функция}", {"type": "function", "function": {"name": "pong"}}),
+    ("forced", "tool_choice = {function}", {"type": "function", "function": {"name": "pong"}}),
 ]
 
 
@@ -166,13 +167,13 @@ class ProbeResult:
 
     def summary(self) -> str:
         if self.error:
-            return f"ошибка — {self.error}"
+            return f"error — {self.error}"
         if self.tool_calls:
             return f"tool_calls: {', '.join(self.tool_calls)}"
         if self.legacy_function_call:
-            return f"устаревшее поле function_call: {self.legacy_function_call}"
-        text = self.content.strip().replace("\n", " ")[:90] or "(пусто)"
-        marker = "текст, похожий на вызов" if self.content_looks_like_call else "обычный текст"
+            return f"legacy function_call field: {self.legacy_function_call}"
+        text = self.content.strip().replace("\n", " ")[:90] or "(empty)"
+        marker = "text that looks like a call" if self.content_looks_like_call else "plain text"
         return f"{marker} · finish_reason={self.finish_reason} · {text}"
 
 
@@ -188,7 +189,7 @@ async def _request(provider: ProviderConfig, *, tools: bool, tool_choice: Any,
     )
     kwargs: dict[str, Any] = {
         "model": provider.model,
-        "messages": [{"role": "user", "content": "Вызови тул pong со словом ping."
+        "messages": [{"role": "user", "content": "Call the pong tool with the word ping."
                       if tools else "ping"}],
         "max_tokens": 64,
         "extra_headers": provider.request_headers(),
@@ -204,9 +205,9 @@ async def _request(provider: ProviderConfig, *, tools: bool, tool_choice: Any,
     try:
         completion = await client.chat.completions.create(**kwargs)
     except APIStatusError as exc:
-        lines = [f"HTTP {exc.status_code}", f"Тело ответа: {_body_of(exc)}"]
+        lines = [f"HTTP {exc.status_code}", f"Response body: {_body_of(exc)}"]
         if exc.status_code in _HINTS:
-            lines.append(f"Вероятная причина: {_HINTS[exc.status_code]}")
+            lines.append(f"Likely cause: {_HINTS[exc.status_code]}")
         result.error = "\n    ".join(lines)
         return result
     except (APIError, Exception) as exc:  # noqa: BLE001 — network, DNS, TLS
@@ -227,11 +228,11 @@ async def _request(provider: ProviderConfig, *, tools: bool, tool_choice: Any,
 
 
 def _print_auth_hints() -> None:
-    print("Сравни это с запросом, который у тебя проходит вручную. Если отличается")
-    print("форма авторизации — настрой provider.auth_header / provider.auth_scheme:")
-    print('  auth_header = "api-key",   auth_scheme = ""       → api-key: <ключ>')
-    print('  auth_header = "X-Api-Key", auth_scheme = ""       → X-Api-Key: <ключ>')
-    print('  auth_scheme = "Token"                             → Authorization: Token <ключ>')
+    print("Compare this with a request that works for you by hand. If the shape of")
+    print("the authentication differs, set provider.auth_header / provider.auth_scheme:")
+    print('  auth_header = "api-key",   auth_scheme = ""       → api-key: <key>')
+    print('  auth_header = "X-Api-Key", auth_scheme = ""       → X-Api-Key: <key>')
+    print('  auth_scheme = "Token"                             → Authorization: Token <key>')
 
 
 async def _probe_all(provider: ProviderConfig, wire: _Wire) -> tuple[ProbeResult, dict[str, ProbeResult]]:
@@ -257,72 +258,72 @@ def _report_tool_modes(modes: dict[str, ProbeResult]) -> int:
     print()
 
     if not working:
-        print("Итог: шлюз не вернул ни одного настоящего tool_call.")
+        print("Verdict: the gateway returned no real tool_call at all.")
         if any(modes[k].legacy_function_call for k in modes):
-            print("  Пришло устаревшее поле function_call вместо tool_calls — шлюз говорит на")
-            print("  протоколе до июня 2023 года. Ревьюер такого не поймёт.")
+            print("  A legacy function_call field arrived instead of tool_calls — the gateway")
+            print("  speaks the pre-June-2023 protocol. The reviewer will not understand it.")
         elif any(modes[k].content_looks_like_call for k in modes):
-            print("  Вместо вызова пришёл текст, похожий на вызов: шлюз не разбирает tool_call,")
-            print("  а просто пересказывает его словами. Ревьюер попробует достать JSON из")
-            print("  текста, но надёжной работы не будет — замечания будут теряться.")
+            print("  Instead of a call, text that looks like one arrived: the gateway does not")
+            print("  parse tool_call, it just retells it in words. The reviewer will try to pull")
+            print("  JSON out of the text, but it will not be reliable — findings will be lost.")
         else:
-            print("  Модель просто ответила текстом. Либо она не умеет tool calling, либо")
-            print("  шлюз выкидывает поле tools из запроса.")
-        print("  Что делать: взять модель с поддержкой tool calling или другой шлюз.")
+            print("  The model simply answered with text. Either it cannot do tool calling, or")
+            print("  the gateway drops the tools field from the request.")
+        print("  What to do: take a model that supports tool calling, or another gateway.")
         return 1
 
     # The reviewer needs "auto" during the run and the terminal mode on the last turn.
     if "auto" not in working:
-        print("Итог: tool calling есть, но не при tool_choice = \"auto\".")
-        print("  Ревьюер работает именно на auto: он сам решает, читать ли файлы, и")
-        print("  форсирует вызов только на последнем ходу. Такой шлюз не подойдёт.")
+        print("Verdict: tool calling works, but not with tool_choice = \"auto\".")
+        print("  The reviewer runs on auto: it decides for itself whether to read files, and")
+        print("  forces a call only on the last turn. This gateway will not do.")
         return 1
 
     best = next(key for key in ("forced", "required", "auto") if key in working)
-    print("Итог: шлюз поддерживает tool calling.")
+    print("Verdict: the gateway supports tool calling.")
     if best == "forced":
-        print('  Настройка по умолчанию подходит: terminal_tool_choice = "forced".')
+        print('  The default setting fits: terminal_tool_choice = "forced".')
         return 0
 
-    print(f'  Но режим "forced" не поддерживается. Пропиши в конфиг:')
-    print(f'    [provider]')
+    print('  But "forced" mode is not supported. Put this in the config:')
+    print('    [provider]')
     print(f'    terminal_tool_choice = "{best}"')
     if best == "auto":
-        print("  На auto ревьюер не может заставить агента сдать результат на последнем")
-        print("  ходу — часть пунктов будет падать с «модель не вызвала submit_findings».")
-        print("  Помогает поднять max_turns.")
+        print("  On auto the reviewer cannot make the agent submit its result on the last")
+        print("  turn — some items will fail with \"the model never called submit_findings\".")
+        print("  Raising max_turns helps.")
     return 0
 
 
 def check_provider(provider: ProviderConfig) -> int:
     key, source = provider.api_key_source()
 
-    print("Провайдер")
+    print("Provider")
     print(f"  base_url       {provider.base_url}")
     print(f"  model          {provider.model}")
-    print(f"  ключ           {provider.masked_key()}")
-    print(f"  источник ключа {source}")
-    print(f"  авторизация    {provider.auth_header}: "
-          f"{(provider.auth_scheme + ' ') if provider.auth_scheme else ''}<ключ>")
-    print(f"  сдача результата  terminal_tool_choice = \"{provider.terminal_tool_choice}\"")
+    print(f"  key            {provider.masked_key()}")
+    print(f"  key source     {source}")
+    print(f"  auth           {provider.auth_header}: "
+          f"{(provider.auth_scheme + ' ') if provider.auth_scheme else ''}<key>")
+    print(f"  submission     terminal_tool_choice = \"{provider.terminal_tool_choice}\"")
     if provider.extra_headers:
-        print(f"  доп. заголовки {_mask_headers(provider.extra_headers)}")
+        print(f"  extra headers  {_mask_headers(provider.extra_headers)}")
     print()
 
     if key is None:
-        print("✗ Ключ не найден — запрос делать нечем.")
-        print(f"  Задай provider.api_key в конфиге или переменную {provider.api_key_env}.")
+        print("✗ No key found — there is nothing to make a request with.")
+        print(f"  Set provider.api_key in the config or the {provider.api_key_env} variable.")
         return 2
     if key != key.strip():
-        print("⚠ В ключе есть пробелы или перевод строки по краям — частая причина 401.")
+        print("⚠ The key has spaces or a newline at its edges — a common cause of 401.")
 
     wire = _Wire()
     plain, modes = asyncio.run(_probe_all(provider, wire))
 
-    print("1. Обычный запрос")
+    print("1. Plain request")
     if plain.ok:
         # For a plain request text is exactly what we want, so no call-shape verdict here
-        print(f"   ✓ ответ получен: {plain.content.strip()[:80] or '(пусто)'}")
+        print(f"   ✓ got an answer: {plain.content.strip()[:80] or '(empty)'}")
     else:
         print(f"   ✗ {plain.summary()}")
     if not plain.ok:
@@ -333,5 +334,5 @@ def check_provider(provider: ProviderConfig) -> int:
         return 1
 
     print()
-    print("2. Вызов тула — так ревьюер сдаёт результат")
+    print("2. Tool call — this is how the reviewer submits its result")
     return _report_tool_modes(modes)

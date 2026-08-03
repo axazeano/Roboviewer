@@ -28,10 +28,9 @@ class ChecklistItem:
     enabled: bool = True
     order: int = 100
     path: Path | None = None
-    # Filled from the directory's _system.md, when present. Lets a checklist state
-    # how many aspects an agent is holding at once — the default system prompt says
-    # "exactly one, other reviewers cover the rest", which is wrong for a set that
-    # groups several aspects into one agent.
+    # From the directory's _system.md, when present. A set that groups several
+    # aspects into one agent needs it: the default system prompt says "exactly
+    # one aspect, other reviewers cover the rest".
     system: str | None = None
 
 
@@ -61,12 +60,13 @@ def _parse_frontmatter(raw: str) -> tuple[dict[str, str], str]:
 def _as_bool(value: str | None, default: bool = True) -> bool:
     if value is None:
         return default
+    # "да" too: the bundled checklists are written in Russian
     return value.strip().lower() in {"1", "true", "yes", "on", "да"}
 
 
 def load_checklist(directory: Path, only: list[str] | None = None) -> list[ChecklistItem]:
     if not directory.is_dir():
-        raise FileNotFoundError(f"Каталог чек-листа не найден: {directory}")
+        raise FileNotFoundError(f"Checklist directory not found: {directory}")
 
     override = directory / SYSTEM_OVERRIDE
     system = override.read_text(encoding="utf-8").strip() if override.is_file() else None
@@ -98,9 +98,9 @@ def load_checklist(directory: Path, only: list[str] | None = None) -> list[Check
         items = [i for i in items if i.id in wanted]
         missing = wanted - {i.id for i in items}
         if missing:
-            raise ValueError(f"Пункты чек-листа не найдены: {', '.join(sorted(missing))}")
+            raise ValueError(f"Checklist items not found: {', '.join(sorted(missing))}")
 
     if not items:
-        raise ValueError(f"В {directory} нет активных пунктов чек-листа")
+        raise ValueError(f"No enabled checklist items in {directory}")
 
     return sorted(items, key=lambda i: (i.order, i.id))

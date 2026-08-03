@@ -1,4 +1,4 @@
-"""Отчёт в markdown — то, что читают в терминале и вставляют в MR."""
+"""The markdown report — read in a terminal, pasted into a merge request."""
 
 from __future__ import annotations
 

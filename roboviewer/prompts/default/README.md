@@ -1,34 +1,38 @@
-# Промпты
+# Prompts
 
-Четыре файла в этом каталоге — тексты, которые целиком уходят модели. Правь их
-свободно; плейсхолдеры в фигурных скобках подставляются кодом. Литеральные
-фигурные скобки в тексте нужно удваивать: `{{` и `}}`.
+The four files in this directory are the texts that go to the model verbatim.
+Edit them freely; the placeholders in curly braces are substituted by the code.
+Literal braces in the text must be doubled: `{{` and `}}`.
 
-Этот файл (README.md) промптом не является и модели не показывается.
+They are written in Russian, and so are the findings the model returns. This
+file (README.md) is not a prompt and is never shown to the model.
 
-| Файл | Кто видит | Плейсхолдеры |
+| File | Who sees it | Placeholders |
 |---|---|---|
-| `item_system.md` | системный промпт агента-ревьюера¹ | — |
-| `item_user.md` | задание агенту-ревьюеру | `{context}` `{item_title}` `{item_body}` |
-| `judge_system.md` | системный промпт судьи | — |
-| `judge_user.md` | задание судье | `{context}` `{count}` `{findings}` |
+| `item_system.md` | system prompt of the reviewer agent¹ | — |
+| `item_user.md` | task for the reviewer agent | `{context}` `{item_title}` `{item_body}` |
+| `judge_system.md` | system prompt of the judge | — |
+| `judge_user.md` | task for the judge | `{context}` `{count}` `{findings}` |
 
-¹ Набор чек-листов может заменить системный промпт ревьюера своим `_system.md`
-в каталоге набора — тогда `item_system.md` для его пунктов не используется.
+¹ A checklist set can replace the reviewer's system prompt with its own
+`_system.md` in the set's directory — then `item_system.md` is not used for its
+items.
 
-Блок `{context}` — шапка MR, список изменённых файлов, сами файлы с разметкой и
-легенда к ней — собирается кодом (`prompts/__init__.py`) и здесь не правится:
-это не формулировки, а сборка из полей диффа, а легенда обязана совпадать с
-разметкой, которую реально проставляет `gitdiff.py`.
+The `{context}` block — the MR header, the list of changed files, the files
+themselves with markup, and the legend for it — is assembled by the code
+(`prompts/__init__.py`) and is not edited here. It is assembly over diff fields
+rather than wording, and the legend has to match the markup `gitdiff.py`
+actually emits.
 
-## Как переопределить
+## Overriding
 
-Нужен не весь набор, а только то, что вы меняете: каждый файл ищется сначала в
-вашем каталоге, недостающие берутся отсюда. Каталог — `.roboviewer/prompts/`
-внутри проверяемого репозитория (подхватывается сам) либо любой другой,
-указанный через `run.prompts_dir` в конфиге.
+You need only the files you change: each one is looked up in your directory
+first, and the rest come from here. The directory is `.roboviewer/prompts/`
+inside the reviewed repository (picked up on its own) or any other path set via
+`run.prompts_dir` in the config.
 
-`roboviewer --show-config` печатает, какой файл откуда взялся.
+`roboviewer --show-config` prints which file came from where.
 
-Ошибка в плейсхолдере валит прогон на старте, до первого запроса к модели, и
-называет файл — так что опечатка стоит секунды, а не восьми упавших агентов.
+A broken placeholder fails the run at startup, before the first request to the
+model, and names the file — so a typo costs a second rather than eight failed
+agents.

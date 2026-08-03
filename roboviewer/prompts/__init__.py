@@ -1,18 +1,15 @@
 """Prompt templates, loaded from files.
 
-Four texts live here — the reviewer's system prompt and task, the judge's system
-prompt and task. Those are the ones that get rewritten while tuning a model, and
-editing a markdown file beats editing a string literal in code.
+Four texts get rewritten while tuning a model — the reviewer's system prompt and
+task, the judge's — so they live in markdown rather than in string literals.
+They stay in Russian: that is the language the reports come out in.
 
-The scaffolding around them stays in code below: the MR context block, the tail
-listing files that did not fit, and the annotation legend. Those are assembly
-wired to `DiffBundle` fields rather than wording — the legend in particular has
-to match the markup `gitdiff.py` actually emits, so it is not something to hand
-out for editing.
+The scaffolding below stays in code. The context block, the tail listing files
+that did not fit and the annotation legend are assembly over `DiffBundle`
+fields, and the legend has to match the markup `gitdiff.py` actually emits.
 
-Resolution is per file: each template is looked up in the user's directory first
-and falls back to the bundled default, so a custom set carries only what it
-actually changes and picks up improvements to the rest.
+Each template resolves on its own, falling back to the bundled default, so a
+custom set carries only the files it changes.
 """
 
 from __future__ import annotations
@@ -22,7 +19,7 @@ from pathlib import Path
 
 from ..checklist import ChecklistItem
 from ..gitdiff import ANNOTATION_LEGEND, DiffBundle
-from ..models import SEVERITY_LABEL_RU, Finding
+from ..models import Finding
 
 DEFAULT_DIR = Path(__file__).resolve().parent / "default"
 
@@ -73,8 +70,8 @@ class PromptError(RuntimeError):
 @dataclass
 class Prompts:
     texts: dict[str, str]
-    # name → path the text came from; --show-config prints it, so that "which
-    # text produced these findings" never becomes a matter of memory
+    # name → path it was read from; --show-config prints this, so "which text
+    # produced these findings" is never a matter of memory
     sources: dict[str, str]
 
     # ------------------------------------------------------------------ loading
@@ -91,18 +88,17 @@ class Prompts:
             path = next((c for c in candidates if c.is_file()), None)
             if path is None:
                 raise PromptError(
-                    f"Шаблон {filename} не найден ни в {directory}, ни в комплекте ({DEFAULT_DIR})"
+                    f"Template {filename} not found in {directory} or in the bundled set ({DEFAULT_DIR})"
                 )
-            # Trailing newlines are meaningless to the model but break template
-            # composition; leading indentation inside the text is preserved.
+            # Trailing newlines mean nothing to the model but break composition;
+            # indentation inside the text is preserved.
             texts[name] = path.read_text(encoding="utf-8").strip("\n")
             sources[name] = str(path)
         return cls(texts=texts, sources=sources)
 
     def validate(self, items: list[ChecklistItem], diff: DiffBundle) -> None:
         """Renders every template against the real diff before any tokens are
-        spent: a broken placeholder must fail the run at startup, not eight
-        agents deep."""
+        spent, so a broken placeholder fails at startup, not eight agents deep."""
         for item in items:
             self.build_item_prompt(item, diff)
         self.build_judge_prompt([], diff)
@@ -122,9 +118,9 @@ class Prompts:
             return self.texts[name].format(**values)
         except (KeyError, IndexError, ValueError) as exc:
             raise PromptError(
-                f"Шаблон {self.sources[name]} не отрендерился ({exc!r}). "
-                f"Плейсхолдеры пишутся как {{имя}}, литеральные фигурные скобки "
-                f"удваиваются: {{{{ и }}}}. Доступные плейсхолдеры перечислены в "
+                f"Template {self.sources[name]} failed to render ({exc!r}). "
+                f"Placeholders are written as {{name}}; literal braces are doubled "
+                f"as {{{{ and }}}}. The available placeholders are listed in "
                 f"{DEFAULT_DIR / 'README.md'}"
             ) from exc
 
@@ -165,12 +161,12 @@ def _context_block(diff: DiffBundle) -> str:
 
 
 def _render_finding(finding: Finding) -> str:
-    """Serialization of a finding for the judge — structure, not prose, so it
-    stays in code rather than in a template."""
+    """A finding as the judge sees it — structure, not prose, so it stays in
+    code rather than in a template."""
     lines = [
         f"## {finding.id} — {finding.title}",
         f"- Файл: `{finding.location}`",
-        f"- Важность: {SEVERITY_LABEL_RU[finding.severity]} ({finding.severity.value})",
+        f"- Важность: {finding.severity.value}",
         f"- Категория: {finding.category}",
         f"- Уверенность ревьюера: {finding.confidence:.2f}",
         f"- Нашли пункты: {', '.join(finding.sources) or '—'}",

@@ -1,9 +1,9 @@
-"""Ошибки рендеринга — отдельным модулем, чтобы `_jinja` и реестр ссылались на
-одну иерархию и не импортировали друг друга по кругу.
+"""Render errors, in their own module so `_jinja` and the registry share one
+hierarchy without importing each other in a circle.
 
-Тип один на всё, что мешает получить отчёт, потому что вызывающему нужно одно
-решение: прогон состоялся, но показать его нечем. `TemplateError` — частный
-случай для шаблонных рендеров.
+One type for everything that stops a report from being produced: the caller has
+a single decision to make — the run happened, but there is nothing to show.
+`TemplateError` is the templated-render special case.
 """
 
 from __future__ import annotations

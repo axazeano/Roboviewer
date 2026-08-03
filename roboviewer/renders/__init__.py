@@ -1,14 +1,14 @@
-"""Рендеры отчёта — по файлу на формат.
+"""Report renders — one file per format.
 
-Рендер отвечает на три вопроса: как он называется в `--format`, как называется
-файл, который он пишет, и как из прогона получается его содержимое. Всё, что
-делает файл рядом с этим, — модуль с `NAME`, `FILENAME` и `render(run,
-templates_dir)`; список каталога и есть список форматов.
+A render answers three questions: what it is called in `--format`, what file it
+writes, and how a run turns into that file's contents. So it is a module with
+`NAME`, `FILENAME` and `render(run, templates_dir)`, and the directory listing
+is the list of formats.
 
-Шаблонными они быть не обязаны. SARIF или Code Quality для GitLab — это
-сериализация, а не документ, и генерировать JSON текстовым шаблоном означает
-однажды получить невалидный файл из-за кавычки в тексте модели. Такой рендер
-ляжет сюда же обычным модулем и просто не тронет Jinja.
+Being template-based is optional. SARIF and GitLab Code Quality are
+serialization, not documents — generating JSON through a text template would
+eventually produce an invalid file from a quote in the model's prose, so those
+renders sit here as plain modules and never touch Jinja.
 """
 
 from __future__ import annotations
@@ -50,8 +50,8 @@ class Render(Protocol):
     def render(self, run: ReviewRun, templates_dir: Path | None = None) -> str: ...
 
 
-# Явный список, а не обход каталога: неизвестный формат должен падать на понятной
-# ошибке, а не на импорте случайного модуля.
+# An explicit list rather than a directory scan: an unknown format should fail
+# on a clear error, not on importing whatever module happens to match.
 BUILTIN: tuple[Render, ...] = (markdown, html, sarif, codequality)
 REGISTRY: dict[str, Render] = {render.NAME: render for render in BUILTIN}
 
@@ -69,17 +69,17 @@ def resolve(name: str, templates_dir: Path | None = None) -> Render:
         return _CustomTemplate(NAME=name, FILENAME=f"report.{name}", TEMPLATE=template)
 
     raise RenderError(
-        f"Неизвестный формат отчёта: {name}. Известные: {', '.join(known())}. "
-        f"Свой заводится шаблоном {template} в каталоге шаблонов."
+        f"Unknown report format: {name}. Known: {', '.join(known())}. "
+        f"A custom one is added with a {template} template in the templates directory."
     )
 
 
 def prepare(formats: Sequence[str], templates_dir: Path | None = None) -> list[Render]:
-    """Резолвит форматы и компилирует их шаблоны, ничего не рендеря.
+    """Resolves formats and compiles their templates without rendering anything.
 
-    Зовётся дважды: на старте прогона, чтобы опечатка в `--format` стоила
-    секунду, а не полный счёт за токены, и в `save()` перед первой записью,
-    чтобы не оставить на диске половину отчётов.
+    Called twice: at the start of a run, so a typo in `--format` costs a second
+    rather than the full token bill, and in `save()` before the first write, so
+    a failure does not leave half the reports on disk.
     """
     chosen = [resolve(fmt, templates_dir) for fmt in formats]
     for render in chosen:

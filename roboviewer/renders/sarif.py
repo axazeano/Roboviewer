@@ -96,7 +96,7 @@ def _rules(view: ReviewView) -> tuple[list[dict], dict[str, int]]:
 def _message(finding: FindingView) -> str:
     parts = [finding.title, finding.rationale]
     if finding.suggestion:
-        parts.append(f"Что сделать: {finding.suggestion}")
+        parts.append(f"Fix: {finding.suggestion}")
     return "\n\n".join(part for part in parts if part)
 
 
@@ -145,7 +145,7 @@ def _invocation(view: ReviewView) -> dict:
         invocation["toolExecutionNotifications"] = [
             {
                 "level": "error",
-                "message": {"text": f"Пункт «{item.title}» не отработал: {item.error}"},
+                "message": {"text": f"Checklist item “{item.title}” failed: {item.error}"},
                 "descriptor": {"id": item.id},
             }
             for item in view.failed_items

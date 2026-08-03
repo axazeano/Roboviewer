@@ -1,28 +1,28 @@
 {% import "_finding.md.j2" as parts %}
-# Ревью {{ meta.branch }} → {{ meta.target }}
+# Review {{ meta.branch }} → {{ meta.target }}
 
-- Прогон: `{{ meta.run_id }}`
-- База сравнения: `{{ meta.base_sha[:12] }}` · HEAD: `{{ meta.head_sha[:12] }}`
-- Модель: `{{ meta.model }}`
-- Файлов изменено: {{ stats.files_changed }} (+{{ stats.added }} / -{{ stats.removed }})
-- Токенов: {{ stats.total_tokens | thousands }}
+- Run: `{{ meta.run_id }}`
+- Merge base: `{{ meta.base_sha[:12] }}` · HEAD: `{{ meta.head_sha[:12] }}`
+- Model: `{{ meta.model }}`
+- Files changed: {{ stats.files_changed }} (+{{ stats.added }} / -{{ stats.removed }})
+- Tokens: {{ stats.total_tokens | thousands }}
 {% if cache.prompt_tokens %}
 {% if cache.state == "hit" %}
-- Из кэша: {{ cache.cached_tokens | thousands }} токенов промпта ({{ cache.hit_rate | percent }} входящих)
+- From cache: {{ cache.cached_tokens | thousands }} prompt tokens ({{ cache.hit_rate | percent }} of input)
 {% elif cache.state == "unknown" %}
-- Из кэша: неизвестно — провайдер не отдаёт статистику (`usage.prompt_tokens_details` пуст).
-  Это не значит, что кэша нет: провайдер может отдавать общий префикс из кэша молча. Проверяется
-  латентностью — повтор того же префикса приходит заметно быстрее холодного.
+- From cache: unknown — the provider reports no statistics (`usage.prompt_tokens_details` is empty).
+  That does not mean there is no cache: a provider may serve the shared prefix from cache silently.
+  Latency tells you — repeating the same prefix comes back noticeably faster than a cold one.
 {% else %}
-- Из кэша: 0 — провайдер статистику отдаёт, но ни одного попадания.
-  Значит, префикс каждый раз разный либо кэширование на стороне провайдера выключено.
+- From cache: 0 — the provider does report statistics, and there was not a single hit.
+  So either the prefix differs every time, or caching is off on the provider's side.
 {% endif %}
 {% endif %}
 
-## Итог
+## Summary
 
 {% if not findings %}
-Замечаний нет.
+No findings.
 
 {% else %}
 {% for row in stats.by_severity %}
@@ -35,7 +35,7 @@
 
 {% endif %}
 {% if findings %}
-## Замечания
+## Findings
 
 {% for finding in findings %}
 {{ parts.finding(finding) }}
@@ -43,7 +43,7 @@
 {% endif %}
 {% if rejected %}
 <details>
-<summary>Отклонено судьёй ({{ rejected | length }})</summary>
+<summary>Rejected by the judge ({{ rejected | length }})</summary>
 
 {% for finding in rejected %}
 - `{{ finding.location }}` {{ finding.title }} ({{ finding.verdict or "?" }}){{ " — " ~ finding.verdict_reason if finding.verdict_reason else "" }}
@@ -52,23 +52,23 @@
 </details>
 
 {% endif %}
-## Пункты проверки
+## Checklist items
 
-| Пункт | Статус | Замечаний | Ходов | Токенов | Из кэша | Время |
+| Item | Status | Findings | Turns | Tokens | Cached | Time |
 |---|---|---|---|---|---|---|
 {% for item in items %}
-| {{ item.title }} | {{ STATUS_ICON[item.status] }} | {{ item.findings_count }} | {{ item.turns }} | {{ item.total_tokens }} | {{ (item.cache.hit_rate | percent) if item.cache.state == "hit" else ("н/д" if item.cache.state == "unknown" else "0%") }} | {{ item.duration_s | fixed }}с |
+| {{ item.title }} | {{ STATUS_ICON[item.status] }} | {{ item.findings_count }} | {{ item.turns }} | {{ item.total_tokens }} | {{ (item.cache.hit_rate | percent) if item.cache.state == "hit" else ("n/a" if item.cache.state == "unknown" else "0%") }} | {{ item.duration_s | fixed }}s |
 {% endfor %}
 
 {% if failed_items %}
-### Упавшие пункты
+### Failed items
 
 {% for item in failed_items %}
 - **{{ item.title }}**: {{ item.error }}
 {% endfor %}
 
 {% endif %}
-## Изменённые файлы
+## Changed files
 
 ```
 {% for file in files %}

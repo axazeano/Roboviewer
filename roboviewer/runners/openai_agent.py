@@ -89,14 +89,14 @@ class OpenAIAgentRunner(Runner):
             if not tool_calls:
                 payload = _payload_from_text(message.content)
                 if payload is not None:
-                    emit("fallback", "payload извлечён из текста ответа")
+                    emit("fallback", "payload extracted from the response text")
                     return AgentOutcome(payload=payload, usage=usage, turns=turns)
                 if last_turn:
                     return AgentOutcome(
                         payload=None,
                         usage=usage,
                         turns=turns,
-                        error=f"модель не вызвала {request.terminal_name} за {request.max_turns} ходов",
+                        error=f"the model never called {request.terminal_name} in {request.max_turns} turns",
                     )
                 messages.append({"role": "assistant", "content": message.content or ""})
                 messages.append(
@@ -127,7 +127,7 @@ class OpenAIAgentRunner(Runner):
                 args = parse_arguments(call.function.arguments or "")
 
                 if fn_name == request.terminal_name:
-                    emit("submit", f"ход {turn}")
+                    emit("submit", f"turn {turn}")
                     return AgentOutcome(payload=args, usage=usage, turns=turns)
 
                 emit("tool", f"{fn_name}({_short_args(args)})")
@@ -143,7 +143,7 @@ class OpenAIAgentRunner(Runner):
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": output})
 
         return AgentOutcome(
-            payload=None, usage=usage, turns=turns, error="исчерпан лимит ходов"
+            payload=None, usage=usage, turns=turns, error="turn limit exhausted"
         )
 
     # ----------------------------------------------------------------- private
@@ -182,14 +182,14 @@ class OpenAIAgentRunner(Runner):
                 return await self._client.chat.completions.create(**kwargs)
             except (RateLimitError, APITimeoutError) as exc:
                 last_exc = exc
-                emit("retry", f"попытка {attempt}/{self._provider.max_retries}: {type(exc).__name__}")
+                emit("retry", f"attempt {attempt}/{self._provider.max_retries}: {type(exc).__name__}")
             except APIError as exc:
                 status = getattr(exc, "status_code", None)
                 # 4xx other than 429 is our own fault; retrying will not help
                 if status is not None and 400 <= status < 500 and status != 429:
                     raise
                 last_exc = exc
-                emit("retry", f"попытка {attempt}/{self._provider.max_retries}: HTTP {status}")
+                emit("retry", f"attempt {attempt}/{self._provider.max_retries}: HTTP {status}")
 
             if attempt < self._provider.max_retries:
                 await asyncio.sleep(delay)
@@ -206,11 +206,11 @@ def _describe(exc: Exception) -> str:
         detail = str(getattr(exc, "message", "") or exc)[:300]
         if status in (401, 403):
             return (
-                f"HTTP {status}: провайдер не принял ключ ({detail}). "
-                "Разбирайся через `roboviewer --check-provider`"
+                f"HTTP {status}: the provider rejected the key ({detail}). "
+                "Dig into it with `roboviewer --check-provider`"
             )
         if status == 404:
-            return f"HTTP 404: эндпоинт или модель не найдены ({detail}). Проверь base_url и model"
+            return f"HTTP 404: endpoint or model not found ({detail}). Check base_url and model"
         return f"HTTP {status}: {detail}"
     return f"{type(exc).__name__}: {exc}"
 

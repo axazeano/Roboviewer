@@ -1,34 +1,34 @@
 {% extends "_layout.html.j2" %}
 {% import "_finding.html.j2" as parts %}
 
-{% block title %}Ревью {{ meta.branch }} → {{ meta.target }}{% endblock %}
+{% block title %}Review {{ meta.branch }} → {{ meta.target }}{% endblock %}
 
 {% block content %}
-<h1>Ревью {{ meta.branch }} → {{ meta.target }}</h1>
+<h1>Review {{ meta.branch }} → {{ meta.target }}</h1>
 
 <dl class="meta">
-<dt>Прогон</dt><dd><code>{{ meta.run_id }}</code></dd>
-<dt>База сравнения</dt><dd><code>{{ meta.base_sha[:12] }}</code> · HEAD <code>{{ meta.head_sha[:12] }}</code></dd>
-<dt>Модель</dt><dd><code>{{ meta.model }}</code></dd>
-<dt>Файлов изменено</dt><dd>{{ stats.files_changed }} (+{{ stats.added }} / −{{ stats.removed }})</dd>
-<dt>Токенов</dt><dd>{{ stats.total_tokens | thousands }}</dd>
+<dt>Run</dt><dd><code>{{ meta.run_id }}</code></dd>
+<dt>Merge base</dt><dd><code>{{ meta.base_sha[:12] }}</code> · HEAD <code>{{ meta.head_sha[:12] }}</code></dd>
+<dt>Model</dt><dd><code>{{ meta.model }}</code></dd>
+<dt>Files changed</dt><dd>{{ stats.files_changed }} (+{{ stats.added }} / −{{ stats.removed }})</dd>
+<dt>Tokens</dt><dd>{{ stats.total_tokens | thousands }}</dd>
 {% if cache.prompt_tokens %}
-<dt>Из кэша</dt>
+<dt>From cache</dt>
 {% if cache.state == "hit" %}
-<dd>{{ cache.cached_tokens | thousands }} токенов промпта ({{ cache.hit_rate | percent }} входящих)</dd>
+<dd>{{ cache.cached_tokens | thousands }} prompt tokens ({{ cache.hit_rate | percent }} of input)</dd>
 {% elif cache.state == "unknown" %}
-<dd>неизвестно — провайдер не отдаёт статистику (<code>usage.prompt_tokens_details</code> пуст).
-Это не значит, что кэша нет: провайдер может отдавать общий префикс из кэша молча.
-Проверяется латентностью — повтор того же префикса приходит заметно быстрее холодного.</dd>
+<dd>unknown — the provider reports no statistics (<code>usage.prompt_tokens_details</code> is empty).
+That does not mean there is no cache: a provider may serve the shared prefix from cache silently.
+Latency tells you — repeating the same prefix comes back noticeably faster than a cold one.</dd>
 {% else %}
-<dd>0 — провайдер статистику отдаёт, но ни одного попадания. Значит, префикс каждый
-раз разный либо кэширование на стороне провайдера выключено.</dd>
+<dd>0 — the provider does report statistics, and there was not a single hit. So either
+the prefix differs every time, or caching is off on the provider's side.</dd>
 {% endif %}
 {% endif %}
 </dl>
 
 {% if not findings %}
-<p class="empty">Замечаний нет.</p>
+<p class="empty">No findings.</p>
 {% else %}
 <ul class="tally">
 {% for row in stats.by_severity %}
@@ -42,7 +42,7 @@
 {% endif %}
 
 {% if findings %}
-<h2>Замечания</h2>
+<h2>Findings</h2>
 {% for finding in findings %}
 {{ parts.finding(finding) }}
 {% endfor %}
@@ -50,7 +50,7 @@
 
 {% if rejected %}
 <details>
-<summary>Отклонено судьёй ({{ rejected | length }})</summary>
+<summary>Rejected by the judge ({{ rejected | length }})</summary>
 <ul>
 {% for finding in rejected %}
 <li><code>{{ finding.location }}</code> {{ finding.title }} ({{ finding.verdict or "?" }}){{ " — " ~ finding.verdict_reason if finding.verdict_reason else "" }}</li>
@@ -59,10 +59,10 @@
 </details>
 {% endif %}
 
-<h2>Пункты проверки</h2>
+<h2>Checklist items</h2>
 <table>
 <thead>
-<tr><th>Пункт</th><th>Статус</th><th>Замечаний</th><th>Ходов</th><th>Токенов</th><th>Из кэша</th><th>Время</th></tr>
+<tr><th>Item</th><th>Status</th><th>Findings</th><th>Turns</th><th>Tokens</th><th>Cached</th><th>Time</th></tr>
 </thead>
 <tbody>
 {% for item in items %}
@@ -72,15 +72,15 @@
 <td class="num">{{ item.findings_count }}</td>
 <td class="num">{{ item.turns }}</td>
 <td class="num">{{ item.total_tokens | thousands }}</td>
-<td class="num">{{ (item.cache.hit_rate | percent) if item.cache.state == "hit" else ("н/д" if item.cache.state == "unknown" else "0%") }}</td>
-<td class="num">{{ item.duration_s | fixed }}с</td>
+<td class="num">{{ (item.cache.hit_rate | percent) if item.cache.state == "hit" else ("n/a" if item.cache.state == "unknown" else "0%") }}</td>
+<td class="num">{{ item.duration_s | fixed }}s</td>
 </tr>
 {% endfor %}
 </tbody>
 </table>
 
 {% if failed_items %}
-<h2>Упавшие пункты</h2>
+<h2>Failed items</h2>
 <ul>
 {% for item in failed_items %}
 <li class="failed"><strong>{{ item.title }}</strong>: {{ item.error }}</li>
@@ -88,7 +88,7 @@
 </ul>
 {% endif %}
 
-<h2>Изменённые файлы</h2>
+<h2>Changed files</h2>
 <pre><code>{% for file in files %}
 {{- "%-3s +%-5s -%-5s %s" | format(file.status, file.added, file.removed, file.file) }}
 {% endfor %}</code></pre>

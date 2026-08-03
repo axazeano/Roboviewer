@@ -1,7 +1,7 @@
-"""Отчёт в HTML — один самодостаточный файл.
+"""The HTML report — one self-contained file.
 
-Стили инлайном, ни ссылок, ни скриптов, ни внешних картинок: такой отчёт
-открывают двойным щелчком и цепляют к тикету, тянуть ему неоткуда.
+Styles inline, no links, no scripts, no external images: this report is opened
+by double click and attached to a ticket, so it has nowhere to fetch from.
 """
 
 from __future__ import annotations

@@ -1,11 +1,12 @@
-"""Общее для всех шаблонных рендеров: окружение Jinja, фильтры, словари подписей.
+"""Shared by every templated render: the Jinja environment, filters, labels.
 
-Не рендер, поэтому с подчёркивания — как частичные шаблоны в `templates/`.
+Not a render itself, hence the underscore — same convention as the partials in
+`templates/`.
 
-Сами шаблоны лежат в `roboviewer/templates/` и являются данными, а не кодом:
-имя файла — `<документ>.<формат>.j2`, и расширение перед `.j2` решает
-экранирование. Markdown выводится как есть, HTML экранирует каждое значение,
-потому что заголовок находки — это текст модели, процитированный обратно.
+The templates live in `roboviewer/templates/` and are data, not code. A file is
+named `<document>.<format>.j2`, and the extension before `.j2` decides escaping:
+markdown goes out as-is, HTML escapes every value, because a finding's title is
+model output quoted back.
 """
 
 from __future__ import annotations
@@ -20,14 +21,13 @@ from markdown_it import MarkdownIt
 from markupsafe import Markup
 from pydantic import BaseModel
 
-from ..models import SEVERITY_LABEL_RU, Severity
+from ..models import SEVERITY_LABEL, Severity
 from ._errors import TemplateError
 
 DEFAULT_DIR = Path(__file__).resolve().parent.parent / "templates" / "default"
 
-# Presentation, so it lives next to the rendering rather than in the models. The
-# same two tables serve markdown and HTML, which is why they are not inlined in
-# either template.
+# Presentation, so it lives next to the rendering. Both tables serve markdown
+# and HTML, which is why neither is inlined in a template.
 SEVERITY_ICON: dict[Severity, str] = {
     Severity.BLOCKER: "🛑",
     Severity.MAJOR: "⚠️",
@@ -43,19 +43,17 @@ STATUS_ICON: dict[str, str] = {
     "running": "…",
 }
 
-# `html: False` is the point of this line. Rationale and suggestion are model
-# output, and a report is opened in a browser: the only markup allowed through
-# is what the parser itself produced, never what the text asked for.
-# `breaks` matches how GitLab renders a comment, so the same text reads the same
-# way in the report and in the merge request.
+# `html: False` is the point: rationale and suggestion are model output and the
+# report opens in a browser, so the only markup allowed through is what the
+# parser produced. `breaks` matches GitLab, so the same text reads the same way
+# in the report and in the merge request.
 _MARKDOWN = MarkdownIt("commonmark", {"html": False, "breaks": True})
 
 
 @lru_cache(maxsize=8)
 def environment(directory: Path | None = None) -> Environment:
-    """Cached per directory: a comparison document renders one template per run
-    and has no reason to rebuild the environment each time. Jinja still stats
-    template files on its own, so edits are picked up between renders."""
+    """Cached per directory — no reason to rebuild it for every render. Jinja
+    still stats template files itself, so edits are picked up between renders."""
     loaders: list[FileSystemLoader] = []
     if directory is not None:
         loaders.append(FileSystemLoader(str(directory)))
@@ -78,16 +76,16 @@ def environment(directory: Path | None = None) -> Environment:
     env.filters["fixed"] = _fixed
     env.filters["blockquote"] = _blockquote
     env.filters["markdown"] = _markdown
-    env.globals["SEVERITY_LABEL"] = SEVERITY_LABEL_RU
+    env.globals["SEVERITY_LABEL"] = SEVERITY_LABEL
     env.globals["SEVERITY_ICON"] = SEVERITY_ICON
     env.globals["STATUS_ICON"] = STATUS_ICON
     return env
 
 
 def template_exists(name: str, directory: Path | None = None) -> bool:
-    """Есть ли такой файл. Именно файл: компиляция здесь не нужна, а битый
-    шаблон — это «есть, но сломан», отдельный ответ, и отдавать его как «нет»
-    значит соврать в сообщении об ошибке."""
+    """Whether the file exists — the file, not a compilable template. A broken
+    template is "present but broken", a separate answer, and reporting it as
+    absent would put a lie in the error message."""
     env = environment(directory)
     try:
         env.loader.get_source(env, name)  # type: ignore[union-attr]
@@ -97,10 +95,10 @@ def template_exists(name: str, directory: Path | None = None) -> bool:
 
 
 def compile_template(name: str, directory: Path | None = None) -> Template:
-    """Читает и компилирует шаблон, не рендеря его.
+    """Reads and compiles a template without rendering it.
 
-    Отдельно от рендеринга, потому что зовётся на старте прогона: опечатка в
-    шаблоне должна стоить секунду, а не восемь агентов и полный счёт за токены.
+    Separate from rendering because it runs at the start of a run: a typo in a
+    template should cost a second, not eight agents and the full token bill.
     """
     env = environment(directory)
     try:
@@ -108,19 +106,18 @@ def compile_template(name: str, directory: Path | None = None) -> Template:
     except TemplateNotFound as exc:
         searched = f"{directory}, " if directory is not None else ""
         raise TemplateError(
-            f"Шаблон {name} не найден: искали в {searched}{DEFAULT_DIR}"
+            f"Template {name} not found: looked in {searched}{DEFAULT_DIR}"
         ) from exc
     except _JinjaTemplateError as exc:
-        raise TemplateError(f"Шаблон {name} не разобрался: {exc}") from exc
+        raise TemplateError(f"Template {name} failed to parse: {exc}") from exc
 
 
 def render_template(name: str, context: BaseModel, directory: Path | None = None) -> str:
     """Renders a context model with the named template. `directory` overrides
     bundled templates file by file.
 
-    The context is any model, not the review view specifically: a comparison of
-    several runs has a different shape, and squeezing it through the per-run
-    view to reuse this function would be violence.
+    The context is any model, not the review view specifically — a document
+    covering several runs has a different shape.
     """
     template = compile_template(name, directory)
 
@@ -130,7 +127,7 @@ def render_template(name: str, context: BaseModel, directory: Path | None = None
     try:
         return template.render(values)
     except _JinjaTemplateError as exc:
-        raise TemplateError(f"Шаблон {name} не отрендерился: {exc}") from exc
+        raise TemplateError(f"Template {name} failed to render: {exc}") from exc
 
 
 def _thousands(value: int) -> str:

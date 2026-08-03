@@ -1,8 +1,8 @@
-"""Учёт токенов и попаданий в префиксный кэш.
+"""Token accounting and prefix-cache hits.
 
-Ноль попаданий и отсутствие статистики — разные состояния: провайдер может
-отдавать общий префикс из кэша и при этом не считать его. Отчёт обязан их
-различать, поэтому проверяются все три исхода.
+Zero hits and no statistics are different states: a provider may serve the
+shared prefix from cache without counting it. The report has to tell them
+apart, so all three outcomes are checked.
 """
 
 from __future__ import annotations
@@ -21,11 +21,11 @@ def usage_from(raw: dict) -> Usage:
 BASE = {"prompt_tokens": 100, "completion_tokens": 5}
 
 
-# --------------------------------------------------------------- чтение usage
+# ---------------------------------------------------------------- reading usage
 
 
 def test_empty_details_means_not_reported_rather_than_zero_hits() -> None:
-    # Так отвечает голый vLLM: префикс из кэша отдаёт, а статистику — нет
+    # This is how bare vLLM answers: serves the prefix from cache, reports nothing
     usage = usage_from({**BASE, "prompt_tokens_details": None})
     assert usage.cached_tokens == 0
     assert not usage.cache_reported
@@ -54,7 +54,7 @@ def test_sum_keeps_the_fact_that_someone_reported() -> None:
     assert (silent + silent).cache_reported is False
 
 
-# ------------------------------------------------------------------- в отчёте
+# --------------------------------------------------------------- in the report
 
 
 def run_with(usage: Usage) -> ReviewRun:
@@ -74,19 +74,19 @@ def run_with(usage: Usage) -> ReviewRun:
 
 def test_silence_is_not_reported_as_a_failure_to_cache() -> None:
     text = render_report(run_with(Usage(prompt_tokens=100, completion_tokens=5)))
-    assert "Из кэша: неизвестно" in text
-    assert "не отдаёт статистику" in text
-    assert "| н/д |" in text, "в таблице пунктов тоже не должно быть уверенного нуля"
+    assert "From cache: unknown" in text
+    assert "reports no statistics" in text
+    assert "| n/a |" in text, "the item table must not show a confident zero either"
 
 
 def test_reported_zero_says_the_cache_really_did_not_fire() -> None:
     usage = Usage(prompt_tokens=100, completion_tokens=5, cache_reported=True)
     text = render_report(run_with(usage))
-    assert "Из кэша: 0" in text
-    assert "префикс каждый раз разный" in text
+    assert "From cache: 0" in text
+    assert "the prefix differs every time" in text
 
 
 def test_hits_are_shown_with_their_share() -> None:
     usage = Usage(prompt_tokens=100, completion_tokens=5, cached_tokens=64, cache_reported=True)
     text = render_report(run_with(usage))
-    assert "Из кэша: 64 токенов промпта (64% входящих)" in text
+    assert "From cache: 64 prompt tokens (64% of input)" in text

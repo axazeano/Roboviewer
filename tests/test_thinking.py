@@ -1,7 +1,7 @@
-"""Режим рассуждений: что уходит в тело запроса и кто его получает.
+"""Reasoning mode: what goes into the request body and who receives it.
 
-Настройка бинарная и заметно меняет результат ревью, поэтому «не задано»
-означает молчание: модель остаётся на своём умолчании, а не на чужом выборе.
+The setting is binary and noticeably changes the review, so "unset" means
+silence: the model stays on its own default rather than someone else's choice.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from .conftest import ScriptedRunner, make_bundle, ok_outcome
 ITEM = ChecklistItem(id="correctness", title="Корректность", body="Ищи ошибки.")
 
 
-# ------------------------------------------------------------- тело запроса
+# ------------------------------------------------------------- request body
 
 
 def test_unset_sends_nothing() -> None:
@@ -39,7 +39,7 @@ def test_extra_body_is_merged_and_the_knob_wins() -> None:
     body = provider.request_body(False)
     assert body["top_k"] == 20
     assert body["chat_template_kwargs"] == {"foo": 1, "enable_thinking": False}
-    # Конфиг не должен пострадать: тело собирается на каждый запрос заново
+    # The config must not be mutated: the body is rebuilt for every request
     assert provider.extra_body["chat_template_kwargs"]["enable_thinking"] is True
 
 
@@ -53,7 +53,7 @@ def test_judge_follows_the_items_until_told_otherwise() -> None:
     )
 
 
-# ----------------------------------------------------------- проводка в прогон
+# ------------------------------------------------------------ wiring into a run
 
 
 def test_each_stage_gets_its_own_mode(tmp_path: Path, config) -> None:

@@ -1,4 +1,4 @@
-"""Промпты из файлов: загрузка, по-файловое переопределение, ошибки шаблонов."""
+"""Prompts from files: loading, per-file overriding, template errors."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def test_bundled_set_is_complete() -> None:
 
 
 def test_missing_custom_dir_falls_back_to_bundled(tmp_path: Path) -> None:
-    prompts = Prompts.load(tmp_path / "нет-такого")
+    prompts = Prompts.load(tmp_path / "no-such-dir")
     assert prompts.texts == Prompts.load().texts
 
 
@@ -40,7 +40,7 @@ def test_partial_override_wins_only_for_its_file(tmp_path: Path) -> None:
     prompts = Prompts.load(tmp_path)
     assert prompts.item_system == "Свой системный промпт."
     assert prompts.sources["item_system"] == str(tmp_path / "item_system.md")
-    # Остальные файлы пришли из комплекта
+    # The other files came from the bundle
     assert prompts.judge_system == Prompts.load().judge_system
     assert prompts.sources["judge_system"] == str(DEFAULT_DIR / "judge_system.md")
 
@@ -58,13 +58,13 @@ def test_item_prompt_contains_diff_and_checklist_body(tmp_path: Path) -> None:
 
 
 def test_context_scaffolding_comes_from_code_not_from_files(tmp_path: Path) -> None:
-    # Контекст, легенда и хвост непри­ложенных файлов собираются кодом, поэтому
-    # файл context.md в каталоге пользователя ни на что не влияет
+    # The context, the legend and the tail of non-inlined files are assembled by
+    # the code, so a context.md in the user directory changes nothing
     (tmp_path / "context.md").write_text("Подменённый контекст", encoding="utf-8")
     text = Prompts.load(tmp_path).build_item_prompt(item(), make_bundle(tmp_path))
     assert "Подменённый контекст" not in text
     assert "Контекст merge request'а" in text
-    assert "строка добавлена или изменена" in text, "легенда разметки должна дойти до модели"
+    assert "строка добавлена или изменена" in text, "the markup legend must reach the model"
 
 
 def test_broken_placeholder_fails_loudly_and_names_the_file(tmp_path: Path) -> None:
@@ -73,7 +73,7 @@ def test_broken_placeholder_fails_loudly_and_names_the_file(tmp_path: Path) -> N
     with pytest.raises(PromptError) as err:
         prompts.build_item_prompt(item(), make_bundle(tmp_path))
     assert "item_user.md" in str(err.value)
-    assert "удваиваются" in str(err.value), "ошибка должна объяснять, как экранировать скобки"
+    assert "doubled" in str(err.value), "the error must explain how to escape braces"
 
 
 def test_validate_checks_every_template_before_spending_tokens(tmp_path: Path) -> None:
@@ -86,7 +86,7 @@ def test_validate_checks_every_template_before_spending_tokens(tmp_path: Path) -
 def test_literal_braces_survive_when_doubled(tmp_path: Path) -> None:
     (tmp_path / "item_system.md").write_text('Пример JSON: {{"a": 1}}', encoding="utf-8")
     prompts = Prompts.load(tmp_path)
-    # Системные промпты не рендерятся format-ом и уходят как есть
+    # System prompts are not run through format() and go out as-is
     assert prompts.item_system == 'Пример JSON: {{"a": 1}}'
 
 

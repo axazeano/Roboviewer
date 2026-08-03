@@ -1,20 +1,16 @@
 """The view model a report is rendered from.
 
-`ReviewRun` is the pipeline's own record: raw usage counters, verdicts in a
-dictionary keyed by finding id, every finding regardless of what the judge said.
-Templates should not have to know any of that, and three of them answering the
-same question ("was this finding rejected?") in three slightly different ways is
-how report formats drift apart.
+`ReviewRun` is the pipeline's own record: raw counters, verdicts keyed by
+finding id, every finding regardless of what the judge said. Counting and
+filtering happen once here instead, so three templates cannot answer "was this
+finding rejected?" three slightly different ways.
 
-So the counting and the filtering happen once, here, and produce a flat
-structure. What stays out on purpose is wording and markup: severity labels,
-icons, the sentence explaining an unreported cache — those differ between
-markdown, HTML and a merge request comment, and belong to whichever template is
-rendering. The cache, for instance, hands over a state and the numbers, not a
-paragraph.
+Wording and markup stay out. Severity labels, icons and the sentence explaining
+an unreported cache belong to whichever template is rendering — the cache hands
+over a state and the numbers, not a paragraph.
 
-This is a published contract: user templates read these fields, so renaming one
-breaks them. Adding a field does not, which is why it stays deliberately small.
+User templates read these fields, so renaming one breaks them. That is why the
+model stays deliberately small.
 """
 
 from __future__ import annotations
@@ -41,10 +37,10 @@ from .models import (
 class CacheState(str, Enum):
     """Three outcomes, not two.
 
-    The same ~24k context block is resent on every turn, so a run either costs
-    full price or a fraction of it. `UNKNOWN` is not a polite way of saying zero:
-    a gateway may serve the shared prefix from its cache and still leave
-    `usage.prompt_tokens_details` empty, so silence says nothing either way.
+    `UNKNOWN` is not a polite way of saying zero: a gateway may serve the shared
+    prefix from cache and still leave `usage.prompt_tokens_details` empty, so
+    silence says nothing either way. `ZERO` is the only state that means caching
+    really did not work.
     """
 
     HIT = "hit"
@@ -146,8 +142,8 @@ def _cache(usage: Usage) -> CacheView:
 
 
 def _text(value: str | None) -> str | None:
-    """Prose comes from the model and its trailing whitespace is an accident.
-    Stripping it here keeps templates from having to guard every blank line."""
+    """Trailing whitespace in model prose is an accident. Stripping it here
+    saves every template from guarding against a blank line."""
     if value is None:
         return None
     stripped = value.strip()
@@ -159,8 +155,8 @@ def _fingerprints(findings: list[Finding]) -> dict[str, str]:
     would shift, turning every old finding into a new one. Titles come from the
     model, so this is only as stable as the model's wording.
 
-    Collisions get a suffix: GitLab collapses equal fingerprints, and a lost
-    finding costs more than a shifted identity.
+    Collisions get a suffix, because GitLab collapses equal fingerprints and a
+    lost finding costs more than a shifted identity.
     """
     result: dict[str, str] = {}
     seen: Counter[str] = Counter()

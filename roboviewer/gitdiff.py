@@ -43,7 +43,7 @@ def repo_root(start: Path) -> Path:
     try:
         out = _git(["rev-parse", "--show-toplevel"], start)
     except GitError as exc:
-        raise GitError(f"{start} не внутри git-репозитория") from exc
+        raise GitError(f"{start} is not inside a git repository") from exc
     return Path(out.strip())
 
 
@@ -52,7 +52,7 @@ def current_branch(root: Path) -> str:
     return name if name != "HEAD" else _git(["rev-parse", "--short", "HEAD"], root).strip()
 
 
-def resolve_ref(root: Path, ref: str, *, kind: str = "Ветка") -> str:
+def resolve_ref(root: Path, ref: str, *, kind: str = "Branch") -> str:
     """Resolve a branch, trying the local name first and then origin/."""
     for candidate in (ref, f"origin/{ref}"):
         proc = subprocess.run(
@@ -63,7 +63,7 @@ def resolve_ref(root: Path, ref: str, *, kind: str = "Ветка") -> str:
         )
         if proc.returncode == 0:
             return candidate
-    raise GitError(f"{kind} не найдена ни как '{ref}', ни как 'origin/{ref}'")
+    raise GitError(f"{kind} found neither as '{ref}' nor as 'origin/{ref}'")
 
 
 def merge_base(root: Path, target: str, source: str = "HEAD") -> str:
@@ -147,6 +147,10 @@ def show_file_at(root: Path, ref: str, path: str) -> str | None:
 
 
 # ------------------------------------------------------------------ file annotation
+#
+# The markup and its legend go into the prompt, so the wording here is Russian
+# like the rest of the prompt surface. The legend must keep describing exactly
+# what `annotate_file` emits.
 
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
@@ -339,19 +343,19 @@ def collect(
     to check it out: everything is read from git by ref, the working copy is not
     involved.
     """
-    resolved_target = resolve_ref(root, target, kind="Целевая ветка")
+    resolved_target = resolve_ref(root, target, kind="Target branch")
 
     if source is None:
         resolved_source = "HEAD"
         branch_name = current_branch(root)
     else:
-        resolved_source = resolve_ref(root, source, kind="Исходная ветка")
+        resolved_source = resolve_ref(root, source, kind="Source branch")
         branch_name = source
 
     source_sha = head_sha(root, resolved_source)
     if source_sha == head_sha(root, resolved_target):
         raise GitError(
-            f"Исходная и целевая ветка указывают на один коммит ({branch_name} и {target})"
+            f"Source and target branch point at the same commit ({branch_name} and {target})"
         )
 
     base = merge_base(root, resolved_target, resolved_source)

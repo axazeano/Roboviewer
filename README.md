@@ -10,20 +10,23 @@ roboviewer develop
 ```
 
 ```
-▸ feature/discount → develop: 12 файлов, 8 пунктов проверки
-✓ Корректность и логические ошибки: 3 замечания
-✓ Обработка ошибок: 1 замечание
+▸ feature/discount → develop: 12 files, 8 checklist items
+• Корректность и логические ошибки: 3 findings (ok) · 41200 tokens · 62s
+• Обработка ошибок: 1 findings (ok) · 38900 tokens · 55s
 ...
-⚖ Подтверждено 4 из 11
+▸ Confirmed 4 of 11
 
-  F001  [Блокер]      src/cart.py:42  — гонка при параллельном обновлении корзины
-  F002  [Существенно] src/api.py:118  — изменение ломает старых клиентов
+  F001  [Blocker] src/cart.py:42 — гонка при параллельном обновлении корзины
+  F002  [Major] src/api.py:118 — изменение ломает старых клиентов
 
-Отчёт: .roboviewer/runs/20260730-172900/report.md
+Confirmed 4 of 11 · 167100 tokens · 67% from cache
+Report: .roboviewer/runs/20260730-172900/report.md
 ```
 
-*Prompts, checklist items and generated reports are in Russian. To change that,
-edit the markdown under `roboviewer/prompts/` and `roboviewer/checklists/`.*
+*The tool speaks English, but the prompts and checklist items that go to the
+model are written in Russian, so the findings come back in Russian too. To
+change that, edit the markdown under `roboviewer/prompts/` and
+`roboviewer/checklists/`.*
 
 ## The problem
 

@@ -68,23 +68,23 @@ terminal_tool_choice = "forced"
 #   roboviewer develop
 #   roboviewer develop feature/login
 checklist_dir = "checklists/default"
-# Каталог с промптами. Пусто — комплектные тексты, плюс .roboviewer/prompts/
-# внутри проверяемого репозитория, если он там есть. В своём наборе достаточно
-# тех файлов, которые вы правите: остальные берутся из комплекта.
-# Список файлов и плейсхолдеров — roboviewer/prompts/default/README.md
+# Prompt directory. Empty means the bundled texts, plus .roboviewer/prompts/
+# inside the reviewed repository if it exists. A custom set need only carry the
+# files you edit; the rest come from the bundle.
+# Files and placeholders are listed in roboviewer/prompts/default/README.md
 prompts_dir = ""
-# Каталог с шаблонами отчёта — резолвится так же, как prompts_dir: пусто значит
-# комплектные, плюс .roboviewer/templates/ внутри проверяемого репозитория.
-# Поля, фильтры и соглашения — roboviewer/templates/default/README.md
+# Report template directory, resolved the same way as prompts_dir: empty means
+# the bundled set, plus .roboviewer/templates/ inside the reviewed repository.
+# Fields, filters and conventions: roboviewer/templates/default/README.md
 templates_dir = ""
-# Какие отчёты писать. Формат — это модуль в roboviewer/renders/, файл на формат.
-# В комплекте:
-#   md           отчёт для человека
-#   html         он же одним самодостаточным файлом
+# Which reports to write. A format is a module in roboviewer/renders/, one file
+# per format. Bundled:
+#   md           the report for humans
+#   html         the same as one self-contained file
 #   sarif        SARIF 2.1.0 — GitHub Code Scanning, VS Code, Sonar
-#   codequality  виджет Code Quality в merge request'е GitLab
-# Свой шаблонный формат заводится файлом report.<имя>.j2 в templates_dir, без
-# правки Python. Переопределяется флагом --format md,html
+#   codequality  the Code Quality widget in a GitLab merge request
+# A custom templated format is added with a report.<name>.j2 file in
+# templates_dir, no Python involved. Overridden by --format md,html
 report_formats = ["md"]
 # A relative path lands inside the reviewed repository.
 # An absolute one lands outside, nested by repository name; overridden by -o/--output

@@ -79,9 +79,8 @@ def save(
     except OSError:
         pass  # the symlink is a convenience, not a requirement
 
-    # Last, deliberately. Rendering is the only step here that runs code someone
-    # can edit, and a run costs real money: if a template blows up, the results
-    # are already on disk and only the pretty part is missing.
+    # Last, deliberately: rendering is the only step here that runs code someone
+    # can edit, so a broken template costs the readable report, not the results.
     reports = []
     for render in chosen:
         path = directory / render.FILENAME

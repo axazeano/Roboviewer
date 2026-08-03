@@ -1,8 +1,8 @@
-"""Какие отчёты пишет прогон: настройка проекта против флага.
+"""Which reports a run writes: project setting versus flag.
 
-Список живёт в конфиге, потому что для проекта это постоянное решение. Флаг
-существует, чтобы отступить от него на один прогон, и потому заменяет список
-целиком — иначе «сегодня только markdown» сказать нечем.
+The list lives in the config because for a project it is a standing decision.
+The flag exists to step away from it for one run, and therefore replaces the
+list entirely — otherwise "just markdown today" cannot be said at all.
 """
 
 from __future__ import annotations

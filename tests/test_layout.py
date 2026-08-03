@@ -39,4 +39,4 @@ def test_public_definitions_come_first(path: Path) -> None:
 
     late = [f"{path.name}:{line} {name}" for line, name in defs[first_private:]
             if not name.startswith("_")]
-    assert not late, f"публичное после приватного {defs[first_private][1]}: {', '.join(late)}"
+    assert not late, f"public after private {defs[first_private][1]}: {', '.join(late)}"

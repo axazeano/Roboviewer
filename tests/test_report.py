@@ -146,7 +146,7 @@ def full_run() -> ReviewRun:
             item_id="30-concurrency",
             item_title="Многопоточность",
             status="failed",
-            error="провайдер вернул 502 после 3 попыток",
+            error="the provider returned 502 after 3 attempts",
             usage=Usage(prompt_tokens=24_000, completion_tokens=0, cache_reported=True),
             turns=2,
             duration_s=13.0,
@@ -241,7 +241,7 @@ def test_view_tells_the_three_cache_states_apart() -> None:
     assert build_view(cold_cache_run()).cache.state is CacheState.ZERO
 
 
-# ------------------------------------------------------------- рендеры и шаблоны
+# ----------------------------------------------------------- renders and templates
 
 
 def test_every_render_is_reachable_by_its_name() -> None:
@@ -260,7 +260,7 @@ def test_user_template_overrides_the_bundled_one_file_by_file(tmp_path: Path) ->
     text = render_report(full_run(), templates_dir=tmp_path)
 
     assert text.startswith("### 🛑 F1 · Половина ширины вместо обрезки")
-    assert "## Пункты проверки" not in text
+    assert "## Checklist items" not in text
 
 
 def test_unknown_format_lists_the_ones_that_exist(tmp_path: Path) -> None:
@@ -270,15 +270,15 @@ def test_unknown_format_lists_the_ones_that_exist(tmp_path: Path) -> None:
 
 
 def test_a_format_can_be_added_by_dropping_in_a_template(tmp_path: Path) -> None:
-    """Своя разновидность документа — например, короткий комментарий в MR —
-    заводится одним файлом, без правки Python."""
+    """A document of your own — a short merge request comment, say — is added
+    with one file, no Python involved."""
     (tmp_path / "report.comment.j2").write_text(
-        "{{ findings | length }} замечаний", encoding="utf-8"
+        "{{ findings | length }} findings", encoding="utf-8"
     )
     render = renders.resolve("comment", tmp_path)
 
     assert render.FILENAME == "report.comment"
-    assert render.render(full_run(), tmp_path) == "4 замечаний"
+    assert render.render(full_run(), tmp_path) == "4 findings"
 
 
 def test_typo_in_a_template_fails_instead_of_rendering_a_blank(tmp_path: Path) -> None:
@@ -317,16 +317,16 @@ def test_every_requested_format_is_written_under_its_own_name(tmp_path: Path) ->
 
 
 def test_an_unknown_format_writes_nothing_at_all(tmp_path: Path) -> None:
-    """Форматы резолвятся до записи: иначе половина отчётов уже на диске, а
-    прогон считается упавшим."""
+    """Formats resolve before the first write: otherwise half the reports are
+    already on disk while the run counts as failed."""
     with pytest.raises(renders.RenderError):
         save(empty_run(), tmp_path, ["md", "htlm"])
     assert not (tmp_path / "report.md").exists()
 
 
 def test_a_broken_template_is_caught_before_the_first_write(tmp_path: Path) -> None:
-    """Синтаксис проверяется компиляцией на подготовке, а не на записи: иначе
-    первый формат уже лежит на диске, а второй уронил прогон."""
+    """Syntax is checked by compiling during preparation, not at write time:
+    otherwise the first format is on disk while the second fails the run."""
     templates, out = tmp_path / "templates", tmp_path / "out"
     templates.mkdir()
     (templates / "report.broken.j2").write_text("{% for x in %}", encoding="utf-8")
@@ -338,11 +338,11 @@ def test_a_broken_template_is_caught_before_the_first_write(tmp_path: Path) -> N
 
 
 def test_a_template_failing_at_render_time_does_not_lose_the_run(tmp_path: Path) -> None:
-    """Прогон стоит денег, а шаблон — единственный здесь код, который правят
-    руками. Ошибка в нём должна стоить читаемого отчёта, а не результатов."""
+    """A run costs money, and the template is the only code here that is edited
+    by hand. A mistake in it should cost the readable report, not the results."""
     templates, out = tmp_path / "templates", tmp_path / "out"
     templates.mkdir()
-    # Компилируется, но падает на StrictUndefined уже при рендере
+    # Compiles, but trips StrictUndefined at render time
     (templates / "report.md.j2").write_text("{{ meta.brunch }}", encoding="utf-8")
 
     with pytest.raises(TemplateError):
@@ -354,8 +354,8 @@ def test_a_template_failing_at_render_time_does_not_lose_the_run(tmp_path: Path)
 
 
 def test_template_error_is_a_render_error() -> None:
-    """Вызывающему нужно одно решение — «показать нечем», — поэтому ловится
-    одним типом."""
+    """The caller has one decision to make — "nothing to show" — so it is caught
+    as a single type."""
     assert issubclass(TemplateError, renders.RenderError)
 
 

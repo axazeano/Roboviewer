@@ -178,15 +178,15 @@ class ReviewPipeline:
         self._emit(
             Event(
                 "run_start",
-                f"{self._diff.branch} → {self._diff.target}: {len(self._diff.files)} файлов, "
-                f"{len(self._items)} пунктов проверки",
+                f"{self._diff.branch} → {self._diff.target}: {len(self._diff.files)} files, "
+                f"{len(self._items)} checklist items",
                 data={"files": len(self._diff.files), "items": len(self._items)},
             )
         )
 
         if not self._diff.files:
             run.finished_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            self._emit(Event("run_done", "Изменений относительно целевой ветки нет"))
+            self._emit(Event("run_done", "No changes relative to the target branch"))
             return run
 
         semaphore = asyncio.Semaphore(max(1, self._cfg.run.concurrency))
@@ -199,7 +199,7 @@ class ReviewPipeline:
                 self._emit(
                     Event(
                         "item_done",
-                        f"{item.title}: {len(result.findings)} замечаний ({result.status})",
+                        f"{item.title}: {len(result.findings)} findings ({result.status})",
                         item_id=item.id,
                         data={"result": result},
                     )
@@ -211,7 +211,7 @@ class ReviewPipeline:
         self._emit(
             Event(
                 "merge_done",
-                f"После слияния и дедупликации: {len(run.findings)} замечаний",
+                f"After merge and deduplication: {len(run.findings)} findings",
                 data={"count": len(run.findings)},
             )
         )
@@ -222,13 +222,13 @@ class ReviewPipeline:
             run.verdicts = {f.id: Verdict(finding_id=f.id, verdict="unreviewed") for f in run.findings}
 
         run.finished_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self._emit(Event("run_done", "Ревью завершено", data={"run": run}))
+        self._emit(Event("run_done", "Review finished", data={"run": run}))
         return run
 
     # ------------------------------------------------------------------ stages
 
     async def _run_item(self, item: ChecklistItem) -> ItemResult:
-        self._emit(Event("item_start", f"Запущен: {item.title}", item_id=item.id))
+        self._emit(Event("item_start", f"Started: {item.title}", item_id=item.id))
         started = time.monotonic()
         result = ItemResult(item_id=item.id, item_title=item.title, status="running")
 
@@ -253,7 +253,7 @@ class ReviewPipeline:
 
         if not outcome.ok or outcome.payload is None:
             result.status = "failed"
-            result.error = outcome.error or "агент не вернул результат"
+            result.error = outcome.error or "the agent returned no result"
             self._emit(Event("error", f"{item.title}: {result.error}", item_id=item.id))
             return result
 
@@ -262,7 +262,7 @@ class ReviewPipeline:
         return result
 
     async def _run_judge(self, run: ReviewRun) -> None:
-        self._emit(Event("judge_start", f"Судья проверяет {len(run.findings)} замечаний"))
+        self._emit(Event("judge_start", f"The judge is checking {len(run.findings)} findings"))
 
         request = AgentRequest(
             system=self._prompts.judge_system,
@@ -276,7 +276,7 @@ class ReviewPipeline:
         )
 
         def progress(kind: str, detail: str) -> None:
-            self._emit(Event("item_progress", f"судья {kind}: {detail}", item_id="__judge__"))
+            self._emit(Event("item_progress", f"judge {kind}: {detail}", item_id="__judge__"))
 
         outcome = await self._runner.run(request, progress)
         run.judge_usage = outcome.usage
@@ -284,7 +284,9 @@ class ReviewPipeline:
         if not outcome.ok or outcome.payload is None:
             # The judge failed — show findings as they are instead of losing the run
             run.verdicts = {f.id: Verdict(finding_id=f.id, verdict="unreviewed") for f in run.findings}
-            run.judge_summary = f"Судья не отработал: {outcome.error}. Замечания показаны без фильтрации."
+            run.judge_summary = (
+                f"The judge failed: {outcome.error}. Findings are shown unfiltered."
+            )
             self._emit(Event("error", run.judge_summary))
             return
 
@@ -293,7 +295,7 @@ class ReviewPipeline:
             verdict = verdicts.get(finding.id)
             if verdict is None:
                 verdicts[finding.id] = Verdict(finding_id=finding.id, verdict="unreviewed",
-                                               reason="судья не вынес вердикт")
+                                               reason="the judge returned no verdict")
                 continue
             if verdict.severity is not None and verdict.severity != finding.severity:
                 finding.severity = Severity(verdict.severity)
@@ -304,7 +306,7 @@ class ReviewPipeline:
         self._emit(
             Event(
                 "judge_done",
-                f"Подтверждено {confirmed} из {len(run.findings)}",
+                f"Confirmed {confirmed} of {len(run.findings)}",
                 data={"confirmed": confirmed, "total": len(run.findings)},
             )
         )

@@ -1,25 +1,25 @@
-# Ревью feature/CHATS-16018 → develop
+# Review feature/CHATS-16018 → develop
 
-- Прогон: `20260802-2104-3f1c`
-- База сравнения: `abcdef123456` · HEAD: `1234567890ab`
-- Модель: `qwen3.6-27b`
-- Файлов изменено: 3 (+50 / -191)
-- Токенов: 31 100
-- Из кэша: неизвестно — провайдер не отдаёт статистику (`usage.prompt_tokens_details` пуст).
-  Это не значит, что кэша нет: провайдер может отдавать общий префикс из кэша молча. Проверяется
-  латентностью — повтор того же префикса приходит заметно быстрее холодного.
+- Run: `20260802-2104-3f1c`
+- Merge base: `abcdef123456` · HEAD: `1234567890ab`
+- Model: `qwen3.6-27b`
+- Files changed: 3 (+50 / -191)
+- Tokens: 31 100
+- From cache: unknown — the provider reports no statistics (`usage.prompt_tokens_details` is empty).
+  That does not mean there is no cache: a provider may serve the shared prefix from cache silently.
+  Latency tells you — repeating the same prefix comes back noticeably faster than a cold one.
 
-## Итог
+## Summary
 
-Замечаний нет.
+No findings.
 
-## Пункты проверки
+## Checklist items
 
-| Пункт | Статус | Замечаний | Ходов | Токенов | Из кэша | Время |
+| Item | Status | Findings | Turns | Tokens | Cached | Time |
 |---|---|---|---|---|---|---|
-| Корректность | ✅ | 0 | 4 | 31100 | н/д | 23с |
+| Корректность | ✅ | 0 | 4 | 31100 | n/a | 23s |
 
-## Изменённые файлы
+## Changed files
 
 ```
 M   +42    -7     Sources/UI/BubbleContentLayout.swift

@@ -65,55 +65,41 @@ class ProviderConfig(BaseModel):
     parallel_tool_calls: bool = True
     extra_headers: dict[str, str] = Field(default_factory=dict)
 
-    # Reasoning ("thinking") tokens, for models that emit them. Thinking is
-    # decoded one token at a time and is usually the largest term in how long a
-    # run takes, while the context block resent on every turn tends to come back
-    # from the provider's prefix cache.
-    #   None  — send nothing, leaving the model on its own default
-    #   False — chat_template_kwargs.enable_thinking = false, understood by
-    #           Qwen-style chat templates; tool calling is unaffected
-    # Switching it off trades review depth for speed by a model-specific amount.
+    # None sends nothing and leaves the model on its own default; False sends
+    # chat_template_kwargs.enable_thinking = false, which Qwen-style chat
+    # templates understand without breaking tool calling.
     enable_thinking: bool | None = None
-    # The same setting for the judge, which checks stated claims against the
-    # code rather than looking for them. None follows `enable_thinking`.
+    # None follows `enable_thinking`.
     judge_enable_thinking: bool | None = None
-    # Provider-specific request fields the SDK has no typed parameter for,
-    # merged into the body as-is. `enable_thinking` wins over a colliding key.
+    # Provider fields the SDK has no typed parameter for, merged into the body
+    # as-is. `enable_thinking` wins over a colliding key.
     extra_body: dict[str, Any] = Field(default_factory=dict)
 
-    # How to pass the key. Defaults to the OpenAI way: Authorization: Bearer <key>.
-    # Gateways often want something else:
-    #   auth_header = "api-key",   auth_scheme = ""        → api-key: <key>   (Azure)
-    #   auth_header = "X-Api-Key", auth_scheme = ""        → X-Api-Key: <key>
-    #   auth_scheme = "Token"                              → Authorization: Token <key>
-    # When auth_header is not Authorization, the built-in Bearer header is dropped:
-    # a stray Authorization header alone makes some gateways answer 401.
+    # Defaults to the OpenAI way, Authorization: Bearer <key>; gateways often
+    # want something else. See config.example.toml for the combinations.
     auth_header: str = "Authorization"
     auth_scheme: str = "Bearer"
 
-    # How the agent is pushed to submit its result on the final turn.
-    #   "forced"   — tool_choice = {"type": "function", ...}, names the exact tool
-    #   "required" — tool_choice = "required", any tool but at least one
-    #   "auto"     — no pressure at all; relies on the plain-text JSON fallback
-    # Lower the setting only when `--check-provider` shows the gateway rejects the
-    # stronger mode.
+    # How hard the agent is pushed to submit its result on the final turn.
+    # Lower it only when `--check-provider` says the gateway rejects the
+    # stronger mode — it prints the value to use.
     terminal_tool_choice: Literal["forced", "required", "auto"] = "forced"
 
     def api_key_source(self) -> tuple[str | None, str]:
         """(key, where it came from) — the source is what matters when debugging 401."""
         if self.api_key:
-            return self.api_key, "provider.api_key из конфига"
+            return self.api_key, "provider.api_key from the config"
         from_env = os.environ.get(self.api_key_env)
         if from_env:
-            return from_env, f"переменная окружения {self.api_key_env}"
-        return None, "не найден"
+            return from_env, f"environment variable {self.api_key_env}"
+        return None, "not found"
 
     def resolve_api_key(self) -> str:
         key, _ = self.api_key_source()
         if not key:
             raise RuntimeError(
-                f"API-ключ не найден. Задай переменную окружения {self.api_key_env} "
-                f"или provider.api_key в конфиге."
+                f"No API key found. Set the {self.api_key_env} environment variable "
+                f"or provider.api_key in the config."
             )
         return key
 
@@ -139,7 +125,7 @@ class ProviderConfig(BaseModel):
         if not key:
             return "—"
         # Show the tail so two similar keys can be told apart without revealing either.
-        return f"{key[:4]}…{key[-4:]} ({len(key)} симв.)" if len(key) > 12 else f"(короткий, {len(key)} симв.)"
+        return f"{key[:4]}…{key[-4:]} ({len(key)} chars)" if len(key) > 12 else f"(short, {len(key)} chars)"
 
     def resolve_judge_model(self) -> str:
         return self.judge_model or self.model
@@ -166,17 +152,13 @@ class RunConfig(BaseModel):
     # Branches are deliberately absent: the target is always a CLI argument and
     # the source defaults to the current branch.
     checklist_dir: str = "checklists/default"
-    # Where the four prompt templates come from. Empty → the bundled set, plus
-    # .roboviewer/prompts/ inside the reviewed repository when it exists. A set
-    # need only carry the files it changes; the rest fall back to the bundled ones.
+    # Empty → the bundled set, plus .roboviewer/prompts/ inside the reviewed
+    # repository when it exists. A custom set carries only the files it changes.
     prompts_dir: str = ""
-    # Where report templates come from, resolved the same way as prompts_dir:
-    # empty → the bundled set plus .roboviewer/templates/ inside the reviewed
-    # repository. A custom set need only carry the templates it changes.
+    # Resolved the same way as prompts_dir.
     templates_dir: str = ""
-    # Which reports a run writes. A format is a module in `renders` — see
-    # known() there for the list. A format with no module but with a
-    # report.<name>.j2 in templates_dir also works. Overridden by --format.
+    # A format is a module in `renders` — see known() there — or a bare
+    # report.<name>.j2 in templates_dir. Overridden by --format.
     report_formats: list[str] = Field(default_factory=lambda: ["md"])
     output_dir: str = ".roboviewer/runs"
     # Checklist items reviewed at the same time — concurrent requests to the model,
@@ -245,7 +227,7 @@ def load_config(repo_root: Path, explicit: Path | None = None) -> Config:
     if explicit is not None:
         path = explicit.expanduser().resolve()
         if not path.is_file():
-            raise FileNotFoundError(f"Конфиг не найден: {path}")
+            raise FileNotFoundError(f"Config not found: {path}")
         layers.append(path)
 
     raw: dict = {}

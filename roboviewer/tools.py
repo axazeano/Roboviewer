@@ -5,9 +5,12 @@ must not edit the code it is reviewing. Every path is confined to the repository
 root.
 
 Everything is read from git by the reviewed branch's ref rather than from the
-working copy: the review may target a branch that is not checked out, and if it
-is checked out it may carry uncommitted edits that would shift line numbers away
-from what the agent sees in the attached files.
+working copy. The review may target a branch that is not checked out, and one
+that is may carry uncommitted edits that would shift line numbers away from what
+the agent sees in the attached files.
+
+The descriptions and the returned text below go to the model, so they are part
+of the prompt surface and stay in Russian like the rest of it.
 """
 
 from __future__ import annotations

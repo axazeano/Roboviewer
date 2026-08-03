@@ -9,15 +9,15 @@
 <code>{{ f.location }}</code> ·
 {{ SEVERITY_LABEL[f.severity] }} ·
 {{ f.category }} ·
-уверенность {{ f.confidence | percent }} ·
-{{ f.sources | join(", ") or "вне чек-листа" }}
+confidence {{ f.confidence | percent }} ·
+{{ f.sources | join(", ") or "outside the checklist" }}
 </span>
 <div class="rationale">{{ f.rationale | markdown }}</div>
 {% if f.suggestion %}
-<div class="suggestion"><strong>Что сделать</strong>{{ f.suggestion | markdown }}</div>
+<div class="suggestion"><strong>Fix</strong>{{ f.suggestion | markdown }}</div>
 {% endif %}
 {% if f.verdict_reason %}
-<p class="verdict">Судья ({{ f.verdict }}): {{ f.verdict_reason }}</p>
+<p class="verdict">Judge ({{ f.verdict }}): {{ f.verdict_reason }}</p>
 {% endif %}
 </article>
 {% endmacro %}

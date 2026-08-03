@@ -1,90 +1,87 @@
-# Шаблоны отчёта
+# Report templates
 
-Jinja2. Имя файла — `<документ>.<формат>.j2`, частичные начинаются с
-подчёркивания. Второе расширение решает экранирование: `.md.j2` выводится как
-есть, `.html.j2` экранирует каждое значение. Заголовок находки — это текст
-модели, процитированный обратно, так что в HTML он не должен превращаться в
-разметку.
+Jinja2. File names are `<document>.<format>.j2`; partials start with an
+underscore. The second extension decides escaping: `.md.j2` is emitted as-is,
+`.html.j2` escapes every value. A finding's title is model output quoted back,
+so in HTML it must not become markup.
 
-Свой набор задаётся через `templates_dir` в конфиге или `.roboviewer/templates/`
-внутри проверяемого репозитория. Поиск пофайловый: чего нет у вас — берётся из
-комплекта, поэтому переопределённый `report.md.j2` может импортировать
-комплектный `_finding.md.j2`.
+A custom set is pointed at by `templates_dir` in the config, or picked up from
+`.roboviewer/templates/` inside the reviewed repository. Lookup is per file:
+what you do not provide comes from the bundle, so an overridden `report.md.j2`
+can still import the bundled `_finding.md.j2`.
 
-Какие отчёты пишет прогон — `report_formats` в конфиге или `--format md,html`.
-Формат — это модуль в `roboviewer/renders/`, файл на формат. Но заводить его в
-Python обязательно только тогда, когда рендер не шаблонный (SARIF, Code Quality
-для GitLab — это сериализация, а не документ). Для нового шаблонного документа
-достаточно положить сюда `report.<имя>.j2` и позвать `--format <имя>`.
+Which reports a run writes is `report_formats` in the config, or `--format
+md,html`. A format is a module in `roboviewer/renders/`, one file per format —
+but a module is only required when the render is not template-based (SARIF and
+GitLab Code Quality are serialization, not documents). For a new templated
+document, drop in `report.<name>.j2` and call `--format <name>`.
 
-Имя такого формата заодно задаёт расширение файла, а значит и экранирование.
-`--format comment` даст `report.comment` без экранирования; если документ на
-самом деле HTML, формат называется `comment.html` — тогда шаблон
-`report.comment.html.j2`, файл `report.comment.html`, и значения экранируются.
+That name also sets the file extension, and with it the escaping. `--format
+comment` writes `report.comment` unescaped; if the document is really HTML,
+name the format `comment.html` — then the template is `report.comment.html.j2`,
+the file is `report.comment.html`, and values are escaped.
 
-Опечатка в имени поля роняет рендер, а не выводит пустоту: отчёт с молча
-пропавшей секцией хуже упавшего прогона.
+A typo in a field name fails the render rather than emitting nothing: a report
+with a silently missing section is worse than a failed run.
 
-## Комплект
+## What ships
 
-| Файл | Что это |
+| File | What it is |
 |---|---|
-| `report.md.j2` | Отчёт в markdown |
-| `report.html.j2` | Он же в HTML, наследует `_layout.html.j2` |
-| `_layout.html.j2` | Каркас страницы: блоки `title`, `styles`, `content` |
-| `_styles.css.j2` | Стили, вставляются в `<style>` инлайном |
-| `_finding.md.j2`, `_finding.html.j2` | Макрос `finding(f)` — одна находка |
+| `report.md.j2` | The markdown report |
+| `report.html.j2` | The same in HTML, extends `_layout.html.j2` |
+| `_layout.html.j2` | Page skeleton: blocks `title`, `styles`, `content` |
+| `_styles.css.j2` | Styles, inlined into `<style>` |
+| `_finding.md.j2`, `_finding.html.j2` | The `finding(f)` macro — a single finding |
 
-Markdown и HTML держат отдельные макросы и не пытаются делить разметку. Общая у
-них модель данных, и этого достаточно; попытка абстрагировать вёрстку поверх
-обоих форматов — то, обо что разбиваются шаблонные системы.
+Markdown and HTML keep separate macros and do not try to share markup. They
+share the data model, and that is enough.
 
-HTML собирается одним самодостаточным файлом: стили инлайном, ни ссылок, ни
-скриптов, ни внешних картинок. Отчёт открывают двойным щелчком и цепляют к
-тикету, тянуть ему неоткуда.
+HTML is built as one self-contained file: styles inline, no links, no scripts,
+no external images. The report is opened by double click and attached to a
+ticket, so it has nowhere to fetch from.
 
-## Что приходит в шаблон
+## What reaches a template
 
-Модель собирается в `roboviewer/view.py`. Это контракт: поля добавляются,
-переименование ломает чужие шаблоны.
+The model is assembled in `roboviewer/view.py`. It is a contract: fields get
+added, renaming one breaks other people's templates.
 
-| Имя | Что внутри |
+| Name | What is inside |
 |---|---|
 | `meta` | `run_id`, `repo_root`, `branch`, `target`, `base_sha`, `head_sha`, `model`, `started_at`, `finished_at` |
-| `stats` | `files_changed`, `added`, `removed`, `total_tokens`, `by_severity` — список `{severity, count}`, только непустые важности, тяжёлые первыми |
+| `stats` | `files_changed`, `added`, `removed`, `total_tokens`, `by_severity` — a list of `{severity, count}`, non-empty severities only, heaviest first |
 | `cache` | `state` (`hit` / `zero` / `unknown`), `prompt_tokens`, `cached_tokens`, `hit_rate` |
-| `judge_summary` | Текст судьи, пустая строка если его не было |
-| `findings` | Подтверждённое: `id`, `file`, `line`, `end_line`, `location`, `severity`, `category`, `confidence`, `title`, `rationale`, `suggestion`, `sources`, `verdict`, `verdict_reason` |
-| `rejected` | То же самое для отклонённого судьёй |
-| `items` | Пункты чек-листа: `id`, `title`, `status`, `findings_count`, `turns`, `total_tokens`, `duration_s`, `cache`, `error` |
-| `failed_items` | Подмножество `items` со `status == "failed"` |
+| `judge_summary` | The judge's text, empty string if there was no judge |
+| `findings` | Confirmed: `id`, `file`, `line`, `end_line`, `location`, `severity`, `category`, `confidence`, `title`, `rationale`, `suggestion`, `sources`, `verdict`, `verdict_reason` |
+| `rejected` | The same for what the judge rejected |
+| `items` | Checklist items: `id`, `title`, `status`, `findings_count`, `turns`, `total_tokens`, `duration_s`, `cache`, `error` |
+| `failed_items` | The subset of `items` with `status == "failed"` |
 | `files` | `file`, `status`, `added`, `removed` |
 
-`cache.state` различает три исхода, а не два. `unknown` — это не вежливый ноль:
-шлюз может отдавать общий префикс из кэша и не считать его, тогда молчание не
-говорит ничего. `zero` — единственное состояние, которое значит, что кэш
-действительно не сработал.
+`cache.state` tells three outcomes apart, not two. `unknown` is not a polite
+zero: a gateway may serve the shared prefix from cache without counting it, and
+then silence says nothing. `zero` is the only state that means caching really
+did not work.
 
-`verdict_reason` заполняется, только если судья что-то сказал по существу:
-вердикт `unreviewed` суждением не является и показывать его как суждение нельзя.
+`verdict_reason` is filled only when the judge said something substantive: an
+`unreviewed` verdict is not a judgement and must not be shown as one.
 
-## Что доступно помимо данных
+## What else is available
 
-Словари: `SEVERITY_LABEL`, `SEVERITY_ICON`, `STATUS_ICON` — ключ везде из
-соответствующего поля (`SEVERITY_ICON[f.severity]`).
+Dictionaries: `SEVERITY_LABEL`, `SEVERITY_ICON`, `STATUS_ICON` — keyed by the
+matching field (`SEVERITY_ICON[f.severity]`).
 
-Фильтры:
+Filters:
 
-| Фильтр | Пример |
+| Filter | Example |
 |---|---|
 | `thousands` | `167100` → `167 100` |
 | `percent` | `0.67` → `67%` |
 | `fixed` | `74.4` → `74`, `fixed(1)` → `74.4` |
-| `blockquote` | многострочный текст → каждая строка с `> ` |
-| `markdown` | markdown → HTML, только для HTML-шаблонов |
+| `blockquote` | multi-line text → every line prefixed with `> ` |
+| `markdown` | markdown → HTML, HTML templates only |
 
-`markdown` нужен потому, что в HTML одного экранирования мало: `rationale` и
-`suggestion` написаны markdown'ом, и без него бэктики выйдут бэктиками. Сырой
-HTML внутри этого текста парсер не пропускает — разметка допускается только та,
-которую он породил сам. Промпты в будущем шаблоне сравнения через него гнать не
-надо: там важен точный текст, а не его вид, и место ему в `<pre>`.
+`markdown` is needed because escaping alone is not enough in HTML: `rationale`
+and `suggestion` are written in markdown, and without it backticks come out as
+backticks. Raw HTML inside that text does not get through — only the markup the
+parser produced itself is allowed.

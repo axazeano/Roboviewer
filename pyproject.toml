@@ -1,7 +1,7 @@
 [project]
 name = "roboviewer"
 version = "0.1.0"
-description = "Локальный автоматический ревьюер merge request'ов на агентах"
+description = "A local, agent-driven automated reviewer for merge requests"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
