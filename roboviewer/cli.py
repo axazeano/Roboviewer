@@ -278,8 +278,7 @@ def _print_summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> No
     if cut_off:
         # Worth a line of its own: these aspects reported little because they ran
         # out of turns, which reads exactly like "nothing to report" otherwise.
-        print(f"⚠ Cut off by the turn limit, raise max_turns: "
-              f"{', '.join(i.item_title for i in cut_off)}")
+        print(f"⚠ Cut off by the turn limit: {', '.join(i.item_title for i in cut_off)}")
     if reports:
         print(f"Report: {', '.join(str(p) for p in reports)}")
     else:

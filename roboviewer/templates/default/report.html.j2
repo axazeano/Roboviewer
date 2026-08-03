@@ -81,9 +81,10 @@ the prefix differs every time, or caching is off on the provider's side.</dd>
 
 {% if truncated_items %}
 <h2>Cut off by the turn limit</h2>
-<p>These agents submitted because they ran out of turns, not because they were
-done. Their aspects were not reviewed to the end — raise <code>max_turns</code>
-to give them room.</p>
+<p>The turn limit made these agents submit; they did not stop on their own. Read
+the conclusions below before reaching for <code>max_turns</code>: if one already
+reads as finished, that agent was not short of turns — it just never landed, and
+a bigger budget will only cost more.</p>
 <ul>
 {% for item in truncated_items %}
 <li><strong>{{ item.title }}</strong> — stopped at turn {{ item.turns }}{% if item.summary %}: {{ item.summary }}{% else %} without a conclusion{% endif %}</li>

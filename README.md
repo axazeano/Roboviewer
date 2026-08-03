@@ -259,8 +259,13 @@ belongs on a merge request whose problems are already known.
 Watch the status column for ⚠️. On its last turn an agent is forced to submit
 whatever it has, so an aspect that ran out of `max_turns` hands back a thin
 result that reads exactly like a clean pass. The report calls those out under
-*Cut off by the turn limit* — if they show up, the fix is a higher `max_turns`,
-not a shorter checklist.
+*Cut off by the turn limit*, together with whatever conclusion each one reached.
+
+Read that conclusion before raising `max_turns`. An agent is told its budget and
+asked to land before it runs out, but if it still gets cut off while its summary
+already reads as finished, it was not short of turns — it never stopped, and a
+bigger budget buys nothing. Measured on a 64-file MR: 15 → 25 turns left the
+same seven of eight agents cut off and cost 67% more tokens.
 
 Beyond that, `--model` swaps the model for a single run, `-j` changes how many
 items run concurrently, and `--no-judge` skips the verification pass — useful

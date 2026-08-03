@@ -4,6 +4,12 @@ Our own tool-calling loop rather than someone else's CLI: base_url points at any
 gateway, schemas and retries stay under our control, and the reviewer only needs
 four read-only tools.
 
+The agent is told how many turns it has and is asked to wrap up before they run
+out. Without that it has no stopping criterion and simply expands to fill the
+budget: measured on a 64-file MR, raising max_turns from 15 to 25 left the same
+seven of eight agents cut off, at 67% more tokens — and their own summaries read
+as finished conclusions. They were not short of turns, they never stopped.
+
 Tolerance for custom-provider quirks:
   * the terminal tool may never get called — on the last turn we force tool_choice;
   * the model may return JSON as plain text — we try to parse it out of content;
@@ -26,6 +32,27 @@ from ..tools import dispatch, parse_arguments
 from .base import AgentOutcome, AgentRequest, ProgressHook, Runner
 
 _JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+
+# How many turns before the limit the agent is asked to land. Two leaves one turn
+# to finish the check it is on and one to submit; the forced tool_choice on the
+# very last turn stays as the backstop for when it ignores all of this.
+WRAP_UP_MARGIN = 2
+
+# Appended to the system prompt. Protocol rather than review wording, which is
+# why it lives with the loop that enforces it and not in prompts/.
+BUDGET_NOTE = """
+
+# Turn budget
+
+You have {max_turns} turns. A turn is one reply from you, with or without tool
+calls. Plan for that: investigate what matters most first, and call `{terminal}`
+while turns remain. A review that is never submitted is a review nobody reads.
+"""
+
+WRAP_UP_NOTE = (
+    "{left} turn(s) left. Do not start anything new — finish the check you are "
+    "on and call `{terminal}` now with what you already have."
+)
 
 
 class OpenAIAgentRunner(Runner):
@@ -57,8 +84,9 @@ class OpenAIAgentRunner(Runner):
             if on_progress:
                 on_progress(kind, detail)
 
+        budget = BUDGET_NOTE.format(max_turns=request.max_turns, terminal=request.terminal_name)
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": request.system},
+            {"role": "system", "content": request.system + budget},
             {"role": "user", "content": request.prompt},
         ]
         all_tools = [*request.tools, request.terminal_tool]
@@ -104,7 +132,10 @@ class OpenAIAgentRunner(Runner):
                 messages.append(
                     {
                         "role": "user",
-                        "content": f"Keep going, and be sure to call the {request.terminal_name} tool at the end.",
+                        "content": (
+                            f"Keep going. {request.max_turns - turn} turn(s) left, and "
+                            f"you must call the {request.terminal_name} tool before they run out."
+                        ),
                     }
                 )
                 continue
@@ -147,6 +178,18 @@ class OpenAIAgentRunner(Runner):
                     max_read_lines=self._run_cfg.max_read_lines,
                 )
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": output})
+
+            # Said after the tool results, so it is the last thing the agent reads
+            # before deciding what to do with the turn it has left.
+            left = request.max_turns - turn
+            if 0 < left <= WRAP_UP_MARGIN:
+                emit("wrap-up", f"{left} turn(s) left")
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": WRAP_UP_NOTE.format(left=left, terminal=request.terminal_name),
+                    }
+                )
 
         return AgentOutcome(
             payload=None, usage=usage, turns=turns, error="turn limit exhausted"

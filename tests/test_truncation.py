@@ -66,12 +66,18 @@ def _request(max_turns: int):
     )
 
 
-def _drive(tmp_path: Path, script: list, max_turns: int) -> AgentOutcome:
-    """Runs the real tool-calling loop against a scripted sequence of completions."""
+def _drive(tmp_path: Path, script: list, max_turns: int, seen: list | None = None) -> AgentOutcome:
+    """Runs the real tool-calling loop against a scripted sequence of completions.
+
+    `seen` collects the message list handed to the provider on each turn, so a
+    test can assert on what the agent was actually told.
+    """
     runner = _runner(tmp_path)
     remaining = list(script)
 
-    async def fake_complete(**_kw):
+    async def fake_complete(**kw):
+        if seen is not None:
+            seen.append([dict(m) for m in kw["messages"]])
         return remaining.pop(0)
 
     runner._complete = fake_complete  # type: ignore[method-assign]
@@ -107,6 +113,51 @@ def test_the_plain_text_fallback_on_the_last_turn_is_truncated(tmp_path: Path) -
     outcome = _drive(tmp_path, [_completion(content=body)], max_turns=1)
 
     assert outcome.ok and outcome.truncated
+
+
+# ------------------------------------------------------------- the turn budget
+
+
+def test_the_agent_is_told_how_many_turns_it_has(tmp_path: Path) -> None:
+    """Without a budget the agent has no stopping criterion and expands to fill
+    whatever limit it is given — raising max_turns then buys nothing."""
+    seen: list = []
+    _drive(tmp_path, [_completion(_call("submit_findings", {}))], max_turns=9, seen=seen)
+
+    system = seen[0][0]["content"]
+    assert "You have 9 turns" in system
+    assert "submit_findings" in system
+
+
+def test_the_agent_is_asked_to_land_before_the_limit(tmp_path: Path) -> None:
+    seen: list = []
+    script = [_completion(_call("list_files", {"directory": "."})) for _ in range(4)]
+    script.append(_completion(_call("submit_findings", {})))
+    _drive(tmp_path, script, max_turns=5, seen=seen)
+
+    nudges = [
+        m["content"]
+        for turn in seen for m in turn
+        if m["role"] == "user" and "turn(s) left" in m["content"]
+    ]
+    # Fires while within WRAP_UP_MARGIN of the limit, and not before
+    assert nudges, "the agent should be warned before the limit, not just cut off"
+    assert any("2 turn(s) left" in n for n in nudges)
+    assert any("1 turn(s) left" in n for n in nudges)
+    assert not any("3 turn(s) left" in n for n in nudges)
+
+
+def test_no_wrap_up_nudge_while_the_limit_is_far_away(tmp_path: Path) -> None:
+    seen: list = []
+    script = [_completion(_call("list_files", {"directory": "."})),
+              _completion(_call("submit_findings", {}))]
+    _drive(tmp_path, script, max_turns=20, seen=seen)
+
+    assert not any(
+        "turn(s) left" in m["content"]
+        for turn in seen for m in turn
+        if m["role"] == "user"
+    )
 
 
 # ----------------------------------------------------------------- the pipeline
@@ -168,7 +219,7 @@ def test_report_does_not_pass_a_cut_off_item_off_as_a_clean_one() -> None:
     assert "| Correctness | ✅ |" in text
     assert "Cut off by the turn limit" in text
     assert "stopped at turn 15" in text
-    assert "max_turns" in text, "the report should name the knob that fixes it"
+    assert "max_turns" in text, "the report should name the knob and when not to touch it"
 
 
 def test_report_spells_out_a_missing_conclusion() -> None:

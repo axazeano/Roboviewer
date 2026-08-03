@@ -63,9 +63,10 @@ No findings.
 {% if truncated_items %}
 ### Cut off by the turn limit
 
-These agents submitted because they ran out of turns, not because they were
-done. Their aspects were not reviewed to the end — raise `max_turns` to give
-them room.
+The turn limit made these agents submit; they did not stop on their own. Read
+the conclusions below before reaching for `max_turns`: if one already reads as
+finished, that agent was not short of turns — it just never landed, and a bigger
+budget will only cost more.
 
 {% for item in truncated_items %}
 - **{{ item.title }}** — stopped at turn {{ item.turns }}{% if item.summary %}: {{ item.summary }}{% else %} without a conclusion{% endif %}
