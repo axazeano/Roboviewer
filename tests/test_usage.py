@@ -67,7 +67,7 @@ def run_with(usage: Usage) -> ReviewRun:
         head_sha="b" * 40,
         model="test-model",
         started_at="",
-        items=[ItemResult(item_id="correctness", item_title="Корректность",
+        items=[ItemResult(item_id="correctness", item_title="Correctness",
                           status="ok", usage=usage, turns=3)],
     )
 

@@ -102,7 +102,7 @@ class OpenAIAgentRunner(Runner):
                 messages.append(
                     {
                         "role": "user",
-                        "content": f"Продолжай работу и в конце обязательно вызови тул {request.terminal_name}.",
+                        "content": f"Keep going, and be sure to call the {request.terminal_name} tool at the end.",
                     }
                 )
                 continue

@@ -111,7 +111,7 @@ def test_sarif_admits_that_a_checklist_item_crashed(sarif: dict) -> None:
 
     assert invocation["executionSuccessful"] is False
     assert len(invocation["toolExecutionNotifications"]) == 1
-    assert "Многопоточность" in invocation["toolExecutionNotifications"][0]["message"]["text"]
+    assert "Concurrency" in invocation["toolExecutionNotifications"][0]["message"]["text"]
 
 
 def test_sarif_of_a_clean_run_is_successful_and_empty() -> None:

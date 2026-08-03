@@ -1,50 +1,56 @@
 ---
 id: risks
-title: Риски и покрытие
+title: Risks and coverage
 order: 30
 ---
 
-## Безопасность и приватность
+## Security and privacy
 
-Проверь изменения на предмет проблем с безопасностью и данными пользователя.
+Check the changes for security and user-data problems.
 
-На что смотреть:
-- Секреты в коде: токены, ключи, пароли, приватные URL.
-- Персональные данные, токены и содержимое запросов в логах или в отчётах о падениях.
-- Ввод, попадающий в запрос, путь к файлу или интерпретатор без валидации и экранирования.
-- Чувствительные данные в незащищённом хранилище вместо keychain или шифрованного файла.
-- Ослабление проверки: отключённая валидация сертификата, проверка подписи, обход авторизации.
-- Проверка прав только на стороне клиента.
-- Данные, которые уходят третьей стороне без явного основания.
+What to look at:
+- Secrets in the code: tokens, keys, passwords, private URLs.
+- Personal data, tokens or request bodies in logs or crash reports.
+- Input reaching a query, a file path or an interpreter without validation or escaping.
+- Sensitive data in unprotected storage instead of the keychain or an encrypted file.
+- A weakened check: certificate validation turned off, signature verification skipped, authorisation bypassed.
+- Permission checks done on the client side only.
+- Data sent to a third party with no clear reason.
 
-Не раздувай важность: `blocker` — только там, где есть реальный вектор эксплуатации, а не потенциальный при стечении обстоятельств.
+Do not inflate severity: `blocker` is only for a real, exploitable vector, not a
+potential one under the right circumstances.
 
-## Производительность и ресурсы
+## Performance and resources
 
-Проверь изменения на очевидные проблемы с производительностью.
+Check the changes for obvious performance problems.
 
-На что смотреть:
-- Запрос или тяжёлое вычисление внутри цикла там, где хватило бы одного вызова.
-- Алгоритм, квадратичный по размеру коллекции, на данных, которые могут вырасти.
-- Синхронный ввод-вывод, декодирование или парсинг на главном потоке.
-- Работа в горячем пути: в отрисовке ячейки, в обработчике скролла, в теле часто вызываемого коллбэка.
-- Лишние копии больших коллекций и данных, пересоздание дорогих объектов на каждом вызове.
-- Утечка ресурса: незакрытый файл, соединение, таймер, наблюдатель.
-- Кэш, который растёт без ограничения.
+What to look at:
+- A query or an expensive computation inside a loop where one call would do.
+- An algorithm quadratic in collection size, on data that can grow.
+- Synchronous I/O, decoding or parsing on the main thread.
+- Work on a hot path: in cell rendering, in a scroll handler, in the body of a frequently called callback.
+- Needless copies of large collections, expensive objects recreated on every call.
+- A leaked resource: an unclosed file, connection, timer or observer.
+- A cache that grows without a bound.
 
-Замечание пиши только там, где виден масштаб проблемы: цикл по трём элементам оптимизировать не надо. Если размер данных неочевиден — посмотри через `grep`, откуда они приходят.
+Only write a finding where the scale of the problem is visible: a loop over
+three elements does not need optimising. If the data size is not obvious, use
+`grep` to see where the data comes from.
 
-## Тесты
+## Tests
 
-Оцени, покрыты ли изменения тестами и осмысленны ли сами тесты.
+Judge whether the changes are covered by tests, and whether those tests are
+meaningful.
 
-На что смотреть:
-- Новая или изменённая логика ветвления без теста. Тривиальные обёртки и геттеры не в счёт.
-- Исправление бага без теста, который бы этот баг воспроизводил.
-- Тест проверяет реализацию, а не поведение: ассерты на внутренние вызовы вместо результата.
-- Тест без содержательного ассерта либо ассерт, который пройдёт при любом исходе.
-- Не покрыты именно те краевые случаи, ради которых менялся код.
-- Тест зависит от текущего времени, порядка выполнения, сети или общего состояния — будет мигать.
-- Существующие тесты, которые изменение ломает: найди `grep`-ом тесты на затронутые сущности.
+What to look at:
+- New or changed branching logic with no test. Trivial wrappers and getters do not count.
+- A bug fix with no test that would reproduce the bug.
+- A test that checks the implementation rather than the behaviour: asserting on internal calls instead of the result.
+- A test with no meaningful assertion, or one that would pass on any outcome.
+- The very edge cases the code was changed for left uncovered.
+- A test that depends on the current time, execution order, the network or shared state — it will flake.
+- Existing tests the change breaks: `grep` for tests covering the affected types.
 
-Сначала проверь, нет ли тестов в другом месте: найди `grep`-ом имя изменённого типа или метода по каталогам тестов. Замечание «нет тестов» без такой проверки — ложное срабатывание.
+First check whether tests exist somewhere else: `grep` for the name of the
+changed type or method across the test directories. A "no tests" finding
+without that check is a false positive.

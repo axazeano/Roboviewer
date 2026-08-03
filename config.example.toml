@@ -86,6 +86,14 @@ templates_dir = ""
 # A custom templated format is added with a report.<name>.j2 file in
 # templates_dir, no Python involved. Overridden by --format md,html
 report_formats = ["md"]
+# Language the model writes its own text in: finding titles, rationales,
+# suggestions, verdict reasons, the judge's summary. Empty asks for nothing, so
+# the model answers in the language of the prompts (English by default).
+# Takes an ISO code or a name — "ru", "Russian", "German"; anything unrecognised
+# is written into the prompt as-is, so "Bahasa Indonesia" works too.
+# Report headings and labels are not affected: those come from the templates.
+# Overridden by --language.
+# output_language = "ru"
 # A relative path lands inside the reviewed repository.
 # An absolute one lands outside, nested by repository name; overridden by -o/--output
 # and by ROBOVIEWER_OUTPUT.

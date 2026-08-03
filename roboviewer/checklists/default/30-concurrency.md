@@ -1,17 +1,18 @@
 ---
 id: concurrency
-title: Многопоточность и жизненный цикл
+title: Concurrency and lifecycle
 order: 30
 ---
-Проверь работу с параллельностью и владением объектами.
+Check concurrency and object ownership.
 
-На что смотреть:
-- Общее изменяемое состояние без синхронизации; доступ к одной переменной из разных очередей и потоков.
-- Обновление UI не с главного потока.
-- Retain cycle в замыканиях: `self` захвачен сильно там, где нужен weak; подписка, которая держит владельца.
-- Подписка или наблюдатель без отписки; ресурс без освобождения.
-- Гонка инициализации: значение читается раньше, чем присвоено.
-- Работа с async/await и структурированной конкурентностью: потерянные задачи, отсутствие отмены, вызовы, привязанные не к тому актору.
-- Блокирующие операции на главном потоке.
+What to look at:
+- Shared mutable state without synchronisation; one variable accessed from different queues or threads.
+- UI updated off the main thread.
+- Retain cycles in closures: `self` captured strongly where it should be weak; a subscription that holds its owner.
+- A subscription or observer that is never cancelled; a resource that is never released.
+- Initialisation races: a value read before it is assigned.
+- async/await and structured concurrency: dropped tasks, missing cancellation, calls bound to the wrong actor.
+- Blocking operations on the main thread.
 
-Проверяй по коду, а не по догадке: найди через `grep`, откуда вызывается изменённый метод, и в каком контексте это происходит.
+Verify against the code rather than guessing: use `grep` to find where the
+changed method is called from, and in which context that happens.

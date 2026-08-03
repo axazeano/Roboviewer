@@ -2,11 +2,14 @@
 
 Four texts get rewritten while tuning a model — the reviewer's system prompt and
 task, the judge's — so they live in markdown rather than in string literals.
-They stay in Russian: that is the language the reports come out in.
 
 The scaffolding below stays in code. The context block, the tail listing files
 that did not fit and the annotation legend are assembly over `DiffBundle`
 fields, and the legend has to match the markup `gitdiff.py` actually emits.
+
+The output-language directive is assembly too, over a config value. Keeping it
+out of the templates means a custom prompt set gets the option for free instead
+of having to carry a placeholder for it.
 
 Each template resolves on its own, falling back to the bundled default, so a
 custom set carries only the files it changes.
@@ -33,18 +36,18 @@ NAMES = (
 
 # Structure rather than wording — see the module docstring.
 CONTEXT_BLOCK = """\
-# Контекст merge request'а
+# Merge request context
 
-Репозиторий: {repo}
-Ветка: {branch} → {target}
-База сравнения (merge-base): {base_sha}
+Repository: {repo}
+Branch: {branch} → {target}
+Merge base: {base_sha}
 
-## Изменённые файлы
+## Changed files
 ```
 {files}
 ```
 
-## Изменённые файлы целиком
+## Changed files in full
 
 {legend}
 
@@ -52,19 +55,50 @@ CONTEXT_BLOCK = """\
 {fallback_block}"""
 
 FALLBACK_BLOCK = """
-## Файлы, не приложенные целиком
+## Files not attached in full
 
-Слишком велики либо удалены — ниже только изменённые фрагменты. Полное
-содержимое читай через read_file, состояние до изменений — через git_show.
+Too large, or deleted — only the changed fragments are below. Read the full
+contents with `read_file`, and the state before the changes with `git_show`.
 
 ```diff
 {diff}
 ```
 """
 
+# Appended to the system prompt when a language is configured.
+LANGUAGE_DIRECTIVE = """
+
+# Output language
+
+Write every text field you submit in {language}: titles, rationales,
+suggestions, reasons and the summary.
+
+Code, identifiers, file paths and quoted snippets stay exactly as they appear in
+the source — do not translate those.
+"""
+
+# The same instruction again, last thing in the task. A small model drifts back
+# to the language of the code it has been reading, and the final line is what
+# survives that drift.
+LANGUAGE_REMINDER = "\n\nWrite the text you submit in {language}."
+
+# ISO-639-1 codes people actually type on a command line. Anything missing here
+# goes into the prompt as written, so "Bahasa Indonesia" works just as well.
+_LANGUAGE_NAMES = {
+    "ar": "Arabic", "de": "German", "en": "English", "es": "Spanish",
+    "fr": "French", "hi": "Hindi", "it": "Italian", "ja": "Japanese",
+    "ko": "Korean", "nl": "Dutch", "pl": "Polish", "pt": "Portuguese",
+    "ru": "Russian", "tr": "Turkish", "uk": "Ukrainian", "zh": "Chinese",
+}
+
 
 class PromptError(RuntimeError):
     pass
+
+
+def language_name(value: str) -> str:
+    """`ru` → `Russian`. Anything unknown passes through as written."""
+    return _LANGUAGE_NAMES.get(value.strip().lower(), value.strip())
 
 
 @dataclass
@@ -73,11 +107,17 @@ class Prompts:
     # name → path it was read from; --show-config prints this, so "which text
     # produced these findings" is never a matter of memory
     sources: dict[str, str]
+    # Language the model writes its own prose in. Empty asks for nothing, so the
+    # model answers in the language of the prompts.
+    language: str = ""
+
+    def __post_init__(self) -> None:
+        self.language = language_name(self.language) if self.language else ""
 
     # ------------------------------------------------------------------ loading
 
     @classmethod
-    def load(cls, directory: Path | None = None) -> "Prompts":
+    def load(cls, directory: Path | None = None, language: str = "") -> "Prompts":
         """Loads the set, falling back to the bundled default file by file."""
         texts: dict[str, str] = {}
         sources: dict[str, str] = {}
@@ -94,7 +134,7 @@ class Prompts:
             # indentation inside the text is preserved.
             texts[name] = path.read_text(encoding="utf-8").strip("\n")
             sources[name] = str(path)
-        return cls(texts=texts, sources=sources)
+        return cls(texts=texts, sources=sources, language=language)
 
     def validate(self, items: list[ChecklistItem], diff: DiffBundle) -> None:
         """Renders every template against the real diff before any tokens are
@@ -107,11 +147,26 @@ class Prompts:
 
     @property
     def item_system(self) -> str:
-        return self.texts["item_system"]
+        return self._with_language(self.texts["item_system"])
 
     @property
     def judge_system(self) -> str:
-        return self.texts["judge_system"]
+        return self._with_language(self.texts["judge_system"])
+
+    def system_for(self, item: ChecklistItem) -> str:
+        """The reviewer's system prompt for one item. A checklist set may replace
+        it with its own `_system.md`; the language directive applies either way."""
+        return self._with_language(item.system or self.texts["item_system"])
+
+    def _with_language(self, text: str) -> str:
+        if not self.language:
+            return text
+        return text + LANGUAGE_DIRECTIVE.format(language=self.language)
+
+    def _with_reminder(self, text: str) -> str:
+        if not self.language:
+            return text
+        return text + LANGUAGE_REMINDER.format(language=self.language)
 
     def _fmt(self, name: str, **values: object) -> str:
         try:
@@ -125,19 +180,23 @@ class Prompts:
             ) from exc
 
     def build_item_prompt(self, item: ChecklistItem, diff: DiffBundle) -> str:
-        return self._fmt(
-            "item_user",
-            context=_context_block(diff),
-            item_title=item.title,
-            item_body=item.body,
+        return self._with_reminder(
+            self._fmt(
+                "item_user",
+                context=_context_block(diff),
+                item_title=item.title,
+                item_body=item.body,
+            )
         )
 
     def build_judge_prompt(self, findings: list[Finding], diff: DiffBundle) -> str:
-        return self._fmt(
-            "judge_user",
-            context=_context_block(diff),
-            count=len(findings),
-            findings="\n\n".join(_render_finding(f) for f in findings),
+        return self._with_reminder(
+            self._fmt(
+                "judge_user",
+                context=_context_block(diff),
+                count=len(findings),
+                findings="\n\n".join(_render_finding(f) for f in findings),
+            )
         )
 
 
@@ -146,7 +205,7 @@ def _context_block(diff: DiffBundle) -> str:
     if diff.fallback and diff.text:
         fallback = FALLBACK_BLOCK.format(diff=diff.text)
         if diff.truncated:
-            fallback += "\n> Фрагменты усечены по размеру, дочитывай тулами.\n"
+            fallback += "\n> Fragments were truncated by size; read the rest with the tools.\n"
 
     return CONTEXT_BLOCK.format(
         repo=diff.root.name,
@@ -155,7 +214,7 @@ def _context_block(diff: DiffBundle) -> str:
         base_sha=diff.base_sha[:12],
         files=diff.summary_table(),
         legend=ANNOTATION_LEGEND,
-        annotated=diff.annotated or "(ни один файл не приложен целиком)",
+        annotated=diff.annotated or "(no file was attached in full)",
         fallback_block=fallback,
     )
 
@@ -165,13 +224,13 @@ def _render_finding(finding: Finding) -> str:
     code rather than in a template."""
     lines = [
         f"## {finding.id} — {finding.title}",
-        f"- Файл: `{finding.location}`",
-        f"- Важность: {finding.severity.value}",
-        f"- Категория: {finding.category}",
-        f"- Уверенность ревьюера: {finding.confidence:.2f}",
-        f"- Нашли пункты: {', '.join(finding.sources) or '—'}",
-        f"- Обоснование: {finding.rationale}",
+        f"- File: `{finding.location}`",
+        f"- Severity: {finding.severity.value}",
+        f"- Category: {finding.category}",
+        f"- Reviewer confidence: {finding.confidence:.2f}",
+        f"- Found by: {', '.join(finding.sources) or '—'}",
+        f"- Rationale: {finding.rationale}",
     ]
     if finding.suggestion:
-        lines.append(f"- Предложение: {finding.suggestion}")
+        lines.append(f"- Suggestion: {finding.suggestion}")
     return "\n".join(lines)

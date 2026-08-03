@@ -1,48 +1,53 @@
 ---
 id: behaviour
-title: Поведение в рантайме
+title: Runtime behaviour
 order: 10
 ---
 
-## Корректность и логические ошибки
+## Correctness and logic errors
 
-Ищи логические ошибки в изменённом коде.
+Look for logic errors in the changed code.
 
-На что смотреть:
-- Инвертированные или неполные условия, ошибки на границах (`<` вместо `<=`, off-by-one).
-- Необработанные краевые случаи: пустая коллекция, nil/None, ноль, отрицательное значение, первый и последний элемент.
-- Разыменование опционалов без проверки, принудительное извлечение значения, приведение типов, которое может упасть.
-- Изменения, которые ломают существующий контракт: другой порядок вызовов, изменившаяся семантика возвращаемого значения, побочные эффекты там, где их не было.
-- Копипаста с незаменённой переменной — классика, которую легко пропустить глазами.
-- Ранние возвраты, из-за которых пропускается нужный код.
+What to look at:
+- Inverted or incomplete conditions, boundary errors (`<` instead of `<=`, off-by-one).
+- Unhandled edge cases: empty collection, nil/None, zero, a negative value, the first and the last element.
+- Dereferencing an optional without a check, force-unwrapping, a cast that can fail.
+- Changes that break an existing contract: a different call order, changed semantics of a return value, side effects where there were none.
+- Copy-paste with a variable left unreplaced — a classic, and easy to miss by eye.
+- Early returns that skip code which still needs to run.
 
-Прежде чем писать замечание, прочитай функцию целиком в приложенном файле — проверка, которой «не хватает», часто стоит выше по функции и просто не помечена как изменённая. Если функция вызывается из другого файла, посмотри через `grep`, с какими аргументами.
+Before you write a finding, read the whole function in the attached file: the
+check that seems "missing" is often earlier in the function and simply not
+marked as changed. If the function is called from another file, use `grep` to
+see the arguments it gets.
 
-## Обработка ошибок
+## Error handling
 
-Проверь, как изменённый код обращается с ошибками.
+Check how the changed code deals with errors.
 
-На что смотреть:
-- Проглоченные ошибки: пустой catch, `try?` без обработки, логирование вместо реакции.
-- Ошибка обработана так, что пользователь остаётся в подвешенном состоянии: спиннер не гаснет, экран пустой без объяснения.
-- Сетевые и дисковые операции без обработки отказа или таймаута.
-- Потеря контекста ошибки при переоборачивании — наружу уходит `unknown error`.
-- Состояние, изменённое частично: первая операция прошла, вторая упала, откат не сделан.
-- Обработка ошибок, добавленная для одного пути, но пропущенная в соседнем таком же.
+What to look at:
+- Swallowed errors: an empty catch, `try?` with no handling, logging instead of reacting.
+- An error handled so that the user is left hanging: the spinner never stops, the screen stays empty with no explanation.
+- Network and disk operations with no failure or timeout handling.
+- Error context lost on rewrapping — `unknown error` reaches the surface.
+- Partially changed state: the first operation succeeded, the second failed, nothing was rolled back.
+- Error handling added on one path but skipped on the identical one next to it.
 
-Отличай сознательное игнорирование ошибки (есть комментарий, ошибка действительно неважна) от забытого. Первое — не замечание.
+Tell a deliberately ignored error (there is a comment, the error really does not
+matter) from a forgotten one. The first is not a finding.
 
-## Многопоточность и жизненный цикл
+## Concurrency and lifecycle
 
-Проверь работу с параллельностью и владением объектами.
+Check concurrency and object ownership.
 
-На что смотреть:
-- Общее изменяемое состояние без синхронизации; доступ к одной переменной из разных очередей и потоков.
-- Обновление UI не с главного потока.
-- Retain cycle в замыканиях: `self` захвачен сильно там, где нужен weak; подписка, которая держит владельца.
-- Подписка или наблюдатель без отписки; ресурс без освобождения.
-- Гонка инициализации: значение читается раньше, чем присвоено.
-- Работа с async/await и структурированной конкурентностью: потерянные задачи, отсутствие отмены, вызовы, привязанные не к тому актору.
-- Блокирующие операции на главном потоке.
+What to look at:
+- Shared mutable state without synchronisation; one variable accessed from different queues or threads.
+- UI updated off the main thread.
+- Retain cycles in closures: `self` captured strongly where it should be weak; a subscription that holds its owner.
+- A subscription or observer that is never cancelled; a resource that is never released.
+- Initialisation races: a value read before it is assigned.
+- async/await and structured concurrency: dropped tasks, missing cancellation, calls bound to the wrong actor.
+- Blocking operations on the main thread.
 
-Проверяй по коду, а не по догадке: найди через `grep`, откуда вызывается изменённый метод, и в каком контексте это происходит.
+Verify against the code rather than guessing: use `grep` to find where the
+changed method is called from, and in which context that happens.

@@ -131,7 +131,7 @@ def diff_text(
     ]
     text = _git(args, root)
     if len(text) > max_chars:
-        return text[:max_chars] + "\n\n[... дифф усечён; недостающее читай через тулы ...]", True
+        return text[:max_chars] + "\n\n[... diff truncated; read the rest with the tools ...]", True
     return text, False
 
 
@@ -148,9 +148,8 @@ def show_file_at(root: Path, ref: str, path: str) -> str | None:
 
 # ------------------------------------------------------------------ file annotation
 #
-# The markup and its legend go into the prompt, so the wording here is Russian
-# like the rest of the prompt surface. The legend must keep describing exactly
-# what `annotate_file` emits.
+# The legend goes into the prompt and must keep describing exactly what
+# `annotate_file` emits — the agent reads line numbers off this markup.
 
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
@@ -159,10 +158,10 @@ MARKER_ADDED = " + | "
 MARKER_REMOVED = " - | "
 
 ANNOTATION_LEGEND = """\
-Формат: номер строки в новой версии файла, маркер, код.
-   12   | код   — строка не менялась в этом MR, дана для контекста
-   13 + | код   — строка добавлена или изменена в этом MR
-      - | код   — строка удалена в этом MR (в новой версии её нет, номера тоже нет)\
+Format: line number in the new version of the file, marker, code.
+   12   | code   — line unchanged in this MR, shown for context
+   13 + | code   — line added or changed in this MR
+      - | code   — line removed in this MR (absent from the new version, so it has no number)\
 """
 
 
@@ -230,7 +229,7 @@ def looks_binary(text: str) -> bool:
 
 def annotate_file(path: str, stat: DiffStat, content: str, changes: FileChanges) -> str:
     lines = content.splitlines()
-    header = f"===== {path} [{stat.status}, +{stat.added}/-{stat.removed}, {len(lines)} строк] ====="
+    header = f"===== {path} [{stat.status}, +{stat.added}/-{stat.removed}, {len(lines)} lines] ====="
     out = [header]
 
     for number, code in enumerate(lines, start=1):
@@ -317,11 +316,11 @@ class DiffBundle:
 
     def summary_table(self) -> str:
         if not self.files:
-            return "(изменённых файлов нет)"
+            return "(no changed files)"
         inlined = set(self.inlined)
         rows = []
         for f in self.files:
-            note = "" if f.file in inlined else "   [целиком не приложен]"
+            note = "" if f.file in inlined else "   [not attached in full]"
             rows.append(f"{f.status:<3} +{f.added:<5} -{f.removed:<5} {f.file}{note}")
         return "\n".join(rows)
 

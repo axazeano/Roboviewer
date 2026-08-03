@@ -1,6 +1,6 @@
 {context}
-# Твой пункт проверки: {item_title}
+# Your review aspect: {item_title}
 
 {item_body}
 
-Разбери изменения по этому пункту и вызови submit_findings.
+Review the changes against this aspect, then call `submit_findings`.

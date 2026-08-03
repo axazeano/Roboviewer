@@ -16,7 +16,7 @@ No findings.
 
 | Item | Status | Findings | Turns | Tokens | Cached | Time |
 |---|---|---|---|---|---|---|
-| Корректность | ✅ | 0 | 4 | 31100 | 0% | 23s |
+| Correctness | ✅ | 0 | 4 | 31100 | 0% | 23s |
 
 ## Changed files
 

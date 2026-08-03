@@ -160,6 +160,10 @@ class RunConfig(BaseModel):
     # A format is a module in `renders` — see known() there — or a bare
     # report.<name>.j2 in templates_dir. Overridden by --format.
     report_formats: list[str] = Field(default_factory=lambda: ["md"])
+    # Language the model writes findings in. Empty asks for nothing, so it
+    # answers in the language of the prompts. An ISO code or a name; anything
+    # unrecognised goes into the prompt as written. Overridden by --language.
+    output_language: str = ""
     output_dir: str = ".roboviewer/runs"
     # Checklist items reviewed at the same time — concurrent requests to the model,
     # not OS threads.

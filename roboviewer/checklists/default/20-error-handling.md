@@ -1,16 +1,17 @@
 ---
 id: error-handling
-title: Обработка ошибок
+title: Error handling
 order: 20
 ---
-Проверь, как изменённый код обращается с ошибками.
+Check how the changed code deals with errors.
 
-На что смотреть:
-- Проглоченные ошибки: пустой catch, `try?` без обработки, логирование вместо реакции.
-- Ошибка обработана так, что пользователь остаётся в подвешенном состоянии: спиннер не гаснет, экран пустой без объяснения.
-- Сетевые и дисковые операции без обработки отказа или таймаута.
-- Потеря контекста ошибки при переоборачивании — наружу уходит `unknown error`.
-- Состояние, изменённое частично: первая операция прошла, вторая упала, откат не сделан.
-- Обработка ошибок, добавленная для одного пути, но пропущенная в соседнем таком же.
+What to look at:
+- Swallowed errors: an empty catch, `try?` with no handling, logging instead of reacting.
+- An error handled so that the user is left hanging: the spinner never stops, the screen stays empty with no explanation.
+- Network and disk operations with no failure or timeout handling.
+- Error context lost on rewrapping — `unknown error` reaches the surface.
+- Partially changed state: the first operation succeeded, the second failed, nothing was rolled back.
+- Error handling added on one path but skipped on the identical one next to it.
 
-Отличай сознательное игнорирование ошибки (есть комментарий, ошибка действительно неважна) от забытого. Первое — не замечание.
+Tell a deliberately ignored error (there is a comment, the error really does not
+matter) from a forgotten one. The first is not a finding.

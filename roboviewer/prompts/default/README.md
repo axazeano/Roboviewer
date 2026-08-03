@@ -4,8 +4,10 @@ The four files in this directory are the texts that go to the model verbatim.
 Edit them freely; the placeholders in curly braces are substituted by the code.
 Literal braces in the text must be doubled: `{{` and `}}`.
 
-They are written in Russian, and so are the findings the model returns. This
-file (README.md) is not a prompt and is never shown to the model.
+They are written in English, and so are the findings the model returns by
+default — see [Output language](#output-language) to change that without
+touching these files. This file (README.md) is not a prompt and is never shown
+to the model.
 
 | File | Who sees it | Placeholders |
 |---|---|---|
@@ -23,6 +25,24 @@ themselves with markup, and the legend for it — is assembled by the code
 (`prompts/__init__.py`) and is not edited here. It is assembly over diff fields
 rather than wording, and the legend has to match the markup `gitdiff.py`
 actually emits.
+
+## Output language
+
+`run.output_language` in the config, or `--language`, asks the model to write
+its own prose — finding titles, rationales, suggestions, verdict reasons and the
+summary — in a given language. It takes an ISO code or a name (`ru`, `Russian`,
+`German`); anything the map in `prompts/__init__.py` does not recognise goes
+into the prompt as written, so `Bahasa Indonesia` works too. Unset asks for
+nothing and the model answers in the language of these files.
+
+The directive is appended by the code, not spelled out in the files above: a
+custom prompt set gets the option without having to carry a placeholder for it,
+and a checklist set with its own `_system.md` keeps it too. It lands twice — in
+the system prompt, and restated as the last line of the task, because a small
+model drifts back to the language of the code it has been reading.
+
+Report headings, tables and labels are not affected; those live in the report
+templates and stay English.
 
 ## Overriding
 

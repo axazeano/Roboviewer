@@ -10,7 +10,7 @@ that is may carry uncommitted edits that would shift line numbers away from what
 the agent sees in the attached files.
 
 The descriptions and the returned text below go to the model, so they are part
-of the prompt surface and stay in Russian like the rest of it.
+of the prompt surface: they say what the tool is for, not just what it does.
 """
 
 from __future__ import annotations
@@ -40,14 +40,14 @@ def _safe_path(root: Path, rel: str) -> Path:
     try:
         candidate.relative_to(root.resolve())
     except ValueError:
-        raise ToolError(f"Путь вне репозитория запрещён: {rel}") from None
+        raise ToolError(f"Path outside the repository is not allowed: {rel}") from None
     return candidate
 
 
 def _truncate(text: str) -> str:
     if len(text) <= MAX_TOOL_OUTPUT:
         return text
-    return text[:MAX_TOOL_OUTPUT] + f"\n\n[... вывод усечён до {MAX_TOOL_OUTPUT} символов ...]"
+    return text[:MAX_TOOL_OUTPUT] + f"\n\n[... output truncated to {MAX_TOOL_OUTPUT} characters ...]"
 
 
 # --------------------------------------------------------------------------- tools
@@ -61,14 +61,14 @@ def read_file(root: Path, path: str, start_line: int | None = None, end_line: in
               max_lines: int = 800, ref: str = "HEAD") -> str:
     target = _safe_path(root, path)
     if target.suffix.lower() in _TEXT_SUFFIX_BLOCKLIST:
-        raise ToolError(f"Бинарный файл, чтение не поддерживается: {path}")
+        raise ToolError(f"Binary file, reading is not supported: {path}")
 
     rel = target.relative_to(root.resolve()).as_posix()
     content = show_file_at(root, ref, rel)
     if content is None:
-        raise ToolError(f"Файл не найден в проверяемой ветке: {path}")
+        raise ToolError(f"File not found on the reviewed branch: {path}")
     if looks_binary(content):
-        raise ToolError(f"Бинарный файл, чтение не поддерживается: {path}")
+        raise ToolError(f"Binary file, reading is not supported: {path}")
 
     lines = content.splitlines()
     start = max(1, start_line or 1)
@@ -78,7 +78,7 @@ def read_file(root: Path, path: str, start_line: int | None = None, end_line: in
 
     chunk = lines[start - 1 : end]
     numbered = "\n".join(f"{start + i:>6}\t{line}" for i, line in enumerate(chunk))
-    header = f"{path} (строки {start}-{min(end, len(lines))} из {len(lines)})"
+    header = f"{path} (lines {start}-{min(end, len(lines))} of {len(lines)})"
     return _truncate(f"{header}\n{numbered}")
 
 
@@ -91,7 +91,7 @@ def grep(root: Path, pattern: str, glob: str | None = None, ref: str = "HEAD",
 
     proc = subprocess.run(args, cwd=root, capture_output=True, text=True, timeout=60)
     if proc.returncode not in (0, 1):
-        raise ToolError(f"git grep завершился с ошибкой: {proc.stderr.strip()[:500]}")
+        raise ToolError(f"git grep failed: {proc.stderr.strip()[:500]}")
 
     prefix = f"{ref}:"
     lines = [
@@ -100,9 +100,9 @@ def grep(root: Path, pattern: str, glob: str | None = None, ref: str = "HEAD",
         if ln.strip()
     ]
     if not lines:
-        return f"Совпадений не найдено для: {pattern}"
+        return f"No matches for: {pattern}"
     shown = lines[:max_results]
-    suffix = f"\n[... ещё {len(lines) - len(shown)} совпадений ...]" if len(lines) > len(shown) else ""
+    suffix = f"\n[... {len(lines) - len(shown)} more matches ...]" if len(lines) > len(shown) else ""
     return _truncate("\n".join(shown) + suffix)
 
 
@@ -111,7 +111,7 @@ def list_files(root: Path, directory: str = ".", ref: str = "HEAD", max_entries:
     spec = f"{ref}:{rel}" if rel not in ("", ".") else f"{ref}:"
     proc = subprocess.run(["git", "ls-tree", spec], cwd=root, capture_output=True, text=True)
     if proc.returncode != 0:
-        raise ToolError(f"Каталог не найден в проверяемой ветке: {directory}")
+        raise ToolError(f"Directory not found on the reviewed branch: {directory}")
 
     entries: list[str] = []
     for line in proc.stdout.splitlines():
@@ -123,19 +123,19 @@ def list_files(root: Path, directory: str = ".", ref: str = "HEAD", max_entries:
         if len(entries) >= max_entries:
             entries.append("[...]")
             break
-    return "\n".join(sorted(entries)) or "(пусто)"
+    return "\n".join(sorted(entries)) or "(empty)"
 
 
 def git_show(root: Path, path: str, ref: str) -> str:
     rel = _relative(root, path)
     content = show_file_at(root, ref, rel)
     if content is None:
-        raise ToolError(f"Не удалось получить {path} на ревизии {ref} (файл мог быть создан в этой ветке)")
+        raise ToolError(f"Could not read {path} at revision {ref} (the file may have been created on this branch)")
     if looks_binary(content):
-        raise ToolError(f"Бинарный файл, чтение не поддерживается: {path}")
+        raise ToolError(f"Binary file, reading is not supported: {path}")
     lines = content.splitlines()
     numbered = "\n".join(f"{i + 1:>6}\t{line}" for i, line in enumerate(lines[:800]))
-    return _truncate(f"{path} @ {ref} ({len(lines)} строк)\n{numbered}")
+    return _truncate(f"{path} @ {ref} ({len(lines)} lines)\n{numbered}")
 
 
 # --------------------------------------------------------------------------- schemas
@@ -148,16 +148,16 @@ def tool_schemas(base_ref: str) -> list[dict[str, Any]]:
             "function": {
                 "name": "read_file",
                 "description": (
-                    "Прочитать файл в новой версии (на вершине проверяемой ветки) с нумерацией строк. "
-                    "Нужен для файлов, не приложенных к заданию целиком, и для любого другого кода "
-                    "репозитория: вызывающего, соседнего, тестов."
+                    "Read a file in its new version (at the tip of the reviewed branch), with "
+                    "line numbers. Use it for files not attached to the task in full, and for any "
+                    "other code in the repository: callers, neighbouring files, tests."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Путь относительно корня репозитория"},
-                        "start_line": {"type": "integer", "description": "Первая строка (с 1)"},
-                        "end_line": {"type": "integer", "description": "Последняя строка включительно"},
+                        "path": {"type": "string", "description": "Path relative to the repository root"},
+                        "start_line": {"type": "integer", "description": "First line, 1-based"},
+                        "end_line": {"type": "integer", "description": "Last line, inclusive"},
                     },
                     "required": ["path"],
                 },
@@ -168,15 +168,15 @@ def tool_schemas(base_ref: str) -> list[dict[str, Any]]:
             "function": {
                 "name": "grep",
                 "description": (
-                    "Поиск по расширенному регулярному выражению во всём репозитории на "
-                    "проверяемой ветке. Нужен, чтобы найти вызывающий код, тесты, дубликаты, "
-                    "существующие паттерны."
+                    "Search the whole repository on the reviewed branch with an extended regular "
+                    "expression. Use it to find callers, tests, duplicates and existing patterns — "
+                    "and to confirm something is really missing before you report it as missing."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "pattern": {"type": "string", "description": "Регулярное выражение"},
-                        "glob": {"type": "string", "description": "Ограничение по маске файлов, например *.py или src/**"},
+                        "pattern": {"type": "string", "description": "Extended regular expression"},
+                        "glob": {"type": "string", "description": "Restrict to a file mask, e.g. *.py or src/**"},
                     },
                     "required": ["pattern"],
                 },
@@ -186,10 +186,10 @@ def tool_schemas(base_ref: str) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "list_files",
-                "description": "Список файлов и подкаталогов в каталоге репозитория на проверяемой ветке.",
+                "description": "List the files and subdirectories of a repository directory on the reviewed branch.",
                 "parameters": {
                     "type": "object",
-                    "properties": {"directory": {"type": "string", "description": "Путь относительно корня"}},
+                    "properties": {"directory": {"type": "string", "description": "Path relative to the repository root"}},
                     "required": [],
                 },
             },
@@ -199,8 +199,8 @@ def tool_schemas(base_ref: str) -> list[dict[str, Any]]:
             "function": {
                 "name": "git_show",
                 "description": (
-                    f"Прочитать файл в состоянии ДО изменений (ревизия {base_ref[:12]}). "
-                    "Используй, когда нужно сравнить старую и новую реализацию целиком."
+                    f"Read a file as it was BEFORE the changes (revision {base_ref[:12]}). "
+                    "Use it when you need to compare the old and the new implementation in full."
                 ),
                 "parameters": {
                     "type": "object",
@@ -217,33 +217,33 @@ SUBMIT_FINDINGS_TOOL: dict[str, Any] = {
     "function": {
         "name": "submit_findings",
         "description": (
-            "Завершить проверку и вернуть найденные замечания. "
-            "Вызывай ровно один раз в конце. Пустой список findings — нормальный результат."
+            "Finish the review and return the findings. Call this exactly once, at the end. "
+            "An empty findings list is a normal result."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "summary": {
                     "type": "string",
-                    "description": "1-3 предложения: что проверено и общий вывод по этому пункту.",
+                    "description": "1-3 sentences: what was checked, and the overall conclusion for this aspect.",
                 },
                 "findings": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "file": {"type": "string", "description": "Путь к файлу относительно корня репозитория"},
-                            "line": {"type": "integer", "description": "Номер строки в НОВОЙ версии файла"},
+                            "file": {"type": "string", "description": "File path relative to the repository root"},
+                            "line": {"type": "integer", "description": "Line number in the NEW version of the file"},
                             "end_line": {"type": "integer"},
                             "severity": {
                                 "type": "string",
                                 "enum": ["blocker", "major", "minor", "nit"],
                             },
-                            "category": {"type": "string", "description": "Короткий слаг, например null-safety, race, api-break"},
-                            "title": {"type": "string", "description": "Суть проблемы одной строкой"},
-                            "rationale": {"type": "string", "description": "Почему это проблема и при каком сценарии она проявится"},
-                            "suggestion": {"type": "string", "description": "Конкретное предложение по исправлению"},
-                            "confidence": {"type": "number", "description": "Уверенность от 0 до 1"},
+                            "category": {"type": "string", "description": "A short slug, e.g. null-safety, race, api-break"},
+                            "title": {"type": "string", "description": "The problem in one line"},
+                            "rationale": {"type": "string", "description": "Why this is a problem, and the scenario in which it shows up"},
+                            "suggestion": {"type": "string", "description": "A concrete suggested fix"},
+                            "confidence": {"type": "number", "description": "Confidence from 0 to 1"},
                         },
                         "required": ["file", "severity", "category", "title", "rationale", "confidence"],
                     },
@@ -259,11 +259,11 @@ SUBMIT_VERDICTS_TOOL: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "submit_verdicts",
-        "description": "Завершить работу судьи и вернуть вердикт по каждому замечанию.",
+        "description": "Finish judging and return a verdict for every finding.",
         "parameters": {
             "type": "object",
             "properties": {
-                "summary": {"type": "string", "description": "Общий вывод по качеству MR, 2-5 предложений."},
+                "summary": {"type": "string", "description": "Overall assessment of the merge request, 2-5 sentences."},
                 "verdicts": {
                     "type": "array",
                     "items": {
@@ -277,9 +277,9 @@ SUBMIT_VERDICTS_TOOL: dict[str, Any] = {
                             "severity": {
                                 "type": "string",
                                 "enum": ["blocker", "major", "minor", "nit"],
-                                "description": "Скорректированная важность, если исходная неверна",
+                                "description": "Corrected severity, when the original one is wrong",
                             },
-                            "reason": {"type": "string", "description": "Короткое обоснование вердикта"},
+                            "reason": {"type": "string", "description": "A short justification for the verdict"},
                         },
                         "required": ["finding_id", "verdict", "reason"],
                     },
@@ -310,11 +310,11 @@ def dispatch(root: Path, name: str, args: dict[str, Any], *, base_ref: str, head
             return list_files(root, str(args.get("directory", ".")), ref=head_ref)
         if name == "git_show":
             return git_show(root, str(args["path"]), base_ref)
-        return f"ОШИБКА: неизвестный тул '{name}'"
+        return f"ERROR: unknown tool '{name}'"
     except KeyError as exc:
-        return f"ОШИБКА: не хватает обязательного параметра {exc}"
+        return f"ERROR: required parameter missing: {exc}"
     except (ToolError, subprocess.SubprocessError, OSError) as exc:
-        return f"ОШИБКА: {exc}"
+        return f"ERROR: {exc}"
 
 
 def parse_arguments(raw: str) -> dict[str, Any]:

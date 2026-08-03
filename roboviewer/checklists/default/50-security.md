@@ -1,17 +1,18 @@
 ---
 id: security
-title: Безопасность и приватность
+title: Security and privacy
 order: 50
 ---
-Проверь изменения на предмет проблем с безопасностью и данными пользователя.
+Check the changes for security and user-data problems.
 
-На что смотреть:
-- Секреты в коде: токены, ключи, пароли, приватные URL.
-- Персональные данные, токены и содержимое запросов в логах или в отчётах о падениях.
-- Ввод, попадающий в запрос, путь к файлу или интерпретатор без валидации и экранирования.
-- Чувствительные данные в незащищённом хранилище вместо keychain или шифрованного файла.
-- Ослабление проверки: отключённая валидация сертификата, проверка подписи, обход авторизации.
-- Проверка прав только на стороне клиента.
-- Данные, которые уходят третьей стороне без явного основания.
+What to look at:
+- Secrets in the code: tokens, keys, passwords, private URLs.
+- Personal data, tokens or request bodies in logs or crash reports.
+- Input reaching a query, a file path or an interpreter without validation or escaping.
+- Sensitive data in unprotected storage instead of the keychain or an encrypted file.
+- A weakened check: certificate validation turned off, signature verification skipped, authorisation bypassed.
+- Permission checks done on the client side only.
+- Data sent to a third party with no clear reason.
 
-Не раздувай важность: `blocker` — только там, где есть реальный вектор эксплуатации, а не потенциальный при стечении обстоятельств.
+Do not inflate severity: `blocker` is only for a real, exploitable vector, not a
+potential one under the right circumstances.

@@ -1,122 +1,136 @@
 ---
 id: all
-title: Полная проверка
+title: Full review
 order: 10
 ---
 
-## Корректность и логические ошибки
+## Correctness and logic errors
 
-Ищи логические ошибки в изменённом коде.
+Look for logic errors in the changed code.
 
-На что смотреть:
-- Инвертированные или неполные условия, ошибки на границах (`<` вместо `<=`, off-by-one).
-- Необработанные краевые случаи: пустая коллекция, nil/None, ноль, отрицательное значение, первый и последний элемент.
-- Разыменование опционалов без проверки, принудительное извлечение значения, приведение типов, которое может упасть.
-- Изменения, которые ломают существующий контракт: другой порядок вызовов, изменившаяся семантика возвращаемого значения, побочные эффекты там, где их не было.
-- Копипаста с незаменённой переменной — классика, которую легко пропустить глазами.
-- Ранние возвраты, из-за которых пропускается нужный код.
+What to look at:
+- Inverted or incomplete conditions, boundary errors (`<` instead of `<=`, off-by-one).
+- Unhandled edge cases: empty collection, nil/None, zero, a negative value, the first and the last element.
+- Dereferencing an optional without a check, force-unwrapping, a cast that can fail.
+- Changes that break an existing contract: a different call order, changed semantics of a return value, side effects where there were none.
+- Copy-paste with a variable left unreplaced — a classic, and easy to miss by eye.
+- Early returns that skip code which still needs to run.
 
-Прежде чем писать замечание, прочитай функцию целиком в приложенном файле — проверка, которой «не хватает», часто стоит выше по функции и просто не помечена как изменённая. Если функция вызывается из другого файла, посмотри через `grep`, с какими аргументами.
+Before you write a finding, read the whole function in the attached file: the
+check that seems "missing" is often earlier in the function and simply not
+marked as changed. If the function is called from another file, use `grep` to
+see the arguments it gets.
 
-## Обработка ошибок
+## Error handling
 
-Проверь, как изменённый код обращается с ошибками.
+Check how the changed code deals with errors.
 
-На что смотреть:
-- Проглоченные ошибки: пустой catch, `try?` без обработки, логирование вместо реакции.
-- Ошибка обработана так, что пользователь остаётся в подвешенном состоянии: спиннер не гаснет, экран пустой без объяснения.
-- Сетевые и дисковые операции без обработки отказа или таймаута.
-- Потеря контекста ошибки при переоборачивании — наружу уходит `unknown error`.
-- Состояние, изменённое частично: первая операция прошла, вторая упала, откат не сделан.
-- Обработка ошибок, добавленная для одного пути, но пропущенная в соседнем таком же.
+What to look at:
+- Swallowed errors: an empty catch, `try?` with no handling, logging instead of reacting.
+- An error handled so that the user is left hanging: the spinner never stops, the screen stays empty with no explanation.
+- Network and disk operations with no failure or timeout handling.
+- Error context lost on rewrapping — `unknown error` reaches the surface.
+- Partially changed state: the first operation succeeded, the second failed, nothing was rolled back.
+- Error handling added on one path but skipped on the identical one next to it.
 
-Отличай сознательное игнорирование ошибки (есть комментарий, ошибка действительно неважна) от забытого. Первое — не замечание.
+Tell a deliberately ignored error (there is a comment, the error really does not
+matter) from a forgotten one. The first is not a finding.
 
-## Многопоточность и жизненный цикл
+## Concurrency and lifecycle
 
-Проверь работу с параллельностью и владением объектами.
+Check concurrency and object ownership.
 
-На что смотреть:
-- Общее изменяемое состояние без синхронизации; доступ к одной переменной из разных очередей и потоков.
-- Обновление UI не с главного потока.
-- Retain cycle в замыканиях: `self` захвачен сильно там, где нужен weak; подписка, которая держит владельца.
-- Подписка или наблюдатель без отписки; ресурс без освобождения.
-- Гонка инициализации: значение читается раньше, чем присвоено.
-- Работа с async/await и структурированной конкурентностью: потерянные задачи, отсутствие отмены, вызовы, привязанные не к тому актору.
-- Блокирующие операции на главном потоке.
+What to look at:
+- Shared mutable state without synchronisation; one variable accessed from different queues or threads.
+- UI updated off the main thread.
+- Retain cycles in closures: `self` captured strongly where it should be weak; a subscription that holds its owner.
+- A subscription or observer that is never cancelled; a resource that is never released.
+- Initialisation races: a value read before it is assigned.
+- async/await and structured concurrency: dropped tasks, missing cancellation, calls bound to the wrong actor.
+- Blocking operations on the main thread.
 
-Проверяй по коду, а не по догадке: найди через `grep`, откуда вызывается изменённый метод, и в каком контексте это происходит.
+Verify against the code rather than guessing: use `grep` to find where the
+changed method is called from, and in which context that happens.
 
-## Публичные контракты и обратная совместимость
+## Public contracts and backward compatibility
 
-Проверь изменения публичных интерфейсов и их влияние на вызывающий код.
+Check changes to public interfaces and their effect on calling code.
 
-На что смотреть:
-- Изменённая сигнатура, тип возвращаемого значения или опциональность у публичного метода: найди `grep`-ом всех вызывающих и проверь, что они согласованы.
-- Новый обязательный параметр без значения по умолчанию.
-- Изменившийся смысл существующего параметра при той же сигнатуре — самое опасное, компилятор такое не ловит.
-- Изменения структур, сериализуемых в сеть или на диск: переименованные и удалённые поля, несовместимость со старыми сохранёнными данными.
-- Удалённый или переименованный публичный символ, у которого остались использования.
-- Расширение enum, из-за которого существующие switch перестают быть исчерпывающими.
+What to look at:
+- A changed signature, return type or optionality on a public method: `grep` for every caller and check they still agree.
+- A new required parameter with no default value.
+- The meaning of an existing parameter changing while the signature stays the same — the most dangerous kind, the compiler does not catch it.
+- Changes to structures serialised to the network or to disk: renamed and removed fields, incompatibility with data already stored.
+- A public symbol removed or renamed while uses of it remain.
+- An enum gaining a case, so existing switches stop being exhaustive.
 
-Если сущность сериализуется или уходит в API — отдельно оцени, что будет со старыми клиентами и уже сохранёнными данными.
+If the type is serialised or crosses an API boundary, judge separately what
+happens to old clients and to data that is already stored.
 
-## Безопасность и приватность
+## Security and privacy
 
-Проверь изменения на предмет проблем с безопасностью и данными пользователя.
+Check the changes for security and user-data problems.
 
-На что смотреть:
-- Секреты в коде: токены, ключи, пароли, приватные URL.
-- Персональные данные, токены и содержимое запросов в логах или в отчётах о падениях.
-- Ввод, попадающий в запрос, путь к файлу или интерпретатор без валидации и экранирования.
-- Чувствительные данные в незащищённом хранилище вместо keychain или шифрованного файла.
-- Ослабление проверки: отключённая валидация сертификата, проверка подписи, обход авторизации.
-- Проверка прав только на стороне клиента.
-- Данные, которые уходят третьей стороне без явного основания.
+What to look at:
+- Secrets in the code: tokens, keys, passwords, private URLs.
+- Personal data, tokens or request bodies in logs or crash reports.
+- Input reaching a query, a file path or an interpreter without validation or escaping.
+- Sensitive data in unprotected storage instead of the keychain or an encrypted file.
+- A weakened check: certificate validation turned off, signature verification skipped, authorisation bypassed.
+- Permission checks done on the client side only.
+- Data sent to a third party with no clear reason.
 
-Не раздувай важность: `blocker` — только там, где есть реальный вектор эксплуатации, а не потенциальный при стечении обстоятельств.
+Do not inflate severity: `blocker` is only for a real, exploitable vector, not a
+potential one under the right circumstances.
 
-## Производительность и ресурсы
+## Performance and resources
 
-Проверь изменения на очевидные проблемы с производительностью.
+Check the changes for obvious performance problems.
 
-На что смотреть:
-- Запрос или тяжёлое вычисление внутри цикла там, где хватило бы одного вызова.
-- Алгоритм, квадратичный по размеру коллекции, на данных, которые могут вырасти.
-- Синхронный ввод-вывод, декодирование или парсинг на главном потоке.
-- Работа в горячем пути: в отрисовке ячейки, в обработчике скролла, в теле часто вызываемого коллбэка.
-- Лишние копии больших коллекций и данных, пересоздание дорогих объектов на каждом вызове.
-- Утечка ресурса: незакрытый файл, соединение, таймер, наблюдатель.
-- Кэш, который растёт без ограничения.
+What to look at:
+- A query or an expensive computation inside a loop where one call would do.
+- An algorithm quadratic in collection size, on data that can grow.
+- Synchronous I/O, decoding or parsing on the main thread.
+- Work on a hot path: in cell rendering, in a scroll handler, in the body of a frequently called callback.
+- Needless copies of large collections, expensive objects recreated on every call.
+- A leaked resource: an unclosed file, connection, timer or observer.
+- A cache that grows without a bound.
 
-Замечание пиши только там, где виден масштаб проблемы: цикл по трём элементам оптимизировать не надо. Если размер данных неочевиден — посмотри через `grep`, откуда они приходят.
+Only write a finding where the scale of the problem is visible: a loop over
+three elements does not need optimising. If the data size is not obvious, use
+`grep` to see where the data comes from.
 
-## Тесты
+## Tests
 
-Оцени, покрыты ли изменения тестами и осмысленны ли сами тесты.
+Judge whether the changes are covered by tests, and whether those tests are
+meaningful.
 
-На что смотреть:
-- Новая или изменённая логика ветвления без теста. Тривиальные обёртки и геттеры не в счёт.
-- Исправление бага без теста, который бы этот баг воспроизводил.
-- Тест проверяет реализацию, а не поведение: ассерты на внутренние вызовы вместо результата.
-- Тест без содержательного ассерта либо ассерт, который пройдёт при любом исходе.
-- Не покрыты именно те краевые случаи, ради которых менялся код.
-- Тест зависит от текущего времени, порядка выполнения, сети или общего состояния — будет мигать.
-- Существующие тесты, которые изменение ломает: найди `grep`-ом тесты на затронутые сущности.
+What to look at:
+- New or changed branching logic with no test. Trivial wrappers and getters do not count.
+- A bug fix with no test that would reproduce the bug.
+- A test that checks the implementation rather than the behaviour: asserting on internal calls instead of the result.
+- A test with no meaningful assertion, or one that would pass on any outcome.
+- The very edge cases the code was changed for left uncovered.
+- A test that depends on the current time, execution order, the network or shared state — it will flake.
+- Existing tests the change breaks: `grep` for tests covering the affected types.
 
-Сначала проверь, нет ли тестов в другом месте: найди `grep`-ом имя изменённого типа или метода по каталогам тестов. Замечание «нет тестов» без такой проверки — ложное срабатывание.
+First check whether tests exist somewhere else: `grep` for the name of the
+changed type or method across the test directories. A "no tests" finding
+without that check is a false positive.
 
-## Архитектура и структура кода
+## Architecture and code structure
 
-Проверь, вписывается ли изменение в устройство проекта.
+Check whether the change fits how the project is built.
 
-На что смотреть:
-- Нарушение принятого разделения слоёв и направления зависимостей: код обращается напрямую туда, куда в проекте принято ходить через промежуточный слой.
-- Зависимость, созданная внутри класса, там где в проекте она передаётся снаружи.
-- Логика в неподходящем месте: бизнес-правила в UI, работа с сетью в модели представления.
-- Дублирование: рядом уже есть функция или расширение, делающее то же самое — проверь `grep`-ом.
-- Класс или функция, которые взяли на себя слишком много и продолжают расти в этом MR.
-- Захардкоженные значения там, где в проекте есть конфиг или константы.
-- Нарушение соглашений соседнего кода: именование, структура каталогов, способ регистрации зависимости.
+What to look at:
+- Broken layering or dependency direction: code reaching straight for something the project normally goes through an intermediate layer to reach.
+- A dependency constructed inside a class where the project passes it in from outside.
+- Logic in the wrong place: business rules in the UI, networking in a view model.
+- Duplication: a function or extension right next to it already does the same thing — check with `grep`.
+- A class or function that took on too much and keeps growing in this MR.
+- Hardcoded values where the project already has a config or constants.
+- Conventions of the surrounding code broken: naming, directory structure, the way a dependency is registered.
 
-Ориентируйся на то, как устроен окружающий код, а не на абстрактные принципы: изучи соседние файлы через `read_file` и `list_files`. Замечания уровня «здесь можно было бы применить паттерн X» не пиши.
+Judge by how the surrounding code is built, not by abstract principles: study
+neighbouring files with `read_file` and `list_files`. Do not write findings of
+the "pattern X could have been applied here" kind.

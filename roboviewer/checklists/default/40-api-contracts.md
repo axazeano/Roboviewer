@@ -1,16 +1,17 @@
 ---
 id: api-contracts
-title: Публичные контракты и обратная совместимость
+title: Public contracts and backward compatibility
 order: 40
 ---
-Проверь изменения публичных интерфейсов и их влияние на вызывающий код.
+Check changes to public interfaces and their effect on calling code.
 
-На что смотреть:
-- Изменённая сигнатура, тип возвращаемого значения или опциональность у публичного метода: найди `grep`-ом всех вызывающих и проверь, что они согласованы.
-- Новый обязательный параметр без значения по умолчанию.
-- Изменившийся смысл существующего параметра при той же сигнатуре — самое опасное, компилятор такое не ловит.
-- Изменения структур, сериализуемых в сеть или на диск: переименованные и удалённые поля, несовместимость со старыми сохранёнными данными.
-- Удалённый или переименованный публичный символ, у которого остались использования.
-- Расширение enum, из-за которого существующие switch перестают быть исчерпывающими.
+What to look at:
+- A changed signature, return type or optionality on a public method: `grep` for every caller and check they still agree.
+- A new required parameter with no default value.
+- The meaning of an existing parameter changing while the signature stays the same — the most dangerous kind, the compiler does not catch it.
+- Changes to structures serialised to the network or to disk: renamed and removed fields, incompatibility with data already stored.
+- A public symbol removed or renamed while uses of it remain.
+- An enum gaining a case, so existing switches stop being exhaustive.
 
-Если сущность сериализуется или уходит в API — отдельно оцени, что будет со старыми клиентами и уже сохранёнными данными.
+If the type is serialised or crosses an API boundary, judge separately what
+happens to old clients and to data that is already stored.

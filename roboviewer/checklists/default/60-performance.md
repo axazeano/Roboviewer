@@ -1,17 +1,19 @@
 ---
 id: performance
-title: Производительность и ресурсы
+title: Performance and resources
 order: 60
 ---
-Проверь изменения на очевидные проблемы с производительностью.
+Check the changes for obvious performance problems.
 
-На что смотреть:
-- Запрос или тяжёлое вычисление внутри цикла там, где хватило бы одного вызова.
-- Алгоритм, квадратичный по размеру коллекции, на данных, которые могут вырасти.
-- Синхронный ввод-вывод, декодирование или парсинг на главном потоке.
-- Работа в горячем пути: в отрисовке ячейки, в обработчике скролла, в теле часто вызываемого коллбэка.
-- Лишние копии больших коллекций и данных, пересоздание дорогих объектов на каждом вызове.
-- Утечка ресурса: незакрытый файл, соединение, таймер, наблюдатель.
-- Кэш, который растёт без ограничения.
+What to look at:
+- A query or an expensive computation inside a loop where one call would do.
+- An algorithm quadratic in collection size, on data that can grow.
+- Synchronous I/O, decoding or parsing on the main thread.
+- Work on a hot path: in cell rendering, in a scroll handler, in the body of a frequently called callback.
+- Needless copies of large collections, expensive objects recreated on every call.
+- A leaked resource: an unclosed file, connection, timer or observer.
+- A cache that grows without a bound.
 
-Замечание пиши только там, где виден масштаб проблемы: цикл по трём элементам оптимизировать не надо. Если размер данных неочевиден — посмотри через `grep`, откуда они приходят.
+Only write a finding where the scale of the problem is visible: a loop over
+three elements does not need optimising. If the data size is not obvious, use
+`grep` to see where the data comes from.

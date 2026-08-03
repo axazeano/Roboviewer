@@ -1,17 +1,20 @@
 ---
 id: tests
-title: Тесты
+title: Tests
 order: 70
 ---
-Оцени, покрыты ли изменения тестами и осмысленны ли сами тесты.
+Judge whether the changes are covered by tests, and whether those tests are
+meaningful.
 
-На что смотреть:
-- Новая или изменённая логика ветвления без теста. Тривиальные обёртки и геттеры не в счёт.
-- Исправление бага без теста, который бы этот баг воспроизводил.
-- Тест проверяет реализацию, а не поведение: ассерты на внутренние вызовы вместо результата.
-- Тест без содержательного ассерта либо ассерт, который пройдёт при любом исходе.
-- Не покрыты именно те краевые случаи, ради которых менялся код.
-- Тест зависит от текущего времени, порядка выполнения, сети или общего состояния — будет мигать.
-- Существующие тесты, которые изменение ломает: найди `grep`-ом тесты на затронутые сущности.
+What to look at:
+- New or changed branching logic with no test. Trivial wrappers and getters do not count.
+- A bug fix with no test that would reproduce the bug.
+- A test that checks the implementation rather than the behaviour: asserting on internal calls instead of the result.
+- A test with no meaningful assertion, or one that would pass on any outcome.
+- The very edge cases the code was changed for left uncovered.
+- A test that depends on the current time, execution order, the network or shared state — it will flake.
+- Existing tests the change breaks: `grep` for tests covering the affected types.
 
-Сначала проверь, нет ли тестов в другом месте: найди `grep`-ом имя изменённого типа или метода по каталогам тестов. Замечание «нет тестов» без такой проверки — ложное срабатывание.
+First check whether tests exist somewhere else: `grep` for the name of the
+changed type or method across the test directories. A "no tests" finding
+without that check is a false positive.

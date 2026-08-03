@@ -1,34 +1,37 @@
 ---
 id: contracts
-title: Контракты и структура
+title: Contracts and structure
 order: 20
 ---
 
-## Публичные контракты и обратная совместимость
+## Public contracts and backward compatibility
 
-Проверь изменения публичных интерфейсов и их влияние на вызывающий код.
+Check changes to public interfaces and their effect on calling code.
 
-На что смотреть:
-- Изменённая сигнатура, тип возвращаемого значения или опциональность у публичного метода: найди `grep`-ом всех вызывающих и проверь, что они согласованы.
-- Новый обязательный параметр без значения по умолчанию.
-- Изменившийся смысл существующего параметра при той же сигнатуре — самое опасное, компилятор такое не ловит.
-- Изменения структур, сериализуемых в сеть или на диск: переименованные и удалённые поля, несовместимость со старыми сохранёнными данными.
-- Удалённый или переименованный публичный символ, у которого остались использования.
-- Расширение enum, из-за которого существующие switch перестают быть исчерпывающими.
+What to look at:
+- A changed signature, return type or optionality on a public method: `grep` for every caller and check they still agree.
+- A new required parameter with no default value.
+- The meaning of an existing parameter changing while the signature stays the same — the most dangerous kind, the compiler does not catch it.
+- Changes to structures serialised to the network or to disk: renamed and removed fields, incompatibility with data already stored.
+- A public symbol removed or renamed while uses of it remain.
+- An enum gaining a case, so existing switches stop being exhaustive.
 
-Если сущность сериализуется или уходит в API — отдельно оцени, что будет со старыми клиентами и уже сохранёнными данными.
+If the type is serialised or crosses an API boundary, judge separately what
+happens to old clients and to data that is already stored.
 
-## Архитектура и структура кода
+## Architecture and code structure
 
-Проверь, вписывается ли изменение в устройство проекта.
+Check whether the change fits how the project is built.
 
-На что смотреть:
-- Нарушение принятого разделения слоёв и направления зависимостей: код обращается напрямую туда, куда в проекте принято ходить через промежуточный слой.
-- Зависимость, созданная внутри класса, там где в проекте она передаётся снаружи.
-- Логика в неподходящем месте: бизнес-правила в UI, работа с сетью в модели представления.
-- Дублирование: рядом уже есть функция или расширение, делающее то же самое — проверь `grep`-ом.
-- Класс или функция, которые взяли на себя слишком много и продолжают расти в этом MR.
-- Захардкоженные значения там, где в проекте есть конфиг или константы.
-- Нарушение соглашений соседнего кода: именование, структура каталогов, способ регистрации зависимости.
+What to look at:
+- Broken layering or dependency direction: code reaching straight for something the project normally goes through an intermediate layer to reach.
+- A dependency constructed inside a class where the project passes it in from outside.
+- Logic in the wrong place: business rules in the UI, networking in a view model.
+- Duplication: a function or extension right next to it already does the same thing — check with `grep`.
+- A class or function that took on too much and keeps growing in this MR.
+- Hardcoded values where the project already has a config or constants.
+- Conventions of the surrounding code broken: naming, directory structure, the way a dependency is registered.
 
-Ориентируйся на то, как устроен окружающий код, а не на абстрактные принципы: изучи соседние файлы через `read_file` и `list_files`. Замечания уровня «здесь можно было бы применить паттерн X» не пиши.
+Judge by how the surrounding code is built, not by abstract principles: study
+neighbouring files with `read_file` and `list_files`. Do not write findings of
+the "pattern X could have been applied here" kind.

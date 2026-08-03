@@ -135,7 +135,7 @@ def full_run() -> ReviewRun:
     items = [
         ItemResult(
             item_id="10-correctness",
-            item_title="Корректность",
+            item_title="Correctness",
             status="ok",
             findings=findings[:1],
             usage=Usage(prompt_tokens=120_000, completion_tokens=4_200, cached_tokens=96_000, cache_reported=True),
@@ -144,7 +144,7 @@ def full_run() -> ReviewRun:
         ),
         ItemResult(
             item_id="30-concurrency",
-            item_title="Многопоточность",
+            item_title="Concurrency",
             status="failed",
             error="the provider returned 502 after 3 attempts",
             usage=Usage(prompt_tokens=24_000, completion_tokens=0, cache_reported=True),
@@ -153,7 +153,7 @@ def full_run() -> ReviewRun:
         ),
         ItemResult(
             item_id="70-tests",
-            item_title="Тесты",
+            item_title="Tests",
             status="skipped",
             usage=Usage(),
             turns=0,
@@ -175,7 +175,7 @@ def empty_run() -> ReviewRun:
         items=[
             ItemResult(
                 item_id="10-correctness",
-                item_title="Корректность",
+                item_title="Correctness",
                 status="ok",
                 usage=Usage(prompt_tokens=30_000, completion_tokens=1_100),
                 turns=4,
@@ -192,7 +192,7 @@ def cold_cache_run() -> ReviewRun:
         items=[
             ItemResult(
                 item_id="10-correctness",
-                item_title="Корректность",
+                item_title="Correctness",
                 status="ok",
                 usage=Usage(prompt_tokens=30_000, completion_tokens=1_100, cache_reported=True),
                 turns=4,

@@ -1,16 +1,19 @@
 ---
 id: correctness
-title: Корректность и логические ошибки
+title: Correctness and logic errors
 order: 10
 ---
-Ищи логические ошибки в изменённом коде.
+Look for logic errors in the changed code.
 
-На что смотреть:
-- Инвертированные или неполные условия, ошибки на границах (`<` вместо `<=`, off-by-one).
-- Необработанные краевые случаи: пустая коллекция, nil/None, ноль, отрицательное значение, первый и последний элемент.
-- Разыменование опционалов без проверки, принудительное извлечение значения, приведение типов, которое может упасть.
-- Изменения, которые ломают существующий контракт: другой порядок вызовов, изменившаяся семантика возвращаемого значения, побочные эффекты там, где их не было.
-- Копипаста с незаменённой переменной — классика, которую легко пропустить глазами.
-- Ранние возвраты, из-за которых пропускается нужный код.
+What to look at:
+- Inverted or incomplete conditions, boundary errors (`<` instead of `<=`, off-by-one).
+- Unhandled edge cases: empty collection, nil/None, zero, a negative value, the first and the last element.
+- Dereferencing an optional without a check, force-unwrapping, a cast that can fail.
+- Changes that break an existing contract: a different call order, changed semantics of a return value, side effects where there were none.
+- Copy-paste with a variable left unreplaced — a classic, and easy to miss by eye.
+- Early returns that skip code which still needs to run.
 
-Прежде чем писать замечание, прочитай функцию целиком в приложенном файле — проверка, которой «не хватает», часто стоит выше по функции и просто не помечена как изменённая. Если функция вызывается из другого файла, посмотри через `grep`, с какими аргументами.
+Before you write a finding, read the whole function in the attached file: the
+check that seems "missing" is often earlier in the function and simply not
+marked as changed. If the function is called from another file, use `grep` to
+see the arguments it gets.

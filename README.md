@@ -11,22 +11,20 @@ roboviewer develop
 
 ```
 ▸ feature/discount → develop: 12 files, 8 checklist items
-• Корректность и логические ошибки: 3 findings (ok) · 41200 tokens · 62s
-• Обработка ошибок: 1 findings (ok) · 38900 tokens · 55s
+• Correctness and logic errors: 3 findings (ok) · 41200 tokens · 62s
+• Error handling: 1 findings (ok) · 38900 tokens · 55s
 ...
 ▸ Confirmed 4 of 11
 
-  F001  [Blocker] src/cart.py:42 — гонка при параллельном обновлении корзины
-  F002  [Major] src/api.py:118 — изменение ломает старых клиентов
+  F001  [Blocker] src/cart.py:42 — race when the cart is updated concurrently
+  F002  [Major] src/api.py:118 — the change breaks older clients
 
 Confirmed 4 of 11 · 167100 tokens · 67% from cache
 Report: .roboviewer/runs/20260730-172900/report.md
 ```
 
-*The tool speaks English, but the prompts and checklist items that go to the
-model are written in Russian, so the findings come back in Russian too. To
-change that, edit the markdown under `roboviewer/prompts/` and
-`roboviewer/checklists/`.*
+*Findings come back in English. `--language ru` asks the model for another one
+without touching the prompts — see [Output language](#output-language).*
 
 ## The problem
 
@@ -125,7 +123,7 @@ roboviewer -C ~/projects/app develop  # a repository living elsewhere
 | `--only correctness,tests` | Run just these checklist items |
 | `-v, --verbose` | Stream agent activity: tool calls, retries, errors |
 | `--format md,html` | Which reports to write; HTML is one self-contained file |
-| `--no-tui` | Plain text output, for CI |
+| `--language ru` | Language the model writes findings in |
 | `--check-provider` | Diagnose the gateway and stop |
 
 `ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` cover `-C`/`-o` if you set them once.
@@ -190,15 +188,42 @@ One markdown file per concern, in `roboviewer/checklists/default/`:
 ```markdown
 ---
 id: correctness
-title: Корректность и логические ошибки
+title: Correctness and logic errors
 order: 10
 ---
-Задача для агента...
+The task for the agent...
 ```
 
 Adding a check means adding a file — no code involved. A `checklists/` directory
 inside the repository being reviewed overrides the built-in set. An optional
 `_system.md` in the directory replaces the system prompt for its items.
+
+## Output language
+
+Prompts and checklists are English, so findings come back in English. To get
+them in another language, ask for it rather than translating the prompts:
+
+```bash
+roboviewer develop --language ru
+```
+
+Or once, in the config:
+
+```toml
+[run]
+output_language = "ru"
+```
+
+It takes an ISO code or a name — `ru`, `Russian`, `German`. Anything not in the
+built-in map goes into the prompt as written, so `Bahasa Indonesia` works too.
+
+This covers the text the model writes: finding titles, rationales, suggestions,
+verdict reasons and the judge's summary. Report headings, tables and severity
+labels come from the templates and stay English — change those in
+`roboviewer/templates/default/`.
+
+The directive is appended by the code, so it survives a custom prompt set and a
+checklist that brings its own `_system.md`.
 
 ## Tuning
 

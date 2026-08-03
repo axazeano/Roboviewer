@@ -13,7 +13,12 @@ from .checklist import load_checklist
 from .config import Config, load_config, templates_dir_for
 from .models import SEVERITY_LABEL, ReviewRun
 from .pipeline import Event, ReviewPipeline, output_dir_for
-from .prompts import DEFAULT_DIR as PROMPTS_DEFAULT_DIR, PromptError, Prompts
+from .prompts import (
+    DEFAULT_DIR as PROMPTS_DEFAULT_DIR,
+    PromptError,
+    Prompts,
+    language_name,
+)
 from .report import save
 from .runners import OpenAIAgentRunner
 
@@ -94,6 +99,15 @@ def build_parser() -> argparse.ArgumentParser:
             "Replaces report_formats from the config entirely; without the flag, as set there"
         ),
     )
+    parser.add_argument(
+        "--language",
+        metavar="LANG",
+        help=(
+            "Language for the model's own text: finding titles, rationales, "
+            "suggestions, the judge's summary. Takes an ISO code or a name — "
+            "ru, Russian, German. Without the flag, whatever the config says"
+        ),
+    )
     parser.add_argument("-j", "--concurrency", type=int, help="How many items to review in parallel")
     parser.add_argument("--no-judge", action="store_true", help="Skip the final judge pass")
     parser.add_argument(
@@ -133,6 +147,8 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
         # Overrides both stages; telling them apart is a config-level choice
         cfg.provider.enable_thinking = args.thinking == "on"
         cfg.provider.judge_enable_thinking = cfg.provider.enable_thinking
+    if args.language:
+        cfg.run.output_language = args.language
     if args.concurrency:
         cfg.run.concurrency = args.concurrency
     if args.no_judge:
@@ -170,7 +186,7 @@ def _load_prompts(cfg: Config, root: Path) -> Prompts:
     # go out with prompts nobody chose.
     if cfg.run.prompts_dir and (directory is None or not directory.is_dir()):
         raise PromptError(f"Prompts directory not found: {directory}")
-    return Prompts.load(directory)
+    return Prompts.load(directory, cfg.run.output_language)
 
 
 def _print_prompt_sources(cfg: Config, root: Path) -> None:
@@ -225,6 +241,7 @@ def _print_config(cfg: Config, root: Path) -> None:
     templates_dir = templates_dir_for(cfg, root)
     print(f"  templates      {templates_dir or 'bundled'}")
     print(f"  reports        {', '.join(cfg.run.report_formats)}")
+    print(f"  output lang    {language_name(cfg.run.output_language) or 'not set (model answers in the prompt language)'}")
     print(f"  output_dir     {cfg.run.output_dir}")
     print(f"  concurrency    {cfg.run.concurrency}")
     print(f"  max_turns      {cfg.run.max_turns}")
@@ -242,19 +259,6 @@ def _print_event(event: Event, verbose: bool = False) -> None:
         result = event.data["result"]
         line += f" · {result.usage.total_tokens} tokens · {result.duration_s:.0f}s"
     print(line, flush=True)
-
-
-def _print_diff(diff: gitdiff.DiffBundle) -> None:
-    """The console twin of `DiffBundle.summary_table`. Separate because that one
-    goes into the prompt and is worded for the model, in Russian."""
-    print(f"{diff.branch} → {diff.target} (merge-base {diff.base_sha[:12]})")
-    if not diff.files:
-        print("(no changed files)")
-        return
-    inlined = set(diff.inlined)
-    for stat in diff.files:
-        note = "" if stat.file in inlined else "   [not inlined in full]"
-        print(f"{stat.status:<3} +{stat.added:<5} -{stat.removed:<5} {stat.file}{note}")
 
 
 def _print_summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> None:
@@ -374,7 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.diff_only:
-        _print_diff(diff)
+        print(f"{diff.branch} → {diff.target} (merge-base {diff.base_sha[:12]})")
+        print(diff.summary_table())
         return 0
 
     if not diff.files:

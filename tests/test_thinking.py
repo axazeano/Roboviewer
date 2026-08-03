@@ -17,7 +17,7 @@ from roboviewer.runners import AgentOutcome
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
-ITEM = ChecklistItem(id="correctness", title="Корректность", body="Ищи ошибки.")
+ITEM = ChecklistItem(id="correctness", title="Correctness", body="Ищи ошибки.")
 
 
 # ------------------------------------------------------------- request body

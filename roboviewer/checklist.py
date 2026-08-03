@@ -4,7 +4,7 @@ File format:
 
     ---
     id: correctness
-    title: Корректность и логические ошибки
+    title: Correctness and logic errors
     enabled: true
     order: 10
     ---
@@ -60,7 +60,7 @@ def _parse_frontmatter(raw: str) -> tuple[dict[str, str], str]:
 def _as_bool(value: str | None, default: bool = True) -> bool:
     if value is None:
         return default
-    # "да" too: the bundled checklists are written in Russian
+    # "да" stays for checklists written before the bundled set moved to English
     return value.strip().lower() in {"1", "true", "yes", "on", "да"}
 
 

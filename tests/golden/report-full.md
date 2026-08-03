@@ -72,13 +72,13 @@
 
 | Item | Status | Findings | Turns | Tokens | Cached | Time |
 |---|---|---|---|---|---|---|
-| Корректность | ✅ | 1 | 9 | 124200 | 80% | 74s |
-| Многопоточность | ❌ | 0 | 2 | 24000 | 0% | 13s |
-| Тесты | ⏭ | 0 | 0 | 0 | n/a | 0s |
+| Correctness | ✅ | 1 | 9 | 124200 | 80% | 74s |
+| Concurrency | ❌ | 0 | 2 | 24000 | 0% | 13s |
+| Tests | ⏭ | 0 | 0 | 0 | n/a | 0s |
 
 ### Failed items
 
-- **Многопоточность**: the provider returned 502 after 3 attempts
+- **Concurrency**: the provider returned 502 after 3 attempts
 
 ## Changed files
 
