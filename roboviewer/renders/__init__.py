@@ -56,22 +56,6 @@ BUILTIN: tuple[Render, ...] = (markdown, html, sarif, codequality)
 REGISTRY: dict[str, Render] = {render.NAME: render for render in BUILTIN}
 
 
-@dataclass(frozen=True)
-class _CustomTemplate:
-    """Формат, которого нет в коде, но под который лежит шаблон в templates_dir.
-
-    Нужен, чтобы свой документ — скажем, короткий комментарий в MR — заводился
-    одним файлом, без правки Python.
-    """
-
-    NAME: str
-    FILENAME: str
-    TEMPLATE: str
-
-    def render(self, run: ReviewRun, templates_dir: Path | None = None) -> str:
-        return render_template(self.TEMPLATE, build_view(run), templates_dir)
-
-
 def known() -> list[str]:
     return [render.NAME for render in BUILTIN]
 
@@ -103,3 +87,15 @@ def prepare(formats: Sequence[str], templates_dir: Path | None = None) -> list[R
         if template:
             compile_template(template, templates_dir)
     return chosen
+
+
+@dataclass(frozen=True)
+class _CustomTemplate:
+    """A format with no module but a template of its own in templates_dir."""
+
+    NAME: str
+    FILENAME: str
+    TEMPLATE: str
+
+    def render(self, run: ReviewRun, templates_dir: Path | None = None) -> str:
+        return render_template(self.TEMPLATE, build_view(run), templates_dir)

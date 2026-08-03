@@ -51,38 +51,6 @@ STATUS_ICON: dict[str, str] = {
 _MARKDOWN = MarkdownIt("commonmark", {"html": False, "breaks": True})
 
 
-def _thousands(value: int) -> str:
-    """12345 → "12 345". A thin space would read better but breaks copy-paste
-    out of a terminal, so it stays an ordinary one."""
-    return f"{value:,}".replace(",", " ")
-
-
-def _percent(value: float) -> str:
-    return f"{value:.0%}"
-
-
-def _fixed(value: float, digits: int = 0) -> str:
-    return f"{value:.{digits}f}"
-
-
-def _blockquote(text: str, marker: str = "> ") -> str:
-    return marker + text.replace("\n", "\n" + marker)
-
-
-def _markdown(text: str) -> Markup:
-    """Prose written as markdown, turned into HTML. Marked safe because the
-    parser produced it — see `_MARKDOWN` for why that is not the same as
-    trusting the text."""
-    return Markup(_MARKDOWN.render(text))
-
-
-def _autoescape(name: str | None) -> bool:
-    """Escaping follows the target format, which is the extension before `.j2`."""
-    if name is None:
-        return False
-    return name.removesuffix(".j2").endswith((".html", ".htm", ".xml"))
-
-
 @lru_cache(maxsize=8)
 def environment(directory: Path | None = None) -> Environment:
     """Cached per directory: a comparison document renders one template per run
@@ -163,3 +131,35 @@ def render_template(name: str, context: BaseModel, directory: Path | None = None
         return template.render(values)
     except _JinjaTemplateError as exc:
         raise TemplateError(f"Шаблон {name} не отрендерился: {exc}") from exc
+
+
+def _thousands(value: int) -> str:
+    """12345 → "12 345". A thin space would read better but breaks copy-paste
+    out of a terminal, so it stays an ordinary one."""
+    return f"{value:,}".replace(",", " ")
+
+
+def _percent(value: float) -> str:
+    return f"{value:.0%}"
+
+
+def _fixed(value: float, digits: int = 0) -> str:
+    return f"{value:.{digits}f}"
+
+
+def _blockquote(text: str, marker: str = "> ") -> str:
+    return marker + text.replace("\n", "\n" + marker)
+
+
+def _markdown(text: str) -> Markup:
+    """Prose written as markdown, turned into HTML. Marked safe because the
+    parser produced it — see `_MARKDOWN` for why that is not the same as
+    trusting the text."""
+    return Markup(_MARKDOWN.render(text))
+
+
+def _autoescape(name: str | None) -> bool:
+    """Escaping follows the target format, which is the extension before `.j2`."""
+    if name is None:
+        return False
+    return name.removesuffix(".j2").endswith((".html", ".htm", ".xml"))

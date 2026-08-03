@@ -31,6 +31,42 @@ LEVEL: dict[Severity, str] = {
 }
 
 
+def render(run: ReviewRun, templates_dir: Path | None = None) -> str:
+    return json.dumps(build(build_view(run)), ensure_ascii=False, indent=2) + "\n"
+
+
+def build(view: ReviewView) -> dict:
+    rules, rule_index = _rules(view)
+    return {
+        "$schema": SCHEMA,
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "Roboviewer",
+                        "version": __version__,
+                        "informationUri": TOOL_URI,
+                        "rules": rules,
+                    }
+                },
+                "automationDetails": {"id": f"roboviewer/{view.meta.run_id}"},
+                "versionControlProvenance": [
+                    {
+                        "repositoryUri": Path(view.meta.repo_root).name,
+                        "revisionId": view.meta.head_sha,
+                        "branch": view.meta.branch,
+                    }
+                ],
+                "invocations": [_invocation(view)],
+                # Confirmed only: a rejected finding is a decision that there is
+                # no defect, not a suppressed one.
+                "results": [_result(f, rule_index) for f in view.findings],
+            }
+        ],
+    }
+
+
 def _rule_id(finding: FindingView) -> str:
     """The checklist item, which is stable; category is invented per run."""
     return finding.sources[0] if finding.sources else f"category/{finding.category}"
@@ -115,39 +151,3 @@ def _invocation(view: ReviewView) -> dict:
             for item in view.failed_items
         ]
     return invocation
-
-
-def build(view: ReviewView) -> dict:
-    rules, rule_index = _rules(view)
-    return {
-        "$schema": SCHEMA,
-        "version": "2.1.0",
-        "runs": [
-            {
-                "tool": {
-                    "driver": {
-                        "name": "Roboviewer",
-                        "version": __version__,
-                        "informationUri": TOOL_URI,
-                        "rules": rules,
-                    }
-                },
-                "automationDetails": {"id": f"roboviewer/{view.meta.run_id}"},
-                "versionControlProvenance": [
-                    {
-                        "repositoryUri": Path(view.meta.repo_root).name,
-                        "revisionId": view.meta.head_sha,
-                        "branch": view.meta.branch,
-                    }
-                ],
-                "invocations": [_invocation(view)],
-                # Confirmed only: a rejected finding is a decision that there is
-                # no defect, not a suppressed one.
-                "results": [_result(f, rule_index) for f in view.findings],
-            }
-        ],
-    }
-
-
-def render(run: ReviewRun, templates_dir: Path | None = None) -> str:
-    return json.dumps(build(build_view(run)), ensure_ascii=False, indent=2) + "\n"

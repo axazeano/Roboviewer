@@ -26,6 +26,14 @@ SEVERITY: dict[Severity, str] = {
 }
 
 
+def render(run: ReviewRun, templates_dir: Path | None = None) -> str:
+    return json.dumps(build(build_view(run)), ensure_ascii=False, indent=2) + "\n"
+
+
+def build(view: ReviewView) -> list[dict]:
+    return [_entry(finding) for finding in view.findings]
+
+
 def _entry(finding: FindingView) -> dict:
     return {
         # The only text field there is; the rationale stays in report.md.
@@ -40,11 +48,3 @@ def _entry(finding: FindingView) -> dict:
             "lines": {"begin": finding.line or 1},
         },
     }
-
-
-def build(view: ReviewView) -> list[dict]:
-    return [_entry(finding) for finding in view.findings]
-
-
-def render(run: ReviewRun, templates_dir: Path | None = None) -> str:
-    return json.dumps(build(build_view(run)), ensure_ascii=False, indent=2) + "\n"
