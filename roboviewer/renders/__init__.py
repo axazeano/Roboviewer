@@ -20,7 +20,7 @@ from typing import Protocol
 
 from ..models import ReviewRun
 from ..view import build_view
-from . import html, markdown
+from . import codequality, html, markdown, sarif
 from ._errors import RenderError, TemplateError
 from ._jinja import (
     DEFAULT_DIR,
@@ -52,7 +52,7 @@ class Render(Protocol):
 
 # Явный список, а не обход каталога: неизвестный формат должен падать на понятной
 # ошибке, а не на импорте случайного модуля.
-BUILTIN: tuple[Render, ...] = (markdown, html)
+BUILTIN: tuple[Render, ...] = (markdown, html, sarif, codequality)
 REGISTRY: dict[str, Render] = {render.NAME: render for render in BUILTIN}
 
 

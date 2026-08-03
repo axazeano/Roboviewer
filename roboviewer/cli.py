@@ -90,8 +90,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=report_formats,
         metavar="СПИСОК",
         help=(
-            "Форматы отчёта через запятую: md, html. Заменяет report_formats "
-            "из конфига целиком; без флага — как там задано"
+            "Форматы отчёта через запятую: md, html, sarif, codequality. "
+            "Заменяет report_formats из конфига целиком; без флага — как там задано"
         ),
     )
     parser.add_argument("-j", "--concurrency", type=int, help="Сколько пунктов проверять параллельно")

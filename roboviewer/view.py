@@ -19,6 +19,7 @@ breaks them. Adding a field does not, which is why it stays deliberately small.
 
 from __future__ import annotations
 
+import hashlib
 from collections import Counter
 from enum import Enum
 
@@ -101,6 +102,8 @@ class FindingView(BaseModel):
     # Set only when the judge actually said something about this finding: an
     # `unreviewed` verdict carries no judgement and must not be shown as one.
     verdict_reason: str | None
+    # Identity across runs, for consumers that track issues between pipelines
+    fingerprint: str
 
 
 class ItemView(BaseModel):
@@ -151,7 +154,31 @@ def _text(value: str | None) -> str | None:
     return stripped or None
 
 
-def _finding(finding: Finding, run: ReviewRun) -> FindingView:
+def _fingerprints(findings: list[Finding]) -> dict[str, str]:
+    """File, category and title — deliberately not the line, which an edit above
+    would shift, turning every old finding into a new one. Titles come from the
+    model, so this is only as stable as the model's wording.
+
+    Collisions get a suffix: GitLab collapses equal fingerprints, and a lost
+    finding costs more than a shifted identity.
+    """
+    result: dict[str, str] = {}
+    seen: Counter[str] = Counter()
+    for finding in findings:
+        material = " ".join(
+            [
+                finding.file.strip().lstrip("./"),
+                finding.category.strip().casefold(),
+                " ".join(finding.title.split()).casefold(),
+            ]
+        )
+        base = hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
+        seen[base] += 1
+        result[finding.id] = base if seen[base] == 1 else f"{base}-{seen[base]}"
+    return result
+
+
+def _finding(finding: Finding, run: ReviewRun, fingerprint: str) -> FindingView:
     verdict = run.verdicts.get(finding.id)
     reason = None
     if verdict is not None and verdict.verdict != "unreviewed":
@@ -171,6 +198,7 @@ def _finding(finding: Finding, run: ReviewRun) -> FindingView:
         sources=list(finding.sources),
         verdict=verdict.verdict if verdict is not None else None,
         verdict_reason=reason,
+        fingerprint=fingerprint,
     )
 
 
@@ -189,8 +217,10 @@ def _item(item: ItemResult) -> ItemView:
 
 
 def build_view(run: ReviewRun) -> ReviewView:
-    confirmed = [_finding(f, run) for f in run.confirmed()]
-    rejected = [_finding(f, run) for f in run.rejected()]
+    # Over all findings at once: uniqueness has to hold across the report
+    prints = _fingerprints(run.findings)
+    confirmed = [_finding(f, run, prints[f.id]) for f in run.confirmed()]
+    rejected = [_finding(f, run, prints[f.id]) for f in run.rejected()]
     counts = Counter(f.severity for f in confirmed)
     items = [_item(i) for i in run.items]
 

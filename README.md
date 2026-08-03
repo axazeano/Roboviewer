@@ -155,13 +155,30 @@ branch after you forked stay out of the review.
 the most recent run. Point `-o` somewhere outside the repository to keep it out
 of `git status`.
 
-`--format md,html` adds `report.html` — one self-contained file with no external
-requests, so it opens by double click and attaches to a ticket as-is.
+`--format` picks what a run writes. One file per format in
+`roboviewer/renders/`:
 
-One file per format in `roboviewer/renders/`, driving Jinja templates in
-`roboviewer/templates/default/`. Drop a changed copy of a template into
-`.roboviewer/templates/` to override it file by file; drop in a new
-`report.<name>.j2` and `--format <name>` picks it up without touching Python.
+| Format | File | For |
+| --- | --- | --- |
+| `md` | `report.md` | Reading in a terminal, pasting into a merge request |
+| `html` | `report.html` | One self-contained file — opens by double click, attaches to a ticket |
+| `sarif` | `report.sarif` | SARIF 2.1.0: GitHub Code Scanning, the VS Code viewer, SonarQube |
+| `codequality` | `gl-code-quality-report.json` | The Code Quality widget in a GitLab merge request |
+
+```yaml
+# .gitlab-ci.yml
+review:
+  script: roboviewer develop --format md,codequality
+  artifacts:
+    reports:
+      codequality: .roboviewer/runs/latest/gl-code-quality-report.json
+```
+
+`md` and `html` are Jinja templates in `roboviewer/templates/default/`; drop a
+changed copy into `.roboviewer/templates/` to override one file by file, or add
+a new `report.<name>.j2` and `--format <name>` picks it up without touching
+Python. `sarif` and `codequality` are serialization rather than documents, so
+they are plain Python and never go near a template.
 
 ## Customise the checklist
 
