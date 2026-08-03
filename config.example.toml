@@ -77,10 +77,10 @@ prompts_dir = ""
 # комплектные, плюс .roboviewer/templates/ внутри проверяемого репозитория.
 # Поля, фильтры и соглашения — roboviewer/templates/default/README.md
 templates_dir = ""
-# Какие отчёты писать. Здесь имена шаблонов, а не форматов: свой шаблон из
-# templates_dir перечисляется как есть, имя файла получается отбрасыванием .j2.
-# Переопределяется флагом --format md,html
-report_templates = ["report.md.j2"]
+# Какие отчёты писать. Формат — это модуль в roboviewer/renders/, файл на формат;
+# в комплекте md и html. Свой заводится шаблоном report.<имя>.j2 в templates_dir,
+# без правки Python. Переопределяется флагом --format md,html
+report_formats = ["md"]
 # A relative path lands inside the reviewed repository.
 # An absolute one lands outside, nested by repository name; overridden by -o/--output
 # and by ROBOVIEWER_OUTPUT.

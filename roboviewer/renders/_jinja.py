@@ -1,18 +1,11 @@
-"""Report templates, loaded from files.
+"""Общее для всех шаблонных рендеров: окружение Jinja, фильтры, словари подписей.
 
-Same arrangement as `prompts`: the bundled set lives in `default/`, a user
-directory is searched first, and resolution is per file — a custom set carries
-only the templates it actually changes and picks up improvements to the rest.
+Не рендер, поэтому с подчёркивания — как частичные шаблоны в `templates/`.
 
-Templates are named `<document>.<target format>.j2`, partials start with an
-underscore, and the format extension is not decoration: it decides escaping.
-Markdown is emitted verbatim, HTML has every value escaped, because a finding's
-title is model output quoted back and a report is a file people open in a
-browser.
-
-Markdown and HTML each get their own macros rather than sharing an abstracted
-one. What they share is the view model; trying to abstract markup across output
-formats is where template systems go to die.
+Сами шаблоны лежат в `roboviewer/templates/` и являются данными, а не кодом:
+имя файла — `<документ>.<формат>.j2`, и расширение перед `.j2` решает
+экранирование. Markdown выводится как есть, HTML экранирует каждое значение,
+потому что заголовок находки — это текст модели, процитированный обратно.
 """
 
 from __future__ import annotations
@@ -20,7 +13,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined, Template
 from jinja2 import TemplateError as _JinjaTemplateError
 from jinja2 import TemplateNotFound
 from markdown_it import MarkdownIt
@@ -28,10 +21,11 @@ from markupsafe import Markup
 from pydantic import BaseModel
 
 from ..models import SEVERITY_LABEL_RU, Severity
+from ._errors import TemplateError
 
-DEFAULT_DIR = Path(__file__).resolve().parent / "default"
+DEFAULT_DIR = Path(__file__).resolve().parent.parent / "templates" / "default"
 
-# Presentation, so it lives next to the templates rather than in the models. The
+# Presentation, so it lives next to the rendering rather than in the models. The
 # same two tables serve markdown and HTML, which is why they are not inlined in
 # either template.
 SEVERITY_ICON: dict[Severity, str] = {
@@ -55,10 +49,6 @@ STATUS_ICON: dict[str, str] = {
 # `breaks` matches how GitLab renders a comment, so the same text reads the same
 # way in the report and in the merge request.
 _MARKDOWN = MarkdownIt("commonmark", {"html": False, "breaks": True})
-
-
-class TemplateError(RuntimeError):
-    pass
 
 
 def _thousands(value: int) -> str:
@@ -126,7 +116,37 @@ def environment(directory: Path | None = None) -> Environment:
     return env
 
 
-def render(name: str, context: BaseModel, directory: Path | None = None) -> str:
+def template_exists(name: str, directory: Path | None = None) -> bool:
+    """Есть ли такой файл. Именно файл: компиляция здесь не нужна, а битый
+    шаблон — это «есть, но сломан», отдельный ответ, и отдавать его как «нет»
+    значит соврать в сообщении об ошибке."""
+    env = environment(directory)
+    try:
+        env.loader.get_source(env, name)  # type: ignore[union-attr]
+    except TemplateNotFound:
+        return False
+    return True
+
+
+def compile_template(name: str, directory: Path | None = None) -> Template:
+    """Читает и компилирует шаблон, не рендеря его.
+
+    Отдельно от рендеринга, потому что зовётся на старте прогона: опечатка в
+    шаблоне должна стоить секунду, а не восемь агентов и полный счёт за токены.
+    """
+    env = environment(directory)
+    try:
+        return env.get_template(name)
+    except TemplateNotFound as exc:
+        searched = f"{directory}, " if directory is not None else ""
+        raise TemplateError(
+            f"Шаблон {name} не найден: искали в {searched}{DEFAULT_DIR}"
+        ) from exc
+    except _JinjaTemplateError as exc:
+        raise TemplateError(f"Шаблон {name} не разобрался: {exc}") from exc
+
+
+def render_template(name: str, context: BaseModel, directory: Path | None = None) -> str:
     """Renders a context model with the named template. `directory` overrides
     bundled templates file by file.
 
@@ -134,14 +154,7 @@ def render(name: str, context: BaseModel, directory: Path | None = None) -> str:
     several runs has a different shape, and squeezing it through the per-run
     view to reuse this function would be violence.
     """
-    env = environment(directory)
-    try:
-        template = env.get_template(name)
-    except TemplateNotFound as exc:
-        searched = f"{directory}, " if directory is not None else ""
-        raise TemplateError(
-            f"Шаблон {name} не найден: искали в {searched}{DEFAULT_DIR}"
-        ) from exc
+    template = compile_template(name, directory)
 
     # Field by field rather than as a dump: templates keep attribute access and
     # enums stay enums, so SEVERITY_ICON[f.severity] works.

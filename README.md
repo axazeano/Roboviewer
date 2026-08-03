@@ -156,9 +156,12 @@ the most recent run. Point `-o` somewhere outside the repository to keep it out
 of `git status`.
 
 `--format md,html` adds `report.html` — one self-contained file with no external
-requests, so it opens by double click and attaches to a ticket as-is. Both
-formats are Jinja templates in `roboviewer/templates/default/`; drop a changed
-copy into `.roboviewer/templates/` to override any of them file by file.
+requests, so it opens by double click and attaches to a ticket as-is.
+
+One file per format in `roboviewer/renders/`, driving Jinja templates in
+`roboviewer/templates/default/`. Drop a changed copy of a template into
+`.roboviewer/templates/` to override it file by file; drop in a new
+`report.<name>.j2` and `--format <name>` picks it up without touching Python.
 
 ## Customise the checklist
 

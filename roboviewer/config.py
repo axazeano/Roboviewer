@@ -174,10 +174,10 @@ class RunConfig(BaseModel):
     # empty → the bundled set plus .roboviewer/templates/ inside the reviewed
     # repository. A custom set need only carry the templates it changes.
     templates_dir: str = ""
-    # Which reports a run writes. Names are templates, not formats, so a custom
-    # one from templates_dir is listed here as-is; the output file is named after
-    # the template minus `.j2`. Overridden by --format.
-    report_templates: list[str] = Field(default_factory=lambda: ["report.md.j2"])
+    # Which reports a run writes. A format is a module in `renders` — see
+    # known() there for the list. A format with no module but with a
+    # report.<name>.j2 in templates_dir also works. Overridden by --format.
+    report_formats: list[str] = Field(default_factory=lambda: ["md"])
     output_dir: str = ".roboviewer/runs"
     # Checklist items reviewed at the same time — concurrent requests to the model,
     # not OS threads.

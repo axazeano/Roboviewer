@@ -1,8 +1,9 @@
-"""Persisting run results: a rendered report for humans, JSON for debugging.
+"""Persisting run results: rendered reports for humans, JSON for debugging.
 
 Nothing here knows what a report looks like. The numbers are counted once in
-`view`, the layout lives in `templates`, and this module only decides what gets
-written to disk. Adding a format means adding a template, not editing this file.
+`view`, each output format is a module in `renders`, and this file only decides
+what gets written to disk. Adding a format means adding a render, not editing
+this one.
 """
 
 from __future__ import annotations
@@ -11,46 +12,36 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
+from . import renders
 from .models import ReviewRun
-from .templates import render
-from .view import build_view
 
-DEFAULT_TEMPLATE = "report.md.j2"
-DEFAULT_TEMPLATES: tuple[str, ...] = (DEFAULT_TEMPLATE,)
+DEFAULT_FORMATS: tuple[str, ...] = ("md",)
 
 
 def render_report(
     run: ReviewRun,
-    template: str = DEFAULT_TEMPLATE,
+    fmt: str = DEFAULT_FORMATS[0],
     templates_dir: Path | None = None,
 ) -> str:
-    """Renders a run with the named template. `templates_dir` overrides the
-    bundled templates file by file, the way a custom prompt set does."""
-    return render(template, build_view(run), templates_dir)
-
-
-def output_name(template: str) -> str:
-    """`report.md.j2` → `report.md`: the file is named after what the template
-    produces, so a second format needs no second mapping to maintain."""
-    return Path(template).name.removesuffix(".j2")
+    """Renders a run in one format. `templates_dir` overrides bundled templates
+    file by file, the way a custom prompt set does."""
+    return renders.resolve(fmt, templates_dir).render(run, templates_dir)
 
 
 def save(
     run: ReviewRun,
     directory: Path,
-    templates: Sequence[str] = DEFAULT_TEMPLATES,
+    formats: Sequence[str] = DEFAULT_FORMATS,
     templates_dir: Path | None = None,
 ) -> list[Path]:
-    """Writes a report per template plus the raw JSON. Returns the written
-    reports in the order asked for; the first one is what the CLI announces and
-    the TUI opens."""
-    directory.mkdir(parents=True, exist_ok=True)
+    """Writes the raw JSON plus a report per format. Returns the written reports
+    in the order asked for; the first one is what the CLI announces and the TUI
+    opens."""
+    # Resolved and compiled before anything is written, so a broken template
+    # fails before half the reports are on disk.
+    chosen = renders.prepare(formats, templates_dir)
 
-    reports = []
-    for template in templates:
-        path = directory / output_name(template)
-        path.write_text(render_report(run, template, templates_dir), encoding="utf-8")
-        reports.append(path)
+    directory.mkdir(parents=True, exist_ok=True)
 
     (directory / "run.json").write_text(
         run.model_dump_json(indent=2, exclude={"items": {"__all__": {"findings"}}}),
@@ -87,5 +78,14 @@ def save(
         latest.symlink_to(directory.name)
     except OSError:
         pass  # the symlink is a convenience, not a requirement
+
+    # Last, deliberately. Rendering is the only step here that runs code someone
+    # can edit, and a run costs real money: if a template blows up, the results
+    # are already on disk and only the pretty part is missing.
+    reports = []
+    for render in chosen:
+        path = directory / render.FILENAME
+        path.write_text(render.render(run, templates_dir), encoding="utf-8")
+        reports.append(path)
 
     return reports

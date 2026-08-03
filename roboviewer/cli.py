@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import gitdiff
+from . import gitdiff, renders
 from .checklist import load_checklist
 from .config import Config, load_config, templates_dir_for
 from .models import SEVERITY_LABEL_RU, ReviewRun
@@ -18,14 +18,15 @@ from .report import save
 from .runners import OpenAIAgentRunner
 
 
-def report_templates(value: str) -> list[str]:
-    """`md,html` → template names. A format is the shorthand for the CLI; the
-    config stores template names, so a custom template can be listed there
-    without inventing a format for it."""
+def report_formats(value: str) -> list[str]:
+    """`md,html` → список форматов. Известен ли формат, проверяется позже —
+    когда уже разобран конфиг и известен каталог шаблонов."""
     formats = [fmt.strip() for fmt in value.split(",") if fmt.strip()]
     if not formats:
-        raise argparse.ArgumentTypeError("перечисли форматы через запятую, например md,html")
-    return [f"report.{fmt}.j2" for fmt in formats]
+        raise argparse.ArgumentTypeError(
+            f"перечисли форматы через запятую, например {','.join(renders.known())}"
+        )
+    return formats
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -86,10 +87,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--format",
-        type=report_templates,
+        type=report_formats,
         metavar="СПИСОК",
         help=(
-            "Форматы отчёта через запятую: md, html. Заменяет report_templates "
+            "Форматы отчёта через запятую: md, html. Заменяет report_formats "
             "из конфига целиком; без флага — как там задано"
         ),
     )
@@ -127,7 +128,7 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
         # Replaces the configured list rather than extending it: --format md is a
         # way to say "just markdown this time", and appending would make that
         # impossible.
-        cfg.run.report_templates = args.format
+        cfg.run.report_formats = args.format
     if args.thinking:
         # Overrides both stages; telling them apart is a config-level choice
         cfg.provider.enable_thinking = args.thinking == "on"
@@ -223,7 +224,7 @@ def _print_config(cfg: Config, root: Path) -> None:
     _print_prompt_sources(cfg, root)
     templates_dir = templates_dir_for(cfg, root)
     print(f"  шаблоны        {templates_dir or 'из комплекта'}")
-    print(f"  отчёты         {', '.join(cfg.run.report_templates)}")
+    print(f"  отчёты         {', '.join(cfg.run.report_formats)}")
     print(f"  output_dir     {cfg.run.output_dir}")
     print(f"  concurrency    {cfg.run.concurrency}")
     print(f"  max_turns      {cfg.run.max_turns}")
@@ -243,7 +244,7 @@ def _print_event(event: Event, verbose: bool = False) -> None:
     print(line, flush=True)
 
 
-def _print_summary(run: ReviewRun, reports: list[Path]) -> None:
+def _print_summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> None:
     print()
     confirmed = run.confirmed()
     for finding in confirmed:
@@ -255,7 +256,11 @@ def _print_summary(run: ReviewRun, reports: list[Path]) -> None:
     cache = f" · из кэша {usage.cache_hit_rate:.0%}" if usage.cached_tokens else " · кэш не сработал"
     print(f"Подтверждено {len(confirmed)} из {len(run.findings)} · "
           f"{usage.total_tokens} токенов{cache}")
-    print(f"Отчёт: {', '.join(str(p) for p in reports)}")
+    if reports:
+        print(f"Отчёт: {', '.join(str(p) for p in reports)}")
+    else:
+        # report_formats = [] в конфиге: машинные данные всё равно записаны
+        print(f"Отчётов не запрошено; данные прогона: {reports_dir}")
 
 
 async def _run_review(
@@ -276,13 +281,15 @@ async def _run_review(
     finally:
         await runner.aclose()
 
-    reports = save(
-        run,
-        output_dir_for(cfg, diff.root, run.run_id),
-        cfg.run.report_templates,
-        templates_dir_for(cfg, diff.root),
-    )
-    _print_summary(run, reports)
+    directory = output_dir_for(cfg, diff.root, run.run_id)
+    try:
+        reports = save(run, directory, cfg.run.report_formats, templates_dir_for(cfg, diff.root))
+    except renders.RenderError as exc:
+        # The run itself is already on disk; only the readable part is missing
+        print(f"Отчёт не отрендерился: {exc}", file=sys.stderr)
+        print(f"Данные прогона сохранены: {directory}", file=sys.stderr)
+        return 2
+    _print_summary(run, reports, directory)
     return 1 if any(i.status == "failed" for i in run.items) else 0
 
 
@@ -372,6 +379,14 @@ def main(argv: list[str] | None = None) -> int:
         prompts.validate(items, diff)
     except PromptError as exc:
         print(f"Ошибка промптов: {exc}", file=sys.stderr)
+        return 2
+
+    # Same reason: a misspelled format must not surface after the tokens are
+    # spent, when there is nowhere left to write the report
+    try:
+        renders.prepare(cfg.run.report_formats, templates_dir_for(cfg, root))
+    except renders.RenderError as exc:
+        print(f"Ошибка отчёта: {exc}", file=sys.stderr)
         return 2
 
     try:

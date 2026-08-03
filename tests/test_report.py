@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from roboviewer import renders
 from roboviewer.models import (
     DiffStat,
     Finding,
@@ -21,8 +22,9 @@ from roboviewer.models import (
     Usage,
     Verdict,
 )
+from roboviewer.renders import _jinja
+from roboviewer.renders._jinja import DEFAULT_DIR, TemplateError
 from roboviewer.report import render_report, save
-from roboviewer.templates import DEFAULT_DIR, TemplateError
 from roboviewer.view import CacheState, build_view
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
@@ -239,7 +241,12 @@ def test_view_tells_the_three_cache_states_apart() -> None:
     assert build_view(cold_cache_run()).cache.state is CacheState.ZERO
 
 
-# ------------------------------------------------------------- слой шаблонов
+# ------------------------------------------------------------- рендеры и шаблоны
+
+
+def test_every_render_is_reachable_by_its_name() -> None:
+    for name in renders.known():
+        assert renders.resolve(name).NAME == name
 
 
 def test_user_template_overrides_the_bundled_one_file_by_file(tmp_path: Path) -> None:
@@ -256,11 +263,22 @@ def test_user_template_overrides_the_bundled_one_file_by_file(tmp_path: Path) ->
     assert "## Пункты проверки" not in text
 
 
-def test_missing_template_names_both_places_it_looked(tmp_path: Path) -> None:
-    with pytest.raises(TemplateError) as exc:
-        render_report(empty_run(), template="nope.md.j2", templates_dir=tmp_path)
-    assert str(tmp_path) in str(exc.value)
-    assert str(DEFAULT_DIR) in str(exc.value)
+def test_unknown_format_lists_the_ones_that_exist(tmp_path: Path) -> None:
+    with pytest.raises(renders.RenderError) as exc:
+        render_report(empty_run(), "htlm", tmp_path)
+    assert "md" in str(exc.value) and "html" in str(exc.value)
+
+
+def test_a_format_can_be_added_by_dropping_in_a_template(tmp_path: Path) -> None:
+    """Своя разновидность документа — например, короткий комментарий в MR —
+    заводится одним файлом, без правки Python."""
+    (tmp_path / "report.comment.j2").write_text(
+        "{{ findings | length }} замечаний", encoding="utf-8"
+    )
+    render = renders.resolve("comment", tmp_path)
+
+    assert render.FILENAME == "report.comment"
+    assert render.render(full_run(), tmp_path) == "4 замечаний"
 
 
 def test_typo_in_a_template_fails_instead_of_rendering_a_blank(tmp_path: Path) -> None:
@@ -269,6 +287,13 @@ def test_typo_in_a_template_fails_instead_of_rendering_a_blank(tmp_path: Path) -
     (tmp_path / "report.md.j2").write_text("{{ meta.brunch }}", encoding="utf-8")
     with pytest.raises(TemplateError):
         render_report(empty_run(), templates_dir=tmp_path)
+
+
+def test_missing_template_names_both_places_it_looked(tmp_path: Path) -> None:
+    with pytest.raises(TemplateError) as exc:
+        _jinja.render_template("nope.md.j2", build_view(empty_run()), tmp_path)
+    assert str(tmp_path) in str(exc.value)
+    assert str(DEFAULT_DIR) in str(exc.value)
 
 
 def test_html_escapes_values_and_markdown_does_not(tmp_path: Path) -> None:
@@ -280,15 +305,58 @@ def test_html_escapes_values_and_markdown_does_not(tmp_path: Path) -> None:
     (tmp_path / "report.html.j2").write_text(body, encoding="utf-8")
     (tmp_path / "report.md.j2").write_text(body, encoding="utf-8")
 
-    assert "&lt;script&gt;" in render_report(run, "report.html.j2", tmp_path)
-    assert render_report(run, "report.md.j2", tmp_path) == "<script>alert(1)</script>"
+    assert "&lt;script&gt;" in render_report(run, "html", tmp_path)
+    assert render_report(run, "md", tmp_path) == "<script>alert(1)</script>"
 
 
-def test_every_requested_template_is_written_and_named_after_itself(tmp_path: Path) -> None:
-    reports = save(empty_run(), tmp_path, ["report.md.j2", "report.html.j2"])
+def test_every_requested_format_is_written_under_its_own_name(tmp_path: Path) -> None:
+    reports = save(empty_run(), tmp_path, ["md", "html"])
 
     assert [p.name for p in reports] == ["report.md", "report.html"]
     assert all(p.is_file() for p in reports)
+
+
+def test_an_unknown_format_writes_nothing_at_all(tmp_path: Path) -> None:
+    """Форматы резолвятся до записи: иначе половина отчётов уже на диске, а
+    прогон считается упавшим."""
+    with pytest.raises(renders.RenderError):
+        save(empty_run(), tmp_path, ["md", "htlm"])
+    assert not (tmp_path / "report.md").exists()
+
+
+def test_a_broken_template_is_caught_before_the_first_write(tmp_path: Path) -> None:
+    """Синтаксис проверяется компиляцией на подготовке, а не на записи: иначе
+    первый формат уже лежит на диске, а второй уронил прогон."""
+    templates, out = tmp_path / "templates", tmp_path / "out"
+    templates.mkdir()
+    (templates / "report.broken.j2").write_text("{% for x in %}", encoding="utf-8")
+
+    with pytest.raises(TemplateError):
+        save(empty_run(), out, ["html", "broken"], templates)
+
+    assert not (out / "report.html").exists()
+
+
+def test_a_template_failing_at_render_time_does_not_lose_the_run(tmp_path: Path) -> None:
+    """Прогон стоит денег, а шаблон — единственный здесь код, который правят
+    руками. Ошибка в нём должна стоить читаемого отчёта, а не результатов."""
+    templates, out = tmp_path / "templates", tmp_path / "out"
+    templates.mkdir()
+    # Компилируется, но падает на StrictUndefined уже при рендере
+    (templates / "report.md.j2").write_text("{{ meta.brunch }}", encoding="utf-8")
+
+    with pytest.raises(TemplateError):
+        save(empty_run(), out, ["md"], templates)
+
+    assert (out / "run.json").is_file()
+    assert (out / "findings.json").is_file()
+    assert (out / "items").is_dir()
+
+
+def test_template_error_is_a_render_error() -> None:
+    """Вызывающему нужно одно решение — «показать нечем», — поэтому ловится
+    одним типом."""
+    assert issubclass(TemplateError, renders.RenderError)
 
 
 # ------------------------------------------------------------------------ HTML
@@ -297,7 +365,7 @@ def test_every_requested_template_is_written_and_named_after_itself(tmp_path: Pa
 def test_html_report_is_one_self_contained_file() -> None:
     """It gets opened by double click and attached to a ticket, so it must not
     fetch anything: no stylesheet link, no script, no remote image."""
-    html = render_report(full_run(), "report.html.j2")
+    html = render_report(full_run(), "html")
 
     assert html.startswith("<!DOCTYPE html>")
     assert "<style>" in html and "--blocker" in html
@@ -310,7 +378,7 @@ def test_html_renders_the_markdown_inside_a_rationale() -> None:
     the same prose has to stay text."""
     run = full_run()
     run.findings[0].rationale = "Смотри `layoutMargins`, а не <b>это</b>."
-    html = render_report(run, "report.html.j2")
+    html = render_report(run, "html")
 
     assert "<code>layoutMargins</code>" in html
     assert "&lt;b&gt;" in html
@@ -318,14 +386,14 @@ def test_html_renders_the_markdown_inside_a_rationale() -> None:
 
 
 def test_html_carries_severity_as_a_class_and_the_id_as_an_anchor() -> None:
-    html = render_report(full_run(), "report.html.j2")
+    html = render_report(full_run(), "html")
     assert '<article class="finding blocker" id="F1">' in html
 
 
 def test_html_and_markdown_report_the_same_facts() -> None:
     """Two templates over one view: whatever the numbers are, they agree."""
     run = full_run()
-    html, markdown = render_report(run, "report.html.j2"), render_report(run)
+    html, markdown = render_report(run, "html"), render_report(run)
 
     for fact in ("F1", "Половина ширины вместо обрезки", "qwen3.6-27b", "167 100"):
         assert fact in html and fact in markdown
