@@ -40,6 +40,10 @@ class AgentOutcome:
     usage: Usage
     turns: int
     error: str | None = None
+    # The agent submitted because the turn limit forced it, not because it was
+    # done. The payload is real but the review behind it is half-finished, and a
+    # report that hides that reads as "nothing found here".
+    truncated: bool = False
 
     @property
     def ok(self) -> bool:

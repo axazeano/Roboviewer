@@ -112,6 +112,9 @@ class ItemView(BaseModel):
     duration_s: float
     cache: CacheView
     error: str | None
+    # What the agent concluded. None when it submitted without one, which is
+    # itself worth showing — it usually means the agent never got that far.
+    summary: str | None
 
 
 class ReviewView(BaseModel):
@@ -123,6 +126,9 @@ class ReviewView(BaseModel):
     rejected: list[FindingView]
     items: list[ItemView]
     failed_items: list[ItemView]
+    # Items the turn limit cut off. Their findings are in `findings`, but the
+    # aspects they cover were not reviewed to the end.
+    truncated_items: list[ItemView]
     files: list[DiffStat]
 
 
@@ -209,6 +215,7 @@ def _item(item: ItemResult) -> ItemView:
         duration_s=item.duration_s,
         cache=_cache(item.usage),
         error=item.error,
+        summary=_text(item.summary),
     )
 
 
@@ -248,5 +255,6 @@ def build_view(run: ReviewRun) -> ReviewView:
         rejected=rejected,
         items=items,
         failed_items=[i for i in items if i.status == "failed"],
+        truncated_items=[i for i in items if i.status == "truncated"],
         files=list(run.files),
     )

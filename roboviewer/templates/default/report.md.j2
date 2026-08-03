@@ -60,6 +60,18 @@ No findings.
 | {{ item.title }} | {{ STATUS_ICON[item.status] }} | {{ item.findings_count }} | {{ item.turns }} | {{ item.total_tokens }} | {{ (item.cache.hit_rate | percent) if item.cache.state == "hit" else ("n/a" if item.cache.state == "unknown" else "0%") }} | {{ item.duration_s | fixed }}s |
 {% endfor %}
 
+{% if truncated_items %}
+### Cut off by the turn limit
+
+These agents submitted because they ran out of turns, not because they were
+done. Their aspects were not reviewed to the end — raise `max_turns` to give
+them room.
+
+{% for item in truncated_items %}
+- **{{ item.title }}** — stopped at turn {{ item.turns }}{% if item.summary %}: {{ item.summary }}{% else %} without a conclusion{% endif %}
+
+{% endfor %}
+{% endif %}
 {% if failed_items %}
 ### Failed items
 

@@ -54,8 +54,9 @@ added, renaming one breaks other people's templates.
 | `judge_summary` | The judge's text, empty string if there was no judge |
 | `findings` | Confirmed: `id`, `file`, `line`, `end_line`, `location`, `severity`, `category`, `confidence`, `title`, `rationale`, `suggestion`, `sources`, `verdict`, `verdict_reason` |
 | `rejected` | The same for what the judge rejected |
-| `items` | Checklist items: `id`, `title`, `status`, `findings_count`, `turns`, `total_tokens`, `duration_s`, `cache`, `error` |
+| `items` | Checklist items: `id`, `title`, `status`, `findings_count`, `turns`, `total_tokens`, `duration_s`, `cache`, `error`, `summary` |
 | `failed_items` | The subset of `items` with `status == "failed"` |
+| `truncated_items` | The subset with `status == "truncated"` — the turn limit made them submit |
 | `files` | `file`, `status`, `added`, `removed` |
 
 `cache.state` tells three outcomes apart, not two. `unknown` is not a polite
@@ -65,6 +66,13 @@ did not work.
 
 `verdict_reason` is filled only when the judge said something substantive: an
 `unreviewed` verdict is not a judgement and must not be shown as one.
+
+`status == "truncated"` is not a failure and not a pass. The agent did submit
+findings, but on the last turn `tool_choice` left it no other move, so it
+stopped because the turn limit said so. Rendering that as a tick turns "I ran
+out of turns" into "I found nothing" — give it its own icon. An item's `summary`
+is `None` when the agent submitted without a conclusion, which is the usual
+shape of being cut off and worth saying out loud.
 
 ## What else is available
 

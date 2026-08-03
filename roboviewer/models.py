@@ -102,7 +102,9 @@ class Finding(BaseModel):
         return (self.file.strip().lstrip("./"), (self.line - 1) // 5 if self.line else -1)
 
 
-ItemStatus = Literal["pending", "running", "ok", "failed", "skipped"]
+# "truncated" is a result, not a failure: the agent submitted findings, but the
+# turn limit ended the review rather than the agent deciding it was done.
+ItemStatus = Literal["pending", "running", "ok", "truncated", "failed", "skipped"]
 
 
 class ItemResult(BaseModel):

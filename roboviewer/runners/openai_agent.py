@@ -90,7 +90,9 @@ class OpenAIAgentRunner(Runner):
                 payload = _payload_from_text(message.content)
                 if payload is not None:
                     emit("fallback", "payload extracted from the response text")
-                    return AgentOutcome(payload=payload, usage=usage, turns=turns)
+                    return AgentOutcome(
+                        payload=payload, usage=usage, turns=turns, truncated=last_turn
+                    )
                 if last_turn:
                     return AgentOutcome(
                         payload=None,
@@ -127,8 +129,12 @@ class OpenAIAgentRunner(Runner):
                 args = parse_arguments(call.function.arguments or "")
 
                 if fn_name == request.terminal_name:
-                    emit("submit", f"turn {turn}")
-                    return AgentOutcome(payload=args, usage=usage, turns=turns)
+                    # On the last turn tool_choice left the model no other move,
+                    # so this submission is the limit talking, not the agent.
+                    emit("submit", f"turn {turn}" + (" (forced by the turn limit)" if last_turn else ""))
+                    return AgentOutcome(
+                        payload=args, usage=usage, turns=turns, truncated=last_turn
+                    )
 
                 emit("tool", f"{fn_name}({_short_args(args)})")
                 output = await asyncio.to_thread(

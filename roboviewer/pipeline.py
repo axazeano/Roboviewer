@@ -258,7 +258,7 @@ class ReviewPipeline:
             return result
 
         result.summary, result.findings = _findings_from_payload(outcome.payload, item.id)
-        result.status = "ok"
+        result.status = "truncated" if outcome.truncated else "ok"
         return result
 
     async def _run_judge(self, run: ReviewRun) -> None:

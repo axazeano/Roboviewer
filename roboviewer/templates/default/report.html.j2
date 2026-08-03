@@ -79,6 +79,18 @@ the prefix differs every time, or caching is off on the provider's side.</dd>
 </tbody>
 </table>
 
+{% if truncated_items %}
+<h2>Cut off by the turn limit</h2>
+<p>These agents submitted because they ran out of turns, not because they were
+done. Their aspects were not reviewed to the end — raise <code>max_turns</code>
+to give them room.</p>
+<ul>
+{% for item in truncated_items %}
+<li><strong>{{ item.title }}</strong> — stopped at turn {{ item.turns }}{% if item.summary %}: {{ item.summary }}{% else %} without a conclusion{% endif %}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
 {% if failed_items %}
 <h2>Failed items</h2>
 <ul>

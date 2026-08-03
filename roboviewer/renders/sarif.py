@@ -134,20 +134,37 @@ def _result(finding: FindingView, rule_index: dict[str, int]) -> dict:
 
 
 def _invocation(view: ReviewView) -> dict:
-    """Failed items belong here, or four results read as a complete review."""
+    """Failed and cut-off items belong here, or four results read as a complete
+    review. Truncation is a warning rather than an error: the item did produce
+    findings, it just never finished looking."""
     invocation: dict = {
         "executionSuccessful": not view.failed_items,
         "startTimeUtc": view.meta.started_at,
     }
     if view.meta.finished_at:
         invocation["endTimeUtc"] = view.meta.finished_at
-    if view.failed_items:
-        invocation["toolExecutionNotifications"] = [
-            {
-                "level": "error",
-                "message": {"text": f"Checklist item “{item.title}” failed: {item.error}"},
-                "descriptor": {"id": item.id},
-            }
-            for item in view.failed_items
-        ]
+
+    notifications = [
+        {
+            "level": "error",
+            "message": {"text": f"Checklist item “{item.title}” failed: {item.error}"},
+            "descriptor": {"id": item.id},
+        }
+        for item in view.failed_items
+    ] + [
+        {
+            "level": "warning",
+            "message": {
+                "text": (
+                    f"Checklist item “{item.title}” hit the turn limit at turn "
+                    f"{item.turns} and was made to submit; its aspect was not "
+                    f"reviewed to the end."
+                )
+            },
+            "descriptor": {"id": item.id},
+        }
+        for item in view.truncated_items
+    ]
+    if notifications:
+        invocation["toolExecutionNotifications"] = notifications
     return invocation

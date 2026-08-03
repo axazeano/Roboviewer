@@ -37,6 +37,7 @@ SEVERITY_ICON: dict[Severity, str] = {
 
 STATUS_ICON: dict[str, str] = {
     "ok": "✅",
+    "truncated": "⚠️",
     "failed": "❌",
     "skipped": "⏭",
     "pending": "…",

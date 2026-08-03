@@ -273,6 +273,13 @@ def _print_summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> No
     cache = f" · {usage.cache_hit_rate:.0%} from cache" if usage.cached_tokens else " · no cache hits"
     print(f"Confirmed {len(confirmed)} of {len(run.findings)} · "
           f"{usage.total_tokens} tokens{cache}")
+
+    cut_off = [i for i in run.items if i.status == "truncated"]
+    if cut_off:
+        # Worth a line of its own: these aspects reported little because they ran
+        # out of turns, which reads exactly like "nothing to report" otherwise.
+        print(f"⚠ Cut off by the turn limit, raise max_turns: "
+              f"{', '.join(i.item_title for i in cut_off)}")
     if reports:
         print(f"Report: {', '.join(str(p) for p in reports)}")
     else:

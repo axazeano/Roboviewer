@@ -17,7 +17,7 @@ from roboviewer.runners import AgentOutcome
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
-ITEM = ChecklistItem(id="correctness", title="Correctness", body="Ищи ошибки.")
+ITEM = ChecklistItem(id="correctness", title="Correctness", body="Find logic errors.")
 
 
 # ------------------------------------------------------------- request body
@@ -62,7 +62,7 @@ def test_each_stage_gets_its_own_mode(tmp_path: Path, config) -> None:
     config.provider.judge_enable_thinking = True
 
     finding = Finding(file="src/cart.py", line=42, severity=Severity.MAJOR,
-                      category="logic", title="Баг", rationale="Потому что", confidence=0.9)
+                      category="logic", title="Bug", rationale="Because", confidence=0.9)
     runner = ScriptedRunner(
         ok_outcome(findings=[finding.model_dump(mode="json")]),
         AgentOutcome(payload={"summary": "", "verdicts": []}, usage=Usage(), turns=1),
