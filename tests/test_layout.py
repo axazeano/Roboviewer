@@ -16,7 +16,11 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parent.parent / "roboviewer"
 
-ENFORCED = sorted((PACKAGE / "renders").rglob("*.py"))
+ENFORCED = sorted((PACKAGE / "renders").rglob("*.py")) + [
+    PACKAGE / "cli.py",
+    PACKAGE / "console.py",
+    PACKAGE / "sources.py",
+]
 
 
 def definitions(path: Path) -> list[tuple[int, str]]:

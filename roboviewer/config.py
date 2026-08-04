@@ -225,19 +225,6 @@ class Config(BaseModel):
     sources: list[str] = Field(default_factory=list)
 
 
-def templates_dir_for(cfg: "Config", root: Path) -> Path | None:
-    """Where report templates come from, or None for the bundled set.
-
-    Lives here rather than in the CLI because both entry points write reports —
-    the TUI would otherwise need its own copy of the same rule.
-    """
-    if cfg.run.templates_dir:
-        candidate = Path(cfg.run.templates_dir).expanduser()
-        return candidate if candidate.is_absolute() else root / candidate
-    in_repo = root / ".roboviewer" / "templates"
-    return in_repo if in_repo.is_dir() else None
-
-
 def home_config_path() -> Path:
     return Path.home() / ".config" / "roboviewer" / "config.toml"
 

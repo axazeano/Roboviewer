@@ -1,26 +1,26 @@
-"""CLI entry point."""
+"""CLI entry point: the order the steps run in, and what a failure exits with.
+
+Each step below either produces its part of the run or raises `CLIError`, so
+`main` has one place that prints a failure and one that decides the exit code.
+What the steps produce is printed by `console`, and where their files come from
+is decided by `sources`.
+"""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
 import os
-import sys
+from dataclasses import dataclass
 from pathlib import Path
 
-from . import gitdiff, renders
-from .checklist import load_checklist
-from .config import Config, load_config, templates_dir_for
-from .models import SEVERITY_LABEL, ReviewRun
-from .pipeline import Event, ReviewPipeline, output_dir_for
-from .prompts import (
-    DEFAULT_DIR as PROMPTS_DEFAULT_DIR,
-    PromptError,
-    Prompts,
-    language_name,
-)
+from . import console, gitdiff, renders, sources
+from .checklist import ChecklistItem, load_checklist
+from .config import Config, load_config
+from .pipeline import ReviewPipeline, output_dir_for
+from .prompts import PromptError, Prompts
 from .report import save
-from .runners import OpenAIAgentRunner
+from .runners import OpenAIAgentRunner, Runner
 
 
 def report_formats(value: str) -> list[str]:
@@ -151,6 +151,42 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+class CLIError(RuntimeError):
+    """A failure the user can do something about.
+
+    Every setup step raises this instead of printing and returning a code of its
+    own — thirteen of those in one function was most of what made it unreadable.
+    """
+
+    def __init__(self, message: str, hint: str = "", code: int = 2) -> None:
+        super().__init__(message)
+        self.message = message
+        self.hint = hint
+        self.code = code
+
+
+@dataclass
+class RunPlan:
+    """Everything the review needs, with every failure already surfaced."""
+
+    cfg: Config
+    diff: gitdiff.DiffBundle
+    items: list[ChecklistItem]
+    prompts: Prompts
+    runner: Runner
+    templates_dir: Path | None
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return _execute(args, parser)
+    except CLIError as exc:
+        console.error(exc.message, exc.hint)
+        return exc.code
+
+
 def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
     if args.output:
         cfg.run.output_dir = str(Path(args.output).expanduser())
@@ -181,229 +217,86 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
     return cfg
 
 
-def _resolve_checklist_dir(cfg: Config, root: Path) -> Path:
-    candidate = Path(cfg.run.checklist_dir).expanduser()
-    if candidate.is_absolute():
-        return candidate
-    package_dir = Path(__file__).resolve().parent
-    # A checklist inside the repository wins over the built-in one
-    for base in (root, Path.cwd(), package_dir, package_dir.parent):
-        resolved = base / candidate
-        if resolved.is_dir():
-            return resolved
-    return root / candidate
+def _execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    """The order the steps run in, and where each of them can stop the run early.
 
-
-def _resolve_prompts_dir(cfg: Config, root: Path) -> Path | None:
-    """An explicit `prompts_dir` wins; otherwise a set living inside the reviewed
-    repository is picked up on its own. None means the bundled texts."""
-    if cfg.run.prompts_dir:
-        candidate = Path(cfg.run.prompts_dir).expanduser()
-        return candidate if candidate.is_absolute() else root / candidate
-    in_repo = root / ".roboviewer" / "prompts"
-    return in_repo if in_repo.is_dir() else None
-
-
-def _load_prompts(cfg: Config, root: Path) -> Prompts:
-    directory = _resolve_prompts_dir(cfg, root)
-    # A configured directory that does not exist is a typo, not a request for the
-    # defaults: the loader would fall back file by file and the run would quietly
-    # go out with prompts nobody chose.
-    if cfg.run.prompts_dir and (directory is None or not directory.is_dir()):
-        raise PromptError(f"Prompts directory not found: {directory}")
-    return Prompts.load(directory, cfg.run.output_language)
-
-
-def _print_prompt_sources(cfg: Config, root: Path) -> None:
-    """Only overridden templates are named — listing four bundled paths every
-    time buries the one line that says the run is off the default texts."""
-    try:
-        prompts = _load_prompts(cfg, root)
-    except PromptError as exc:
-        print(f"  prompts        error: {exc}")
-        return
-
-    custom = {name: src for name, src in prompts.sources.items() if Path(src).parent != PROMPTS_DEFAULT_DIR}
-    if not custom:
-        print("  prompts        bundled")
-        return
-    print(f"  prompts        {_resolve_prompts_dir(cfg, root)}, custom: {len(custom)} of {len(prompts.sources)}")
-    for name, src in custom.items():
-        print(f"    {name:<14} {src}")
-
-
-def _thinking_label(value: bool | None) -> str:
-    return {None: "model default", True: "on", False: "off"}[value]
-
-
-def _print_config(cfg: Config, root: Path) -> None:
-    from .config import home_config_path, repo_config_path
-
-    print("Config layers (each one overrides the previous):")
-    known = {str(home_config_path()): "home", str(repo_config_path(root)): "repository"}
-    for path in cfg.sources:
-        print(f"  ✓ {path}   [{known.get(path, 'explicit --config')}]")
-    for path, label in known.items():
-        if path not in cfg.sources:
-            print(f"  · {path}   [{label}, no file]")
-    if not cfg.sources:
-        print("  (no files at all — everything on defaults)")
-
-    _, key_source = cfg.provider.api_key_source()
-    print()
-    print("Provider:")
-    print(f"  base_url     {cfg.provider.base_url}")
-    print(f"  model        {cfg.provider.model}")
-    print(f"  judge_model  {cfg.provider.resolve_judge_model()}")
-    print(f"  reasoning    items: {_thinking_label(cfg.provider.enable_thinking)}, "
-          f"judge: {_thinking_label(cfg.provider.resolve_judge_enable_thinking())}")
-    print(f"  key          {cfg.provider.masked_key()}")
-    print(f"  source       {key_source}")
-    print()
-    print("Run:")
-    print(f"  checklist_dir  {_resolve_checklist_dir(cfg, root)}")
-    _print_prompt_sources(cfg, root)
-    templates_dir = templates_dir_for(cfg, root)
-    print(f"  templates      {templates_dir or 'bundled'}")
-    print(f"  reports        {', '.join(cfg.run.report_formats)}")
-    print(f"  output lang    {language_name(cfg.run.output_language) or 'not set (model answers in the prompt language)'}")
-    print(f"  output_dir     {cfg.run.output_dir}")
-    print(f"  concurrency    {cfg.run.concurrency}")
-    print(f"  max_turns      {cfg.run.max_turns}")
-    print(f"  reference pass {'on' if cfg.run.resolve_references else 'off'}")
-    scope_state = f"±{cfg.run.scope_margin} lines" if cfg.run.enforce_scope else "off"
-    print(f"  scope gate     {scope_state}")
-    judge_state = "off" if not cfg.run.enable_judge else cfg.run.judge_mode.replace("_", "-")
-    print(f"  judge          {judge_state}")
-    print(f"  judge_turns    {cfg.run.resolve_judge_max_turns()}"
-          f"{' (follows max_turns)' if not cfg.run.judge_max_turns else ''}")
-
-
-def _print_event(event: Event, verbose: bool = False) -> None:
-    if event.kind == "item_progress":
-        if verbose:
-            print(f"    {event.item_id or '-'} · {event.message}", flush=True)
-        return
-    prefix = {"error": "✗", "item_done": "•", "run_done": "✔"}.get(event.kind, "▸")
-    line = f"{prefix} {event.message}"
-    if event.kind == "item_done":
-        result = event.data["result"]
-        line += f" · {result.usage.total_tokens} tokens · {result.duration_s:.0f}s"
-    print(line, flush=True)
-
-
-def _print_summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> None:
-    print()
-    confirmed = run.confirmed()
-    for finding in confirmed:
-        print(f"  {finding.id}  [{SEVERITY_LABEL[finding.severity]}] {finding.location} — {finding.title}")
-    if not confirmed:
-        print("  No findings.")
-    print()
-    usage = run.total_usage
-    cache = f" · {usage.cache_hit_rate:.0%} from cache" if usage.cached_tokens else " · no cache hits"
-    print(f"Confirmed {len(confirmed)} of {len(run.findings)} · "
-          f"{usage.total_tokens} tokens{cache}")
-
-    cut_off = [i for i in run.items if i.status == "truncated"]
-    if cut_off:
-        # Worth a line of its own: these aspects reported little because they ran
-        # out of turns, which reads exactly like "nothing to report" otherwise.
-        print(f"⚠ Cut off by the turn limit: {', '.join(i.item_title for i in cut_off)}")
-    if reports:
-        print(f"Report: {', '.join(str(p) for p in reports)}")
-    else:
-        # report_formats = [] in the config; the machine-readable data is written anyway
-        print(f"No reports requested; run data: {reports_dir}")
-
-
-async def _run_review(
-    cfg: Config,
-    diff: gitdiff.DiffBundle,
-    items: list,
-    runner,
-    prompts: Prompts,
-    verbose: bool,
-) -> int:
-    origin = cfg.provider.base_url.split("//", 1)[-1].split("/", 1)[0]
-    print(f"▸ {cfg.provider.model} @ {origin} · config files picked up: {len(cfg.sources)}")
-    pipeline = ReviewPipeline(
-        cfg, diff, items, runner, lambda event: _print_event(event, verbose), prompts
-    )
-    try:
-        run = await pipeline.execute()
-    finally:
-        await runner.aclose()
-
-    directory = output_dir_for(cfg, diff.root, run.run_id)
-    try:
-        reports = save(run, directory, cfg.run.report_formats, templates_dir_for(cfg, diff.root))
-    except renders.RenderError as exc:
-        # The run itself is already on disk; only the readable part is missing
-        print(f"Report failed to render: {exc}", file=sys.stderr)
-        print(f"Run data saved: {directory}", file=sys.stderr)
-        return 2
-    _print_summary(run, reports, directory)
-    return 1 if any(i.status == "failed" for i in run.items) else 0
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-
+    Everything that fails raises `CLIError`; what stops on purpose returns a code
+    of its own, because `--diff-only` finishing is not a failure.
+    """
     # Diagnostic commands work without branches and outside a repository
     informational = args.list_items or args.show_config or args.check_provider
-
     if not args.target and not informational:
         parser.error("no target branch given: roboviewer <target> [source]")
 
-    requested = Path(args.repo).expanduser().resolve()
-    try:
-        root = gitdiff.repo_root(requested)
-    except gitdiff.GitError as exc:
-        if not informational:
-            print(f"Error: {exc}", file=sys.stderr)
-            print(
-                "Point at a repository with -C PATH or the ROBOVIEWER_REPO variable.",
-                file=sys.stderr,
-            )
-            return 2
-        root = requested
-
-    try:
-        cfg = _apply_overrides(load_config(root, args.config), args)
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"Config error: {exc}", file=sys.stderr)
-        return 2
+    root = _repo_root(args.repo, required=not informational)
+    cfg = _apply_overrides(_config(root, args.config), args)
 
     if args.show_config:
-        _print_config(cfg, root)
+        console.config(cfg, root)
         return 0
-
     if args.check_provider:
         from .diagnose import check_provider
 
         return check_provider(cfg.provider)
 
-    try:
-        items = load_checklist(
-            _resolve_checklist_dir(cfg, root),
-            [s for s in args.only.split(",")] if args.only else None,
-        )
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"Checklist error: {exc}", file=sys.stderr)
-        return 2
-
+    items = _checklist(cfg, root, args.only)
     if args.list_items:
-        for item in items:
-            print(f"{item.id:<20} {item.title}")
+        console.checklist_items(items)
         return 0
 
+    diff = _diff(cfg, root, args.target, args.source)
+    if args.diff_only:
+        console.diff_summary(diff)
+        return 0
+    if not diff.files:
+        console.notice(f"No changes in {diff.branch} relative to {diff.target}.")
+        return 0
+
+    plan = _plan(cfg, root, diff, items)
+    if diff.detached:
+        console.notice(
+            f"Reviewing branch {diff.branch} ({diff.head[:12]}); the working copy is untouched."
+        )
+    return asyncio.run(_review(plan, args.verbose))
+
+
+def _repo_root(requested: str, *, required: bool) -> Path:
+    path = Path(requested).expanduser().resolve()
     try:
-        diff = gitdiff.collect(
+        return gitdiff.repo_root(path)
+    except gitdiff.GitError as exc:
+        if required:
+            raise CLIError(
+                f"Error: {exc}",
+                "Point at a repository with -C PATH or the ROBOVIEWER_REPO variable.",
+            ) from exc
+        # A diagnostic command has no repository to work on and does not need one
+        return path
+
+
+def _config(root: Path, explicit: Path | None) -> Config:
+    try:
+        return load_config(root, explicit)
+    except (FileNotFoundError, ValueError) as exc:
+        raise CLIError(f"Config error: {exc}") from exc
+
+
+def _checklist(cfg: Config, root: Path, only: str | None) -> list[ChecklistItem]:
+    try:
+        return load_checklist(
+            sources.checklist_dir(cfg, root),
+            only.split(",") if only else None,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise CLIError(f"Checklist error: {exc}") from exc
+
+
+def _diff(cfg: Config, root: Path, target: str, source: str | None) -> gitdiff.DiffBundle:
+    try:
+        return gitdiff.collect(
             root,
-            args.target,
-            args.source,
+            target,
+            source,
             context_lines=cfg.run.diff_context_lines,
             max_chars=cfg.run.diff_max_chars,
             excludes=cfg.run.exclude_globs,
@@ -412,45 +305,69 @@ def main(argv: list[str] | None = None) -> int:
             resolve_references=cfg.run.resolve_references,
         )
     except gitdiff.GitError as exc:
-        print(f"Git error: {exc}", file=sys.stderr)
-        return 2
+        raise CLIError(f"Git error: {exc}") from exc
 
-    if args.diff_only:
-        print(f"{diff.branch} → {diff.target} (merge-base {diff.base_sha[:12]})")
-        print(diff.summary_table())
-        return 0
 
-    if not diff.files:
-        print(f"No changes in {diff.branch} relative to {diff.target}.")
-        return 0
+def _plan(
+    cfg: Config, root: Path, diff: gitdiff.DiffBundle, items: list[ChecklistItem]
+) -> RunPlan:
+    """Everything that can still fail, gathered before the first request.
 
-    if diff.detached:
-        print(f"Reviewing branch {diff.branch} ({diff.head[:12]}); the working copy is untouched.")
-
-    # Before the runner, so a broken template costs a second rather than a
-    # provider connection and eight agents failing one by one
+    A broken prompt template, a misspelled format or a missing key costs a second
+    here; found later it costs the whole token bill, with nowhere left to write
+    the report.
+    """
+    templates = sources.templates_dir(cfg, root)
     try:
-        prompts = _load_prompts(cfg, root)
+        prompts = sources.load_prompts(cfg, root)
         prompts.validate(items, diff)
     except PromptError as exc:
-        print(f"Prompt error: {exc}", file=sys.stderr)
-        return 2
+        raise CLIError(f"Prompt error: {exc}") from exc
 
-    # Same reason: a misspelled format must not surface after the tokens are
-    # spent, when there is nowhere left to write the report
     try:
-        renders.prepare(cfg.run.report_formats, templates_dir_for(cfg, root))
+        renders.prepare(cfg.run.report_formats, templates)
     except renders.RenderError as exc:
-        print(f"Report error: {exc}", file=sys.stderr)
-        return 2
+        raise CLIError(f"Report error: {exc}") from exc
 
     try:
         runner = OpenAIAgentRunner(cfg.provider, cfg.run, root, diff.base_sha, diff.source_ref)
     except RuntimeError as exc:
-        print(f"Provider error: {exc}", file=sys.stderr)
-        return 2
+        raise CLIError(f"Provider error: {exc}") from exc
 
-    return asyncio.run(_run_review(cfg, diff, items, runner, prompts, args.verbose))
+    return RunPlan(
+        cfg=cfg,
+        diff=diff,
+        items=items,
+        prompts=prompts,
+        runner=runner,
+        templates_dir=templates,
+    )
+
+
+async def _review(plan: RunPlan, verbose: bool) -> int:
+    console.run_header(plan.cfg)
+    pipeline = ReviewPipeline(
+        plan.cfg,
+        plan.diff,
+        plan.items,
+        plan.runner,
+        lambda entry: console.event(entry, verbose),
+        plan.prompts,
+    )
+    try:
+        run = await pipeline.execute()
+    finally:
+        await plan.runner.aclose()
+
+    directory = output_dir_for(plan.cfg, plan.diff.root, run.run_id)
+    try:
+        reports = save(run, directory, plan.cfg.run.report_formats, plan.templates_dir)
+    except renders.RenderError as exc:
+        # The run itself is already on disk; only the readable part is missing
+        console.error(f"Report failed to render: {exc}", f"Run data saved: {directory}")
+        return 2
+    console.summary(run, reports, directory)
+    return 1 if any(i.status == "failed" for i in run.items) else 0
 
 
 if __name__ == "__main__":
