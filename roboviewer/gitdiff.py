@@ -186,43 +186,70 @@ def change_map(root: Path, base: str, source: str, files: list[str]) -> dict[str
         return {}
 
     out = _git(["diff", "-M", "--unified=0", "--no-color", f"{base}..{source}", "--", *files], root)
-    result: dict[str, FileChanges] = {}
-    current: FileChanges | None = None
-    new_line = 0
-    in_header = False
-
+    scan = _ChangeScan()
     for raw in out.splitlines():
+        scan.feed(raw)
+    return scan.changes
+
+
+class _ChangeScan:
+    """`git diff -U0`, read one line at a time.
+
+    Three states, and telling them apart is the whole job: between files, inside
+    a file header, inside a hunk body. Outside a header, a line beginning with
+    `---` is a deleted line of code rather than the header it looks like, and
+    reading it as a header would drop the rest of the file.
+    """
+
+    def __init__(self) -> None:
+        self.changes: dict[str, FileChanges] = {}
+        self._file: FileChanges | None = None
+        self._new_line = 0
+        self._in_header = False
+
+    def feed(self, raw: str) -> None:
         if raw.startswith("diff --git "):
-            current, in_header = None, True
-            continue
-        if in_header:
-            # File header: index / mode / similarity / --- / +++
-            if raw.startswith("+++ "):
-                path = raw[4:].strip()
-                if path == "/dev/null":
-                    current = None
-                else:
-                    key = path[2:] if path.startswith(("a/", "b/")) else path
-                    current = result.setdefault(key, FileChanges())
-                continue
-            if not raw.startswith("@@"):
-                continue
-            in_header = False  # hunk bodies follow; '---'/'+++' there is code, not a header
+            self._file, self._in_header = None, True
+            return
+        if self._in_header and not self._read_header(raw):
+            return
 
         hunk = _HUNK_RE.match(raw)
         if hunk:
-            new_line = int(hunk.group(1))
-            continue
-        if current is None or not raw:
-            continue
-        if raw[0] == "+":
-            current.added.add(new_line)
-            new_line += 1
-        elif raw[0] == "-":
-            current.removed_before.setdefault(new_line, []).append(raw[1:])
-        # "\ No newline at end of file" and friends are ignored
+            self._new_line = int(hunk.group(1))
+            return
+        if self._file is not None and raw:
+            self._read_body(self._file, raw)
 
-    return result
+    def _read_header(self, raw: str) -> bool:
+        """One line of a file header — index / mode / similarity / --- / +++.
+
+        Returns True once the header is over, meaning this line is a hunk header
+        and the caller has to go on and read it.
+        """
+        if raw.startswith("+++ "):
+            self._file = self._open(raw[4:].strip())
+            return False
+        if not raw.startswith("@@"):
+            return False
+        self._in_header = False
+        return True
+
+    def _open(self, path: str) -> FileChanges | None:
+        """The entry the following hunks belong to. A deleted file has no new
+        version to number lines in, so it gets none."""
+        if path == "/dev/null":
+            return None
+        key = path[2:] if path.startswith(("a/", "b/")) else path
+        return self.changes.setdefault(key, FileChanges())
+
+    def _read_body(self, file: FileChanges, raw: str) -> None:
+        if raw[0] == "+":
+            file.added.add(self._new_line)
+            self._new_line += 1
+        elif raw[0] == "-":
+            file.removed_before.setdefault(self._new_line, []).append(raw[1:])
+        # "\ No newline at end of file" and friends are ignored
 
 
 def normalise_path(path: str) -> str:
