@@ -153,7 +153,7 @@ def show_file_at(root: Path, ref: str, path: str) -> str | None:
 # The legend goes into the prompt and must keep describing exactly what
 # `annotate_file` emits — the agent reads line numbers off this markup.
 
-_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 MARKER_CONTEXT = "   | "
 MARKER_ADDED = " + | "
@@ -192,6 +192,21 @@ def change_map(root: Path, base: str, source: str, files: list[str]) -> dict[str
     return scan.changes
 
 
+def _anchor(hunk: re.Match[str]) -> int:
+    """Where in the new file this hunk starts counting.
+
+    `@@ -2 +2 @@` puts the hunk at line 2, and a removal in it sat before what
+    is now line 2 — the line that replaced it. A hunk that adds nothing is
+    written `@@ -2 +1,0 @@`, where 1 is the last line that survived rather than
+    the position the removal held: the deleted line sat before line 2. Without
+    the +1 the markup prints it a line too high and the scope gate anchors it a
+    line off.
+    """
+    start = int(hunk.group(1))
+    count = int(hunk.group(2)) if hunk.group(2) is not None else 1
+    return start if count else start + 1
+
+
 class _ChangeScan:
     """`git diff -U0`, read one line at a time.
 
@@ -216,7 +231,7 @@ class _ChangeScan:
 
         hunk = _HUNK_RE.match(raw)
         if hunk:
-            self._new_line = int(hunk.group(1))
+            self._new_line = _anchor(hunk)
             return
         if self._file is not None and raw:
             self._read_body(self._file, raw)

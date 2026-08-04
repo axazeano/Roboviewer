@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer.gitdiff import change_map
+from roboviewer.gitdiff import MARKER_REMOVED, annotate_file, change_map
+from roboviewer.models import DiffStat
 
 
 @pytest.fixture
@@ -57,13 +58,12 @@ def test_added_lines_are_numbered_in_the_new_file(repo: Path) -> None:
     assert changes["cart.py"].removed_before == {}
 
 
-def test_a_removed_line_is_anchored_at_the_position_git_reports(repo: Path) -> None:
-    """A removed line has no line of its own in the new file, so it hangs off a
-    neighbour. For a hunk that only deletes, git writes `@@ -2 +1,0 @@` — the
-    number is the last surviving line BEFORE the deletion, and that is the key
-    stored here. Note that `removed_before` is documented as the line a removal
-    sat before, which is one further down — so annotate_file prints a deleted
-    line one position higher than it stood. Recorded as it behaves today."""
+def test_a_removed_line_is_anchored_where_it_used_to_sit(repo: Path) -> None:
+    """It has no line of its own in the new file, so it hangs off the line that
+    took its place — the one the markup prints it above.
+
+    git writes `@@ -2 +1,0 @@` for a hunk that only deletes, where 1 is the last
+    line that survived; the removal sat before line 2."""
     (repo / "cart.py").write_text(_lines("one", "doomed", "three"))
     base = _commit(repo, "init")
     (repo / "cart.py").write_text(_lines("one", "three"))
@@ -72,7 +72,7 @@ def test_a_removed_line_is_anchored_at_the_position_git_reports(repo: Path) -> N
     entry = change_map(repo, base, head, ["cart.py"])["cart.py"]
 
     assert entry.added == set()
-    assert entry.removed_before == {1: ["doomed"]}
+    assert entry.removed_before == {2: ["doomed"]}
 
 
 def test_a_replaced_line_counts_as_both(repo: Path) -> None:
@@ -87,9 +87,9 @@ def test_a_replaced_line_counts_as_both(repo: Path) -> None:
     assert entry.removed_before == {2: ["old"]}
 
 
-def test_a_removal_at_the_end_anchors_on_the_last_surviving_line(repo: Path) -> None:
-    """Same convention at the end of a file: git reports the line the deletion
-    followed, so the key is 2 rather than the 3 the line used to occupy."""
+def test_a_removal_at_the_end_anchors_past_the_last_line(repo: Path) -> None:
+    """There is no line after it, so the anchor is len + 1 — which is what
+    annotate_file looks for when it flushes the tail."""
     (repo / "cart.py").write_text(_lines("one", "two", "last"))
     base = _commit(repo, "init")
     (repo / "cart.py").write_text(_lines("one", "two"))
@@ -97,7 +97,7 @@ def test_a_removal_at_the_end_anchors_on_the_last_surviving_line(repo: Path) -> 
 
     entry = change_map(repo, base, head, ["cart.py"])["cart.py"]
 
-    assert entry.removed_before == {2: ["last"]}
+    assert entry.removed_before == {3: ["last"]}
 
 
 def test_a_new_file_is_all_additions(repo: Path) -> None:
@@ -148,8 +148,46 @@ def test_content_that_looks_like_diff_syntax_is_read_as_code(repo: Path) -> None
 
     entry = change_map(repo, base, head, ["notes.md"])["notes.md"]
 
-    assert entry.removed_before == {1: ["--- a/old.py", "+++ b/old.py"]}
+    assert entry.removed_before == {2: ["--- a/old.py", "+++ b/old.py"]}
 
 
 def test_no_files_means_no_git_call(repo: Path) -> None:
     assert change_map(repo, "HEAD", "HEAD", []) == {}
+
+
+# ------------------------------------------------------------------ what the agent reads
+#
+# The anchor only matters through the markup: these are the same two deletions
+# as above, rendered the way an agent receives them.
+
+
+def _render(repo: Path, path: str, base: str, head: str) -> list[str]:
+    entry = change_map(repo, base, head, [path])[path]
+    stat = DiffStat(file=path, status="M", added=0, removed=1)
+    return annotate_file(path, stat, (repo / path).read_text(), entry).splitlines()
+
+
+def test_the_markup_puts_a_deleted_line_between_its_neighbours(repo: Path) -> None:
+    (repo / "cart.py").write_text(_lines("one", "doomed", "three"))
+    base = _commit(repo, "init")
+    (repo / "cart.py").write_text(_lines("one", "three"))
+    head = _commit(repo, "delete")
+
+    body = _render(repo, "cart.py", base, head)[1:]
+
+    assert [line.split("| ")[1] for line in body] == ["one", "doomed", "three"]
+    assert MARKER_REMOVED in body[1]
+
+
+def test_a_deletion_at_the_end_is_printed_after_the_last_line(repo: Path) -> None:
+    """This is the tail flush in annotate_file, which had nothing to flush while
+    the anchor came back one line short."""
+    (repo / "cart.py").write_text(_lines("one", "two", "last"))
+    base = _commit(repo, "init")
+    (repo / "cart.py").write_text(_lines("one", "two"))
+    head = _commit(repo, "truncate")
+
+    body = _render(repo, "cart.py", base, head)[1:]
+
+    assert [line.split("| ")[1] for line in body] == ["one", "two", "last"]
+    assert MARKER_REMOVED in body[-1]
