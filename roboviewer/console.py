@@ -54,12 +54,17 @@ def summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> None:
     print()
     confirmed = run.confirmed()
     for finding in confirmed:
-        print(f"  {finding.id}  [{SEVERITY_LABEL[finding.severity]}] {finding.location} — {finding.title}")
+        print(
+            f"  {finding.id}  [{SEVERITY_LABEL[finding.severity]}] "
+            f"{finding.location} — {finding.title}"
+        )
     if not confirmed:
         print("  No findings.")
     print()
     usage = run.total_usage
-    cache = f" · {usage.cache_hit_rate:.0%} from cache" if usage.cached_tokens else " · no cache hits"
+    cache = (
+        f" · {usage.cache_hit_rate:.0%} from cache" if usage.cached_tokens else " · no cache hits"
+    )
     print(f"Confirmed {len(confirmed)} of {len(run.findings)} · "
           f"{usage.total_tokens} tokens{cache}")
 
@@ -123,7 +128,8 @@ def _run(cfg: Config, root: Path) -> None:
     _prompt_sources(cfg, root)
     print(f"  templates      {sources.templates_dir(cfg, root) or 'bundled'}")
     print(f"  reports        {', '.join(cfg.run.report_formats)}")
-    print(f"  output lang    {language_name(cfg.run.output_language) or 'not set (model answers in the prompt language)'}")
+    language = language_name(cfg.run.output_language)
+    print(f"  output lang    {language or 'not set (model answers in the prompt language)'}")
     print(f"  output_dir     {cfg.run.output_dir}")
     print(f"  concurrency    {cfg.run.concurrency}")
     print(f"  max_turns      {cfg.run.max_turns}")

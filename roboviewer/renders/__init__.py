@@ -89,9 +89,13 @@ def prepare(formats: Sequence[str], templates_dir: Path | None = None) -> list[R
     return chosen
 
 
-@dataclass(frozen=True)
+@dataclass
 class _CustomTemplate:
-    """A format with no module but a template of its own in templates_dir."""
+    """A format with no module but a template of its own in templates_dir.
+
+    Not frozen: `Render` declares NAME and FILENAME as plain attributes, which
+    a class with read-only ones does not satisfy.
+    """
 
     NAME: str
     FILENAME: str

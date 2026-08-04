@@ -63,7 +63,10 @@ def full_run() -> ReviewRun:
             severity=Severity.BLOCKER,
             category="correctness",
             title="Половина ширины вместо обрезки",
-            rationale="`availableWidth / 2` считается до вычета инсетов, поэтому длинная\nстрока обрезается вместо переноса.",
+            rationale=(
+                "`availableWidth / 2` считается до вычета инсетов, "
+                "поэтому длинная\nстрока обрезается вместо переноса."
+            ),
             suggestion="Считать ширину после `layoutMargins`.",
             confidence=0.82,
             sources=["10-correctness", "80-architecture"],
@@ -125,11 +128,17 @@ def full_run() -> ReviewRun:
         ),
     ]
     verdicts = {
-        "F1": Verdict(finding_id="F1", verdict="confirmed", reason="Подтверждено чтением файла целиком."),
+        "F1": Verdict(
+            finding_id="F1", verdict="confirmed", reason="Подтверждено чтением файла целиком."
+        ),
         "F2": Verdict(finding_id="F2", verdict="confirmed"),
-        "F3": Verdict(finding_id="F3", verdict="nitpick", reason="Тест желателен, но не блокирует."),
+        "F3": Verdict(
+            finding_id="F3", verdict="nitpick", reason="Тест желателен, но не блокирует."
+        ),
         "F4": Verdict(finding_id="F4", verdict="unreviewed", reason="Не проверялось."),
-        "F5": Verdict(finding_id="F5", verdict="false_positive", reason="Это идентификатор ресурса, не ключ."),
+        "F5": Verdict(
+            finding_id="F5", verdict="false_positive", reason="Это идентификатор ресурса, не ключ."
+        ),
         "F6": Verdict(finding_id="F6", verdict="duplicate", reason="Совпадает с F1."),
     }
     items = [
@@ -138,7 +147,10 @@ def full_run() -> ReviewRun:
             item_title="Correctness",
             status="ok",
             findings=findings[:1],
-            usage=Usage(prompt_tokens=120_000, completion_tokens=4_200, cached_tokens=96_000, cache_reported=True),
+            usage=Usage(
+                prompt_tokens=120_000, completion_tokens=4_200,
+                cached_tokens=96_000, cache_reported=True,
+            ),
             turns=9,
             duration_s=74.4,
         ),
@@ -165,7 +177,10 @@ def full_run() -> ReviewRun:
         verdicts=verdicts,
         items=items,
         judge_summary="Ключевое — расчёт ширины.\nОстальное косметика.",
-        judge_usage=Usage(prompt_tokens=18_000, completion_tokens=900, cached_tokens=12_000, cache_reported=True),
+        judge_usage=Usage(
+            prompt_tokens=18_000, completion_tokens=900,
+            cached_tokens=12_000, cache_reported=True,
+        ),
     )
 
 
@@ -246,7 +261,7 @@ def test_view_tells_the_three_cache_states_apart() -> None:
 
 def test_every_render_is_reachable_by_its_name() -> None:
     for name in renders.known():
-        assert renders.resolve(name).NAME == name
+        assert name == renders.resolve(name).NAME
 
 
 def test_user_template_overrides_the_bundled_one_file_by_file(tmp_path: Path) -> None:

@@ -66,7 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--repo",
         default=os.environ.get("ROBOVIEWER_REPO", "."),
         metavar="PATH",
-        help="Path to the repository under review (defaults to $ROBOVIEWER_REPO or the current directory)",
+        help=(
+            "Path to the repository under review "
+            "(defaults to $ROBOVIEWER_REPO or the current directory)"
+        ),
     )
     parser.add_argument(
         "-o",
@@ -108,7 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
             "ru, Russian, German. Without the flag, whatever the config says"
         ),
     )
-    parser.add_argument("-j", "--concurrency", type=int, help="How many items to review in parallel")
+    parser.add_argument(
+        "-j", "--concurrency", type=int, help="How many items to review in parallel"
+    )
     parser.add_argument("--no-judge", action="store_true", help="Skip the final judge pass")
     parser.add_argument(
         "--judge-mode",
@@ -135,7 +140,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Stream agent activity: tool calls, retries, errors",
     )
-    parser.add_argument("--list-items", action="store_true", help="Print the checklist items and exit")
+    parser.add_argument(
+        "--list-items", action="store_true", help="Print the checklist items and exit"
+    )
     parser.add_argument(
         "--show-config",
         action="store_true",
@@ -144,7 +151,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--check-provider",
         action="store_true",
-        help="Make one probe request to the provider and break down the answer (for debugging 401 and friends)",
+        help=(
+            "Make one probe request to the provider and break down the answer "
+            "(for debugging 401 and friends)"
+        ),
     )
     parser.add_argument("--diff-only", action="store_true", help="Print the diff summary and exit")
     return parser

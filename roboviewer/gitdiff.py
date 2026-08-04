@@ -305,7 +305,9 @@ def looks_binary(text: str) -> bool:
 
 def annotate_file(path: str, stat: DiffStat, content: str, changes: FileChanges) -> str:
     lines = content.splitlines()
-    header = f"===== {path} [{stat.status}, +{stat.added}/-{stat.removed}, {len(lines)} lines] ====="
+    header = (
+        f"===== {path} [{stat.status}, +{stat.added}/-{stat.removed}, {len(lines)} lines] ====="
+    )
     out = [header]
 
     for number, code in enumerate(lines, start=1):
@@ -323,7 +325,6 @@ def annotate_file(path: str, stat: DiffStat, content: str, changes: FileChanges)
 
 def build_annotated(
     root: Path,
-    base: str,
     source: str,
     files: list[DiffStat],
     *,
@@ -392,7 +393,7 @@ class DiffBundle:
     # What the diff introduces that resolves to nothing. Computed once, before
     # the fan-out, so every agent shares it and the prompt prefix stays
     # identical — see resolve.py. None when the pass is switched off.
-    references: "ReferenceReport | None" = None
+    references: ReferenceReport | None = None
 
     @property
     def file_list(self) -> list[str]:
@@ -446,7 +447,7 @@ def collect(
     files = changed_files(root, base, resolved_source, excludes)
     changes = change_map(root, base, resolved_source, [f.file for f in files])
     annotated, inlined, fallback = build_annotated(
-        root, base, resolved_source, files, changes=changes,
+        root, resolved_source, files, changes=changes,
         max_lines=inline_max_lines, max_total_chars=inline_max_total_chars,
     )
     # Hunks are only needed for what was not inlined in full

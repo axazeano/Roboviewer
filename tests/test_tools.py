@@ -72,5 +72,7 @@ def test_an_unforeseen_argument_shape_does_not_escape_dispatch(repo: Path) -> No
 
 
 def test_an_unknown_tool_is_reported_rather_than_raised(repo: Path) -> None:
-    out = dispatch(repo, "delete_everything", {}, base_ref="HEAD", head_ref="HEAD", max_read_lines=800)
+    out = dispatch(
+        repo, "delete_everything", {}, base_ref="HEAD", head_ref="HEAD", max_read_lines=800
+    )
     assert "unknown tool" in out

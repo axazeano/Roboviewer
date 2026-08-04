@@ -99,7 +99,8 @@ def test_generated_files_are_searched_but_never_mined(repo) -> None:
     report = repo(
         {
             "App.xcodeproj/project.pbxproj": (
-                "// !$*UTF8*$!\n{ B55AFB992FE2A6EE00A1A1A4 /* Thing.swift */ = {isa = PBXBuildFile;}; }\n"
+                "// !$*UTF8*$!\n"
+                "{ B55AFB992FE2A6EE00A1A1A4 /* Thing.swift */ = {isa = PBXBuildFile;}; }\n"
             )
         }
     )

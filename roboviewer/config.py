@@ -125,17 +125,21 @@ class ProviderConfig(BaseModel):
         if not key:
             return "—"
         # Show the tail so two similar keys can be told apart without revealing either.
-        return f"{key[:4]}…{key[-4:]} ({len(key)} chars)" if len(key) > 12 else f"(short, {len(key)} chars)"
+        if len(key) <= 12:
+            return f"(short, {len(key)} chars)"
+        return f"{key[:4]}…{key[-4:]} ({len(key)} chars)"
 
     def resolve_judge_model(self) -> str:
         return self.judge_model or self.model
 
     def resolve_judge_enable_thinking(self) -> bool | None:
-        return self.judge_enable_thinking if self.judge_enable_thinking is not None else self.enable_thinking
+        if self.judge_enable_thinking is not None:
+            return self.judge_enable_thinking
+        return self.enable_thinking
 
     def request_body(self, enable_thinking: bool | None) -> dict[str, Any]:
         """Provider-specific request body the SDK has no typed fields for."""
-        body: dict[str, Any] = {k: v for k, v in self.extra_body.items()}
+        body: dict[str, Any] = dict(self.extra_body)
         if enable_thinking is not None:
             template_kwargs = dict(body.get("chat_template_kwargs") or {})
             template_kwargs["enable_thinking"] = enable_thinking
@@ -242,7 +246,9 @@ def _deep_merge(base: dict, overlay: dict) -> dict:
 
 
 def load_config(repo_root: Path, explicit: Path | None = None) -> Config:
-    layers: list[Path] = [p for p in (home_config_path(), repo_config_path(repo_root)) if p.is_file()]
+    layers: list[Path] = [
+        p for p in (home_config_path(), repo_config_path(repo_root)) if p.is_file()
+    ]
 
     if explicit is not None:
         path = explicit.expanduser().resolve()

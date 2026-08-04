@@ -31,7 +31,10 @@ _HINTS: dict[int, str] = {
         "provider.auth_header and provider.auth_scheme. Compare the request dump below "
         "with a request that works by hand."
     ),
-    403: "The key was accepted, but this model is not available to it. Check the model name and the key's permissions.",
+    403: (
+        "The key was accepted, but this model is not available to it. "
+        "Check the model name and the key's permissions."
+    ),
     404: (
         "Endpoint not found. Most often base_url is missing /v1, or conversely "
         "carries a stray /chat/completions at the end."
@@ -178,7 +181,7 @@ class ProbeResult:
 
 
 async def _request(provider: ProviderConfig, *, tools: bool, tool_choice: Any,
-                   wire: "_Wire | None" = None) -> ProbeResult:
+                   wire: _Wire | None = None) -> ProbeResult:
     timeout = min(provider.timeout_s, 60.0)
     client = AsyncOpenAI(
         api_key=provider.resolve_api_key(),
@@ -235,7 +238,9 @@ def _print_auth_hints() -> None:
     print('  auth_scheme = "Token"                             → Authorization: Token <key>')
 
 
-async def _probe_all(provider: ProviderConfig, wire: _Wire) -> tuple[ProbeResult, dict[str, ProbeResult]]:
+async def _probe_all(
+    provider: ProviderConfig, wire: _Wire
+) -> tuple[ProbeResult, dict[str, ProbeResult]]:
     """Plain request first; tool modes are only worth probing if it succeeded."""
     plain = await _request(provider, tools=False, tool_choice=None, wire=wire)
     if not plain.ok:

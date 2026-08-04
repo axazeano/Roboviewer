@@ -47,7 +47,8 @@ def _safe_path(root: Path, rel: str) -> Path:
 def _truncate(text: str) -> str:
     if len(text) <= MAX_TOOL_OUTPUT:
         return text
-    return text[:MAX_TOOL_OUTPUT] + f"\n\n[... output truncated to {MAX_TOOL_OUTPUT} characters ...]"
+    cut = f"\n\n[... output truncated to {MAX_TOOL_OUTPUT} characters ...]"
+    return text[:MAX_TOOL_OUTPUT] + cut
 
 
 # --------------------------------------------------------------------------- tools
@@ -121,7 +122,8 @@ def grep(root: Path, pattern: str, glob: str | None = None, ref: str = "HEAD",
     if not lines:
         return f"No matches for: {pattern}"
     shown = lines[:max_results]
-    suffix = f"\n[... {len(lines) - len(shown)} more matches ...]" if len(lines) > len(shown) else ""
+    hidden = len(lines) - len(shown)
+    suffix = f"\n[... {hidden} more matches ...]" if hidden else ""
     return _truncate("\n".join(shown) + suffix)
 
 
@@ -149,7 +151,10 @@ def git_show(root: Path, path: str, ref: str) -> str:
     rel = _relative(root, path)
     content = show_file_at(root, ref, rel)
     if content is None:
-        raise ToolError(f"Could not read {path} at revision {ref} (the file may have been created on this branch)")
+        raise ToolError(
+            f"Could not read {path} at revision {ref} "
+            "(the file may have been created on this branch)"
+        )
     if looks_binary(content):
         raise ToolError(f"Binary file, reading is not supported: {path}")
     lines = content.splitlines()
@@ -174,7 +179,10 @@ def tool_schemas(base_ref: str) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Path relative to the repository root"},
+                        "path": {
+                            "type": "string",
+                            "description": "Path relative to the repository root",
+                        },
                         "start_line": {"type": "integer", "description": "First line, 1-based"},
                         "end_line": {"type": "integer", "description": "Last line, inclusive"},
                     },
@@ -195,7 +203,10 @@ def tool_schemas(base_ref: str) -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "pattern": {"type": "string", "description": "Extended regular expression"},
-                        "glob": {"type": "string", "description": "Restrict to a file mask, e.g. *.py or src/**"},
+                        "glob": {
+                            "type": "string",
+                            "description": "Restrict to a file mask, e.g. *.py or src/**",
+                        },
                     },
                     "required": ["pattern"],
                 },
@@ -205,10 +216,18 @@ def tool_schemas(base_ref: str) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "list_files",
-                "description": "List the files and subdirectories of a repository directory on the reviewed branch.",
+                "description": (
+                    "List the files and subdirectories of a repository directory on the reviewed "
+                    "branch."
+                ),
                 "parameters": {
                     "type": "object",
-                    "properties": {"directory": {"type": "string", "description": "Path relative to the repository root"}},
+                    "properties": {
+                        "directory": {
+                            "type": "string",
+                            "description": "Path relative to the repository root",
+                        }
+                    },
                     "required": [],
                 },
             },
@@ -244,27 +263,53 @@ SUBMIT_FINDINGS_TOOL: dict[str, Any] = {
             "properties": {
                 "summary": {
                     "type": "string",
-                    "description": "1-3 sentences: what was checked, and the overall conclusion for this aspect.",
+                    "description": (
+                        "1-3 sentences: what was checked, and the overall conclusion for this "
+                        "aspect."
+                    ),
                 },
                 "findings": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "file": {"type": "string", "description": "File path relative to the repository root"},
-                            "line": {"type": "integer", "description": "Line number in the NEW version of the file"},
+                            "file": {
+                                "type": "string",
+                                "description": "File path relative to the repository root",
+                            },
+                            "line": {
+                                "type": "integer",
+                                "description": "Line number in the NEW version of the file",
+                            },
                             "end_line": {"type": "integer"},
                             "severity": {
                                 "type": "string",
                                 "enum": ["blocker", "major", "minor", "nit"],
                             },
-                            "category": {"type": "string", "description": "A short slug, e.g. null-safety, race, api-break"},
+                            "category": {
+                                "type": "string",
+                                "description": "A short slug, e.g. null-safety, race, api-break",
+                            },
                             "title": {"type": "string", "description": "The problem in one line"},
-                            "rationale": {"type": "string", "description": "Why this is a problem, and the scenario in which it shows up"},
-                            "suggestion": {"type": "string", "description": "A concrete suggested fix"},
-                            "confidence": {"type": "number", "description": "Confidence from 0 to 1"},
+                            "rationale": {
+                                "type": "string",
+                                "description": (
+                                    "Why this is a problem, and the scenario "
+                                    "in which it shows up"
+                                ),
+                            },
+                            "suggestion": {
+                                "type": "string",
+                                "description": "A concrete suggested fix",
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "description": "Confidence from 0 to 1",
+                            },
                         },
-                        "required": ["file", "severity", "category", "title", "rationale", "confidence"],
+                        "required": [
+                            "file", "severity", "category", "title", "rationale", "confidence",
+                        ],
                     },
                 },
             },
@@ -282,7 +327,10 @@ SUBMIT_VERDICTS_TOOL: dict[str, Any] = {
         "parameters": {
             "type": "object",
             "properties": {
-                "summary": {"type": "string", "description": "Overall assessment of the merge request, 2-5 sentences."},
+                "summary": {
+                    "type": "string",
+                    "description": "Overall assessment of the merge request, 2-5 sentences.",
+                },
                 "verdicts": {
                     "type": "array",
                     "items": {
@@ -298,7 +346,10 @@ SUBMIT_VERDICTS_TOOL: dict[str, Any] = {
                                 "enum": ["blocker", "major", "minor", "nit"],
                                 "description": "Corrected severity, when the original one is wrong",
                             },
-                            "reason": {"type": "string", "description": "A short justification for the verdict"},
+                            "reason": {
+                                "type": "string",
+                                "description": "A short justification for the verdict",
+                            },
                         },
                         "required": ["finding_id", "verdict", "reason"],
                     },

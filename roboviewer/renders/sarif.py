@@ -31,7 +31,7 @@ LEVEL: dict[Severity, str] = {
 }
 
 
-def render(run: ReviewRun, templates_dir: Path | None = None) -> str:
+def render(run: ReviewRun, templates_dir: Path | None = None) -> str:  # noqa: ARG001
     return json.dumps(build(build_view(run)), ensure_ascii=False, indent=2) + "\n"
 
 

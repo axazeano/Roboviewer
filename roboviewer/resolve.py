@@ -33,7 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # Identifiers that carry no information, plus the declaration keywords themselves.
-KEYWORDS = frozenset("""
+# A block rather than a list literal: the point is that a reader can see it.
+_KEYWORD_BLOCK = """
 func var let if else guard return self super class struct enum protocol extension
 import public private internal fileprivate open static final override init deinit
 weak unowned lazy async await throws try catch throw defer where case switch for
@@ -41,7 +42,9 @@ while repeat break continue nil true false some any inout typealias associatedty
 subscript operator convenience required dynamic mutating available objc IBOutlet
 IBAction escaping autoclosure discardableResult main didSet willSet get set
 def function interface type const class_ None True False self_ import_ return_
-""".split())
+"""
+
+KEYWORDS = frozenset(_KEYWORD_BLOCK.split())
 
 # Files whose identifiers are machine-generated noise — object ids, UUIDs. They
 # are searched, never mined for candidates.
@@ -250,7 +253,7 @@ def _occurrences(root: Path, head: str, names: list[str]) -> dict[str, set[str]]
         args = ["grep", "-o", "-w", "-F", "-I"]
         for name in batch:
             args += ["-e", name]
-        for line in _git(root, args + [head]).splitlines():
+        for line in _git(root, [*args, head]).splitlines():
             path, match = _split_grep_line(line, head)
             if match in wanted:
                 found.setdefault(match, set()).add(path)
@@ -268,7 +271,7 @@ def _declared_anywhere(root: Path, head: str, names: list[str]) -> set[str]:
         args = ["grep", "-o", "-h", "-E", "-I"]
         for name in batch:
             args += ["-e", f"({_DECL_KEYWORDS}){_NON_WORD}+{re.escape(name)}({_NON_WORD}|$)"]
-        text = _git(root, args + [head])
+        text = _git(root, [*args, head])
         if not text:
             continue
         for name in batch:

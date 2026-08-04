@@ -164,7 +164,7 @@ class Prompts:
     # ------------------------------------------------------------------ loading
 
     @classmethod
-    def load(cls, directory: Path | None = None, language: str = "") -> "Prompts":
+    def load(cls, directory: Path | None = None, language: str = "") -> Prompts:
         """Loads the set, falling back to the bundled default file by file."""
         texts: dict[str, str] = {}
         sources: dict[str, str] = {}
@@ -175,7 +175,8 @@ class Prompts:
             path = next((c for c in candidates if c.is_file()), None)
             if path is None:
                 raise PromptError(
-                    f"Template {filename} not found in {directory} or in the bundled set ({DEFAULT_DIR})"
+                    f"Template {filename} not found in {directory} "
+                    f"or in the bundled set ({DEFAULT_DIR})"
                 )
             # Trailing newlines mean nothing to the model but break composition;
             # indentation inside the text is preserved.
@@ -310,7 +311,7 @@ def _context_block(diff: DiffBundle) -> str:
     )
 
 
-def _references_block(report: "ReferenceReport | None") -> str:
+def _references_block(report: ReferenceReport | None) -> str:
     """The pre-pass result. Absent when it did not run — an empty section would
     read as "nothing was found", which is a different claim."""
     if report is None or report.empty:

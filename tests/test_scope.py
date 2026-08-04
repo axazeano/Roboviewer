@@ -26,7 +26,9 @@ from .conftest import ScriptedRunner, make_bundle, ok_outcome
 ITEM = ChecklistItem(id="correctness", title="Correctness", body="Find logic errors.")
 
 # One file: lines 40-42 added, and a block deleted from where line 100 now sits
-CHANGES = {"src/cart.py": FileChanges(added={40, 41, 42}, removed_before={100: ["  old_total = 0"]})}
+CHANGES = {
+    "src/cart.py": FileChanges(added={40, 41, 42}, removed_before={100: ["  old_total = 0"]})
+}
 
 
 def _at(line: int | None, file: str = "src/cart.py") -> bool:
@@ -116,7 +118,9 @@ def test_findings_off_the_change_are_set_aside_not_reported(tmp_path: Path, conf
 def test_the_judge_is_not_paid_to_verify_them(tmp_path: Path, config) -> None:
     """A pass spent on code the MR did not touch buys a line the author has no
     reason to act on in this review."""
-    _, runner = _run(config, tmp_path, [_finding(41, "Off-by-one"), _finding(300, "Hardcoded string")])
+    _, runner = _run(
+        config, tmp_path, [_finding(41, "Off-by-one"), _finding(300, "Hardcoded string")]
+    )
 
     judging = [r for r in runner.requests if r.metadata.get("stage") == "judge"]
     assert len(judging) == 1

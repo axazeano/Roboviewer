@@ -14,9 +14,15 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined, Template
+from jinja2 import (
+    ChoiceLoader,
+    Environment,
+    FileSystemLoader,
+    StrictUndefined,
+    Template,
+    TemplateNotFound,
+)
 from jinja2 import TemplateError as _JinjaTemplateError
-from jinja2 import TemplateNotFound
 from markdown_it import MarkdownIt
 from markupsafe import Markup
 from pydantic import BaseModel

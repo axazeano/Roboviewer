@@ -12,7 +12,9 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
-class Severity(str, Enum):
+# str + Enum rather than StrEnum: templates format a severity into text, and
+# the two spell that differently.
+class Severity(str, Enum):  # noqa: UP042
     BLOCKER = "blocker"
     MAJOR = "major"
     MINOR = "minor"
@@ -52,7 +54,7 @@ class Usage(BaseModel):
     def cache_hit_rate(self) -> float:
         return self.cached_tokens / self.prompt_tokens if self.prompt_tokens else 0.0
 
-    def __add__(self, other: "Usage") -> "Usage":
+    def __add__(self, other: Usage) -> Usage:
         return Usage(
             prompt_tokens=self.prompt_tokens + other.prompt_tokens,
             completion_tokens=self.completion_tokens + other.completion_tokens,
@@ -88,7 +90,7 @@ class Finding(BaseModel):
         if v in (None, "", 0):
             return None
         try:
-            n = int(v)  # type: ignore[arg-type]
+            n = int(v)  # type: ignore[call-overload]
         except (TypeError, ValueError):
             return None
         return n if n > 0 else None
@@ -168,8 +170,12 @@ class ReviewRun(BaseModel):
 
     def confirmed(self) -> list[Finding]:
         keep = {"confirmed", "nitpick", "unreviewed"}
-        return [f for f in self.findings if self.verdicts.get(f.id, Verdict(finding_id=f.id)).verdict in keep]
+        return [f for f in self.findings if self.verdict_on(f) in keep]
 
     def rejected(self) -> list[Finding]:
         drop = {"false_positive", "duplicate"}
-        return [f for f in self.findings if self.verdicts.get(f.id, Verdict(finding_id=f.id)).verdict in drop]
+        return [f for f in self.findings if self.verdict_on(f) in drop]
+
+    def verdict_on(self, finding: Finding) -> VerdictKind:
+        """A finding nobody judged counts as unreviewed rather than as missing."""
+        return self.verdicts.get(finding.id, Verdict(finding_id=finding.id)).verdict

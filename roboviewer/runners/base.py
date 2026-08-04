@@ -7,8 +7,9 @@ local model, or someone else's CLI. All it needs is the terminal tool's payload.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from ..models import Usage
 
@@ -56,7 +57,9 @@ class Runner(ABC):
     name: str = "base"
 
     @abstractmethod
-    async def run(self, request: AgentRequest, on_progress: ProgressHook | None = None) -> AgentOutcome:
+    async def run(
+        self, request: AgentRequest, on_progress: ProgressHook | None = None
+    ) -> AgentOutcome:
         ...
 
     async def aclose(self) -> None:

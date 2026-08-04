@@ -91,7 +91,9 @@ def test_sarif_maps_severity_onto_a_poorer_scale(severity: Severity, level: str)
 
 def test_sarif_omits_the_region_when_there_is_no_line(sarif: dict) -> None:
     # A region without startLine is invalid
-    without_line = [r for r in sarif["runs"][0]["results"] if "Нет теста" in r["message"]["text"]][0]
+    without_line = next(
+        r for r in sarif["runs"][0]["results"] if "Нет теста" in r["message"]["text"]
+    )
     assert "region" not in without_line["locations"][0]["physicalLocation"]
 
 
@@ -166,7 +168,7 @@ def test_codequality_severity_matches_gitlabs_scale(severity: Severity, expected
 def test_codequality_falls_back_to_the_first_line_without_one() -> None:
     # begin is required and numeric; without it the entry is dropped
     entries = json.loads(render_report(full_run(), "codequality"))
-    entry = [e for e in entries if e["description"] == "Нет теста на пустой reply"][0]
+    entry = next(e for e in entries if e["description"] == "Нет теста на пустой reply")
 
     assert entry["location"]["lines"]["begin"] == 1
 

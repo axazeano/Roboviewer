@@ -58,7 +58,11 @@ class ScriptedRunner(Runner):
         self._outcomes = list(outcomes)
         self.requests: list[AgentRequest] = []
 
-    async def run(self, request: AgentRequest, on_progress: ProgressHook | None = None) -> AgentOutcome:
+    async def run(
+        self,
+        request: AgentRequest,
+        on_progress: ProgressHook | None = None,  # noqa: ARG002 — the Runner signature
+    ) -> AgentOutcome:
         self.requests.append(request)
         if len(self._outcomes) > 1:
             return self._outcomes.pop(0)

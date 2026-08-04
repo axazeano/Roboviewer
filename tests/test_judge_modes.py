@@ -67,7 +67,11 @@ class VerdictRunner(Runner):
         self._final = final
         self.requests: list[AgentRequest] = []
 
-    async def run(self, request: AgentRequest, on_progress: ProgressHook | None = None) -> AgentOutcome:
+    async def run(
+        self,
+        request: AgentRequest,
+        on_progress: ProgressHook | None = None,  # noqa: ARG002 — the Runner signature
+    ) -> AgentOutcome:
         self.requests.append(request)
         if request.metadata.get("pass") == "final":
             assert self._final is not None, "the run reached a final pass the test did not script"
@@ -143,7 +147,10 @@ def test_one_pass_per_finding_each_seeing_only_its_own(tmp_path: Path, config) -
         findings,
         {
             "F001": {"verdict": "confirmed", "reason": "checked src/cart.py:42"},
-            "F002": {"verdict": "false_positive", "reason": "the file is closed by the context manager"},
+            "F002": {
+                "verdict": "false_positive",
+                "reason": "the file is closed by the context manager",
+            },
         },
     )
 
@@ -326,7 +333,8 @@ def test_two_stage_rules_only_on_what_survived_verification(tmp_path: Path, conf
             "A small MR with one real bug.",
             [
                 {"finding_id": "F001", "verdict": "confirmed", "reason": "stands"},
-                {"finding_id": "F002", "verdict": "nitpick", "severity": "nit", "reason": "cosmetic"},
+                {"finding_id": "F002", "verdict": "nitpick", "severity": "nit",
+                 "reason": "cosmetic"},
             ],
         ),
     )
@@ -365,8 +373,10 @@ def test_the_final_pass_recalibrates_severity_across_findings(tmp_path: Path, co
         _ruling(
             "One blocker, one nit.",
             [
-                {"finding_id": "F001", "verdict": "confirmed", "severity": "nit", "reason": "trivial"},
-                {"finding_id": "F002", "verdict": "confirmed", "severity": "blocker", "reason": "data loss"},
+                {"finding_id": "F001", "verdict": "confirmed", "severity": "nit",
+                 "reason": "trivial"},
+                {"finding_id": "F002", "verdict": "confirmed", "severity": "blocker",
+                 "reason": "data loss"},
             ],
         ),
     )
@@ -387,7 +397,8 @@ def test_the_final_pass_cannot_resurrect_a_rejected_finding(tmp_path: Path, conf
             "ok",
             [
                 {"finding_id": "F001", "verdict": "confirmed", "reason": "stands"},
-                {"finding_id": "F003", "verdict": "confirmed", "severity": "blocker", "reason": "looks real"},
+                {"finding_id": "F003", "verdict": "confirmed", "severity": "blocker",
+                 "reason": "looks real"},
             ],
         ),
     )
@@ -427,7 +438,8 @@ def test_a_recalibrated_finding_carries_the_reason_that_recalibrated_it(
         tmp_path,
         _ruling(
             "ok",
-            [{"finding_id": "F001", "verdict": "confirmed", "severity": "nit", "reason": "dead code, not a bug"}],
+            [{"finding_id": "F001", "verdict": "confirmed", "severity": "nit",
+              "reason": "dead code, not a bug"}],
         ),
     )
 

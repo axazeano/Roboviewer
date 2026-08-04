@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import difflib
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -167,7 +167,7 @@ class ReviewPipeline:
             base_sha=self._diff.base_sha,
             head_sha=self._diff.head,
             model=self._cfg.provider.model,
-            started_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            started_at=datetime.now(UTC).isoformat(timespec="seconds"),
             files=self._diff.files,
             items=[ItemResult(item_id=i.id, item_title=i.title) for i in self._items],
         )
@@ -182,7 +182,7 @@ class ReviewPipeline:
         )
 
         if not self._diff.files:
-            run.finished_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            run.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
             self._emit(Event("run_done", "No changes relative to the target branch"))
             return run
 
@@ -228,9 +228,11 @@ class ReviewPipeline:
         if run.findings and self._cfg.run.enable_judge:
             await self._run_judge(run)
         else:
-            run.verdicts = {f.id: Verdict(finding_id=f.id, verdict="unreviewed") for f in run.findings}
+            run.verdicts = {
+                f.id: Verdict(finding_id=f.id, verdict="unreviewed") for f in run.findings
+            }
 
-        run.finished_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        run.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
         self._emit(Event("run_done", "Review finished", data={"run": run}))
         return run
 
@@ -240,10 +242,11 @@ class ReviewPipeline:
         remark about code the MR never touched costs a pass to earn a line the
         author has no reason to act on in this review."""
         margin = self._cfg.run.scope_margin
-        keep, drop = [], []
+        keep: list[Finding] = []
+        drop: list[Finding] = []
         for finding in findings:
-            target = keep if in_scope(self._diff.changes, finding.file, finding.line, margin) else drop
-            target.append(finding)
+            reachable = in_scope(self._diff.changes, finding.file, finding.line, margin)
+            (keep if reachable else drop).append(finding)
 
         for index, finding in enumerate(keep, start=1):
             finding.id = f"F{index:03d}"
@@ -270,7 +273,9 @@ class ReviewPipeline:
         )
 
         def progress(kind: str, detail: str) -> None:
-            self._emit(Event("item_progress", f"{kind}: {detail}", item_id=item.id, data={"kind": kind}))
+            self._emit(
+                Event("item_progress", f"{kind}: {detail}", item_id=item.id, data={"kind": kind})
+            )
 
         outcome = await self._runner.run(request, progress)
         result.usage = outcome.usage

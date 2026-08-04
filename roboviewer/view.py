@@ -34,7 +34,7 @@ from .models import (
 )
 
 
-class CacheState(str, Enum):
+class CacheState(str, Enum):  # noqa: UP042 — see the note on Severity
     """Three outcomes, not two.
 
     `UNKNOWN` is not a polite way of saying zero: a gateway may serve the shared
