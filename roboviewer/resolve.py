@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -215,8 +216,38 @@ def _added_lines(root: Path, base: str, head: str) -> dict[str, list[str]]:
 def _unresolved_symbols(
     root: Path, head: str, added: dict[str, list[str]]
 ) -> tuple[dict[str, list[str]], int]:
-    touched = set(added)
+    """Three sieves, each cheaper than the one it feeds.
+
+    Mine the added lines, keep what appears nowhere the diff did not touch, then
+    ask whether the survivors are declared at all. The order matters: every step
+    but the first costs a `git grep` over the tree.
+    """
+    candidates = _candidates(added)
+    if not candidates:
+        return {}, 0
+
+    homeless = _only_where_the_diff_reached(root, head, sorted(candidates), touched=set(added))
+    if not homeless:
+        return {}, 0
+
+    declared = _declared_anywhere(root, head, homeless)
+    return _capped([n for n in homeless if n not in declared], candidates)
+
+
+def _candidates(added: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Identifier the diff introduces → the files that introduced it."""
     candidates: dict[str, list[str]] = {}
+    for path, name in _references(added):
+        where = candidates.setdefault(name, [])
+        if path not in where:
+            where.append(path)
+    return candidates
+
+
+def _references(added: dict[str, list[str]]) -> Iterator[tuple[str, str]]:
+    """Every reference on an added line that has to resolve, with the file it
+    came from. Generated files are searched later but never mined here: their
+    identifiers are object ids and UUIDs."""
     for path, lines in added.items():
         if Path(path).suffix in GENERATED_SUFFIX:
             continue
@@ -224,25 +255,28 @@ def _unresolved_symbols(
             for member, typename in MUST_RESOLVE.findall(line):
                 name = member or typename
                 if name and name not in KEYWORDS:
-                    where = candidates.setdefault(name, [])
-                    if path not in where:
-                        where.append(path)
+                    yield path, name
 
-    if not candidates:
-        return {}, 0
 
-    names = sorted(candidates)
+def _only_where_the_diff_reached(
+    root: Path, head: str, names: list[str], *, touched: set[str]
+) -> list[str]:
+    """Names occurring in no file this diff left alone.
+
+    A name used elsewhere in the tree resolves to something, whatever that is;
+    one that lives entirely inside the changed files has nowhere to be defined
+    but there.
+    """
     occurrences = _occurrences(root, head, names)
-    # Occurs nowhere this diff did not touch → nothing outside can define it
-    homeless = [n for n in names if not (occurrences.get(n, set()) - touched)]
-    if not homeless:
-        return {}, 0
+    return [n for n in names if not (occurrences.get(n, set()) - touched)]
 
-    declared = _declared_anywhere(root, head, homeless)
-    unresolved = [n for n in homeless if n not in declared]
 
-    truncated = max(0, len(unresolved) - MAX_SYMBOLS)
-    return {n: candidates[n] for n in unresolved[:MAX_SYMBOLS]}, truncated
+def _capped(
+    names: list[str], candidates: dict[str, list[str]]
+) -> tuple[dict[str, list[str]], int]:
+    """The section is a lead rather than an inventory: past MAX_SYMBOLS nobody
+    reads it, so it is cut and the count of what was cut goes with it."""
+    return {n: candidates[n] for n in names[:MAX_SYMBOLS]}, max(0, len(names) - MAX_SYMBOLS)
 
 
 def _occurrences(root: Path, head: str, names: list[str]) -> dict[str, set[str]]:
