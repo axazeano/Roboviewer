@@ -26,10 +26,6 @@ from .tools import SUBMIT_FINDINGS_TOOL, tool_schemas
 # --------------------------------------------------------------------------- merge
 
 
-def _similar(a: str, b: str) -> float:
-    return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
-
-
 def merge_findings(results: list[ItemResult], min_confidence: float = 0.0) -> list[Finding]:
     """Collapses duplicates: different checklist items often flag the same line.
 
@@ -37,6 +33,18 @@ def merge_findings(results: list[ItemResult], min_confidence: float = 0.0) -> li
     rationales are compared. The threshold is deliberately conservative — better
     to show two similar findings than to lose a real one.
     """
+    merged: list[Finding] = []
+    for group in _by_place(_reported(results, min_confidence)).values():
+        merged.extend(_collapse(group))
+
+    merged.sort(key=lambda f: (SEVERITY_ORDER[f.severity], -f.confidence, f.file, f.line or 0))
+    for index, finding in enumerate(merged, start=1):
+        finding.id = f"F{index:03d}"
+    return merged
+
+
+def _reported(results: list[ItemResult], min_confidence: float) -> list[Finding]:
+    """Everything worth carrying forward, each finding knowing who found it."""
     flat: list[Finding] = []
     for result in results:
         for finding in result.findings:
@@ -44,42 +52,69 @@ def merge_findings(results: list[ItemResult], min_confidence: float = 0.0) -> li
                 continue
             finding.sources = finding.sources or [result.item_id]
             flat.append(finding)
+    return flat
 
+
+def _by_place(findings: list[Finding]) -> dict[tuple[str, int], list[Finding]]:
+    """Grouped by file and a 5-line window.
+
+    Coarse on purpose: comparing every finding against every other one is
+    quadratic, and two remarks about unrelated lines of the same file are not
+    duplicates however alike they read.
+    """
     buckets: dict[tuple[str, int], list[Finding]] = {}
-    for finding in flat:
+    for finding in findings:
         buckets.setdefault(finding.dedupe_bucket(), []).append(finding)
+    return buckets
 
-    merged: list[Finding] = []
-    for group in buckets.values():
-        kept: list[Finding] = []
-        for finding in group:
-            twin = next(
-                (
-                    k
-                    for k in kept
-                    if _similar(k.title, finding.title) > 0.7
-                    or _similar(k.rationale[:240], finding.rationale[:240]) > 0.8
-                ),
-                None,
-            )
-            if twin is None:
-                kept.append(finding)
-                continue
-            # Keep the heavier, more confident wording
-            if (SEVERITY_ORDER[finding.severity], -finding.confidence) < (
-                SEVERITY_ORDER[twin.severity],
-                -twin.confidence,
-            ):
-                finding.sources = sorted(set(twin.sources) | set(finding.sources))
-                kept[kept.index(twin)] = finding
-            else:
-                twin.sources = sorted(set(twin.sources) | set(finding.sources))
-        merged.extend(kept)
 
-    merged.sort(key=lambda f: (SEVERITY_ORDER[f.severity], -f.confidence, f.file, f.line or 0))
-    for index, finding in enumerate(merged, start=1):
-        finding.id = f"F{index:03d}"
-    return merged
+def _collapse(group: list[Finding]) -> list[Finding]:
+    """One place, several wordings: keep one of each problem, the strongest."""
+    kept: list[Finding] = []
+    for finding in group:
+        twin = _twin_of(finding, kept)
+        if twin is None:
+            kept.append(finding)
+        elif _stronger(finding, twin):
+            finding.sources = _sources(twin, finding)
+            kept[kept.index(twin)] = finding
+        else:
+            twin.sources = _sources(twin, finding)
+    return kept
+
+
+def _twin_of(finding: Finding, kept: list[Finding]) -> Finding | None:
+    """The same problem already kept, in other words.
+
+    Either the titles read alike or the rationales do — the rationale is the
+    longer text, so it takes a higher bar to count.
+    """
+    return next(
+        (
+            k
+            for k in kept
+            if _similar(k.title, finding.title) > 0.7
+            or _similar(k.rationale[:240], finding.rationale[:240]) > 0.8
+        ),
+        None,
+    )
+
+
+def _stronger(finding: Finding, twin: Finding) -> bool:
+    """Heavier severity wins; at equal severity, the more confident wording."""
+    return (SEVERITY_ORDER[finding.severity], -finding.confidence) < (
+        SEVERITY_ORDER[twin.severity],
+        -twin.confidence,
+    )
+
+
+def _sources(*findings: Finding) -> list[str]:
+    """Every item that reported it, so the report can say who agreed."""
+    return sorted({item for finding in findings for item in finding.sources})
+
+
+def _similar(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
 # --------------------------------------------------------------------------- parsing
