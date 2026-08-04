@@ -1,7 +1,7 @@
 """Verifying findings: what survives, at what severity, and why.
 
-The reviewers report; this stage decides what reaches the author. Two modes, and
-what separates them is how much of the list one pass holds at once.
+The reviewers report; this stage decides what reaches the author. Two ways of
+doing it, and what separates them is how much of the list one pass holds at once.
 
 `batch` is a single pass over every finding. It sees the whole list, so
 duplicates and relative severity come easily to it — at the price of spreading
@@ -14,73 +14,127 @@ holding one claim, it has no scale to weigh it against, so severities drift up
 and the same complaint confirmed once per file arrives five times. Measured
 against the batch judge on a 64-file MR: seven duplicates collapsed where the
 text-similarity merge caught none, and the tail moved out of Minor into Nit.
+
+The two are separate classes rather than two branches in one: they share how a
+pass reaches the model, which is `Passes`, and nothing else. Adding a third way
+means adding a class, not editing the one that picks.
 """
 
 from __future__ import annotations
 
 import asyncio
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
-from .config import Config
 from .events import Event, EventSink
 from .gitdiff import DiffBundle
-from .models import SEVERITY_ORDER, Finding, ReviewRun, Severity, Usage, Verdict
+from .models import Finding, ReviewRun, Severity, Usage, Verdict
 from .prompts import Prompts
-from .runners import AgentRequest, ProgressHook, Runner
+from .runners import AgentOutcome, AgentRequest, Runner
 from .tools import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
 
 
-@dataclass
-class Judge:
-    """One judging stage of a run, in whichever mode the config asks for.
+class Judge(Protocol):
+    """What a run needs from its judging stage.
 
-    Everything it needs is handed over once: the passes differ in what they are
-    given to judge, not in how they reach the model.
+    `rule` fills in `run.verdicts`, `run.judge_summary` and any corrected
+    severity. It answers in the run rather than in a return value because a
+    verdict is only meaningful next to the finding it belongs to.
     """
 
-    cfg: Config
-    diff: DiffBundle
+    async def rule(self, run: ReviewRun) -> None: ...
+
+
+@dataclass(frozen=True)
+class JudgeSettings:
+    """The five values judging takes out of the config.
+
+    Named apart so a judging pass can be built and tested without a whole
+    `Config`, and so it is visible at a glance that the judge may run on a
+    different model, budget and reasoning mode than the reviewers.
+    """
+
+    mode: str
+    model: str
+    max_turns: int
+    enable_thinking: bool | None
+    concurrency: int
+
+
+@dataclass
+class Passes:
+    """How a judging pass reaches the model.
+
+    Every pass — batch, per finding, final — is the same request with different
+    contents, so the plumbing lives here once and the modes are left with what
+    they actually decide.
+    """
+
+    settings: JudgeSettings
     prompts: Prompts
+    diff: DiffBundle
     runner: Runner
     tools: list[dict[str, Any]]
     emit: EventSink
 
+    async def ask(
+        self,
+        *,
+        system: str,
+        prompt: str,
+        terminal_tool: dict[str, Any],
+        metadata: dict[str, Any],
+        label: str,
+    ) -> AgentOutcome:
+        request = AgentRequest(
+            system=system,
+            prompt=prompt,
+            tools=self.tools,
+            terminal_tool=terminal_tool,
+            model=self.settings.model,
+            max_turns=self.settings.max_turns,
+            enable_thinking=self.settings.enable_thinking,
+            metadata=metadata,
+        )
+        return await self.runner.run(request, self._progress(label))
+
+    def announce(self, message: str) -> None:
+        self.emit(Event("judge_start", message))
+
+    def failed(self, message: str) -> None:
+        self.emit(Event("error", message))
+
+    def _progress(self, label: str) -> Callable[[str, str], None]:
+        def progress(kind: str, detail: str) -> None:
+            self.emit(Event("item_progress", f"{label} {kind}: {detail}", item_id="__judge__"))
+
+        return progress
+
+
+def judge_for(passes: Passes) -> Judge:
+    """The judge the configured mode asks for."""
+    if passes.settings.mode == "two_stage":
+        return TwoStageJudge(passes)
+    return BatchJudge(passes)
+
+
+@dataclass
+class BatchJudge:
+    """One pass over the whole list."""
+
+    passes: Passes
+
     async def rule(self, run: ReviewRun) -> None:
-        """Fills in `run.verdicts`, `run.judge_summary` and any corrected severity."""
-        if self.cfg.run.judge_mode == "two_stage":
-            await self._two_stage(run)
-        else:
-            await self._batch(run)
+        self.passes.announce(f"The judge is checking {len(run.findings)} findings")
 
-        # The judge may have moved a finding up or down the scale, and the report
-        # order has to follow the corrected value rather than the claimed one.
-        run.findings.sort(
-            key=lambda f: (SEVERITY_ORDER[f.severity], -f.confidence, f.file, f.line or 0)
-        )
-        confirmed = len(run.confirmed())
-        self.emit(
-            Event(
-                "judge_done",
-                f"Confirmed {confirmed} of {len(run.findings)}",
-                data={"confirmed": confirmed, "total": len(run.findings)},
-            )
-        )
-
-    # ------------------------------------------------------------------ modes
-
-    async def _batch(self, run: ReviewRun) -> None:
-        self.emit(Event("judge_start", f"The judge is checking {len(run.findings)} findings"))
-
-        outcome = await self.runner.run(
-            self._request(
-                system=self.prompts.judge_system,
-                prompt=self.prompts.build_judge_prompt(run.findings, self.diff),
-                terminal_tool=SUBMIT_VERDICTS_TOOL,
-                metadata={"stage": "judge"},
-            ),
-            self._progress("judge"),
+        outcome = await self.passes.ask(
+            system=self.passes.prompts.judge_system,
+            prompt=self.passes.prompts.build_judge_prompt(run.findings, self.passes.diff),
+            terminal_tool=SUBMIT_VERDICTS_TOOL,
+            metadata={"stage": "judge"},
+            label="judge",
         )
         run.judge_usage = outcome.usage
 
@@ -92,7 +146,7 @@ class Judge:
             run.judge_summary = (
                 f"The judge failed: {outcome.error}. Findings are shown unfiltered."
             )
-            self.emit(Event("error", run.judge_summary))
+            self.passes.failed(run.judge_summary)
             return
 
         run.judge_summary, verdicts = _verdicts_from_payload(outcome.payload)
@@ -108,7 +162,14 @@ class Judge:
                 finding.severity = Severity(verdict.severity)
         run.verdicts = verdicts
 
-    async def _two_stage(self, run: ReviewRun) -> None:
+
+@dataclass
+class TwoStageJudge:
+    """A pass per finding, then one pass over what survived."""
+
+    passes: Passes
+
+    async def rule(self, run: ReviewRun) -> None:
         run.verdicts = await self._verify_each(run)
         # Only what the author would otherwise see. Findings already rejected stay
         # rejected: re-showing them invites the second pass to reinstate a claim
@@ -117,35 +178,32 @@ class Judge:
         prose = await self._rule_on_survivors(run, survivors) if survivors else ""
         run.judge_summary = _summary(run, prose)
 
-    # ----------------------------------------------------------------- passes
-
     async def _verify_each(self, run: ReviewRun) -> dict[str, Verdict]:
         """One pass per finding, each settling its own claim.
 
         Severity corrections land on the findings and usage on the run; the
         verdicts come back to the caller.
         """
-        self.emit(
-            Event(
-                "judge_start",
-                f"Stage 1 of 2: checking {len(run.findings)} findings, one pass each",
-            )
+        self.passes.announce(
+            f"Stage 1 of 2: checking {len(run.findings)} findings, one pass each"
         )
 
-        semaphore = asyncio.Semaphore(max(1, self.cfg.run.concurrency))
+        semaphore = asyncio.Semaphore(max(1, self.passes.settings.concurrency))
         verdicts: dict[str, Verdict] = {}
         corrections: dict[str, Severity] = {}
 
         async def judge_one(finding: Finding) -> Usage:
             others = [f for f in run.findings if f.id != finding.id]
-            request = self._request(
-                system=self.prompts.judge_one_system,
-                prompt=self.prompts.build_judge_one_prompt(finding, others, self.diff),
-                terminal_tool=SUBMIT_VERDICT_TOOL,
-                metadata={"stage": "judge", "finding_id": finding.id},
-            )
             async with semaphore:
-                outcome = await self.runner.run(request, self._progress(f"judge {finding.id}"))
+                outcome = await self.passes.ask(
+                    system=self.passes.prompts.judge_one_system,
+                    prompt=self.passes.prompts.build_judge_one_prompt(
+                        finding, others, self.passes.diff
+                    ),
+                    terminal_tool=SUBMIT_VERDICT_TOOL,
+                    metadata={"stage": "judge", "finding_id": finding.id},
+                    label=f"judge {finding.id}",
+                )
 
             if not outcome.ok or outcome.payload is None:
                 # One pass failing leaves its finding unjudged rather than
@@ -155,7 +213,7 @@ class Judge:
                     verdict="unreviewed",
                     reason=f"the judging pass failed: {outcome.error or 'no result'}",
                 )
-                self.emit(Event("error", f"Judging {finding.id} failed: {outcome.error}"))
+                self.passes.failed(f"Judging {finding.id} failed: {outcome.error}")
                 return outcome.usage
 
             verdict = _verdict_from_payload(outcome.payload, finding.id)
@@ -191,9 +249,7 @@ class Judge:
         Applies its verdicts and severities to the run and returns its assessment
         of the merge request, which the caller puts under the tally.
         """
-        self.emit(
-            Event("judge_start", f"Stage 2 of 2: ruling on {len(survivors)} verified findings")
-        )
+        self.passes.announce(f"Stage 2 of 2: ruling on {len(survivors)} verified findings")
 
         # What each finding's own pass reported checking. The second stage reads
         # it instead of repeating the search, and can see when a note settles
@@ -204,21 +260,21 @@ class Judge:
             if f.id in run.verdicts and run.verdicts[f.id].reason
         }
 
-        outcome = await self.runner.run(
-            self._request(
-                system=self.prompts.judge_final_system,
-                prompt=self.prompts.build_judge_final_prompt(survivors, notes, self.diff),
-                terminal_tool=SUBMIT_VERDICTS_TOOL,
-                metadata={"stage": "judge", "pass": "final"},
+        outcome = await self.passes.ask(
+            system=self.passes.prompts.judge_final_system,
+            prompt=self.passes.prompts.build_judge_final_prompt(
+                survivors, notes, self.passes.diff
             ),
-            self._progress("judge final"),
+            terminal_tool=SUBMIT_VERDICTS_TOOL,
+            metadata={"stage": "judge", "pass": "final"},
+            label="judge final",
         )
         run.judge_usage = run.judge_usage + outcome.usage
 
         if not outcome.ok or outcome.payload is None:
             # Verification already happened, so a failure here costs calibration,
             # not the verdicts. Say which of the two the report is missing.
-            self.emit(Event("error", f"The final judging pass failed: {outcome.error}"))
+            self.passes.failed(f"The final judging pass failed: {outcome.error}")
             return (
                 f"The pass that rules on the set as a whole failed ({outcome.error}), "
                 f"so severities are the ones each finding was given on its own."
@@ -230,35 +286,6 @@ class Judge:
             if final is not None:
                 _apply_ruling(run, finding, final)
         return summary
-
-    # ------------------------------------------------------------------ plumbing
-
-    def _request(
-        self,
-        *,
-        system: str,
-        prompt: str,
-        terminal_tool: dict[str, Any],
-        metadata: dict[str, Any],
-    ) -> AgentRequest:
-        """Every judging pass reaches the model the same way — judge model, judge
-        turn budget, judge reasoning mode — and differs only in what it is given."""
-        return AgentRequest(
-            system=system,
-            prompt=prompt,
-            tools=self.tools,
-            terminal_tool=terminal_tool,
-            model=self.cfg.provider.resolve_judge_model(),
-            max_turns=self.cfg.run.resolve_judge_max_turns(),
-            enable_thinking=self.cfg.provider.resolve_judge_enable_thinking(),
-            metadata=metadata,
-        )
-
-    def _progress(self, label: str) -> ProgressHook:
-        def progress(kind: str, detail: str) -> None:
-            self.emit(Event("item_progress", f"{label} {kind}: {detail}", item_id="__judge__"))
-
-        return progress
 
 
 def _apply_ruling(run: ReviewRun, finding: Finding, final: Verdict) -> None:

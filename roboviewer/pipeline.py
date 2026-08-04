@@ -17,7 +17,7 @@ from .checklist import ChecklistItem
 from .config import Config
 from .events import Event, EventSink, noop
 from .gitdiff import DiffBundle, in_scope
-from .judge import Judge
+from .judge import JudgeSettings, Passes, judge_for
 from .models import SEVERITY_ORDER, Finding, ItemResult, ReviewRun, Verdict
 from .prompts import Prompts
 from .runners import AgentRequest, Runner
@@ -253,14 +253,36 @@ class ReviewPipeline:
         return result
 
     async def _run_judge(self, run: ReviewRun) -> None:
-        await Judge(
-            cfg=self._cfg,
-            diff=self._diff,
+        passes = Passes(
+            settings=JudgeSettings(
+                mode=self._cfg.run.judge_mode,
+                model=self._cfg.provider.resolve_judge_model(),
+                max_turns=self._cfg.run.resolve_judge_max_turns(),
+                enable_thinking=self._cfg.provider.resolve_judge_enable_thinking(),
+                concurrency=self._cfg.run.concurrency,
+            ),
             prompts=self._prompts,
+            diff=self._diff,
             runner=self._runner,
             tools=self._tools,
             emit=self._emit,
-        ).rule(run)
+        )
+        await judge_for(passes).rule(run)
+
+        # Report order, applied after judging rather than inside it: the judge may
+        # have moved a finding up or down the scale, and which order the report
+        # wants is not something a judging mode should have an opinion about.
+        run.findings.sort(
+            key=lambda f: (SEVERITY_ORDER[f.severity], -f.confidence, f.file, f.line or 0)
+        )
+        confirmed = len(run.confirmed())
+        self._emit(
+            Event(
+                "judge_done",
+                f"Confirmed {confirmed} of {len(run.findings)}",
+                data={"confirmed": confirmed, "total": len(run.findings)},
+            )
+        )
 
 
 def output_dir_for(cfg: Config, root: Path, run_id: str) -> Path:
