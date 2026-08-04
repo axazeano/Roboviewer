@@ -253,51 +253,72 @@ async def _probe_all(
 
 
 def _report_tool_modes(modes: dict[str, ProbeResult]) -> int:
+    """Prints what each tool_choice mode did and the verdict that follows from
+    it; returns the exit code that verdict implies — 1 when the gateway cannot
+    run a review."""
+    _print_mode_table(modes)
+    print()
+
+    working = [key for key, _, _ in TOOL_MODES if modes[key].tool_calls]
+    if not working:
+        _explain_no_tool_calls(modes)
+        return 1
+    # The reviewer needs "auto" during the run and the terminal mode on the last turn.
+    if "auto" not in working:
+        _explain_auto_missing()
+        return 1
+
+    _recommend_terminal_choice(working)
+    return 0
+
+
+def _print_mode_table(modes: dict[str, ProbeResult]) -> None:
     width = max(len(label) for _, label, _ in TOOL_MODES)
     for key, label, _ in TOOL_MODES:
         result = modes[key]
         mark = "✓" if result.tool_calls else "✗"
         print(f"   {mark} {label:<{width}}  {result.summary()}")
 
-    working = [key for key, _, _ in TOOL_MODES if modes[key].tool_calls]
-    print()
 
-    if not working:
-        print("Verdict: the gateway returned no real tool_call at all.")
-        if any(modes[k].legacy_function_call for k in modes):
-            print("  A legacy function_call field arrived instead of tool_calls — the gateway")
-            print("  speaks the pre-June-2023 protocol. The reviewer will not understand it.")
-        elif any(modes[k].content_looks_like_call for k in modes):
-            print("  Instead of a call, text that looks like one arrived: the gateway does not")
-            print("  parse tool_call, it just retells it in words. The reviewer will try to pull")
-            print("  JSON out of the text, but it will not be reliable — findings will be lost.")
-        else:
-            print("  The model simply answered with text. Either it cannot do tool calling, or")
-            print("  the gateway drops the tools field from the request.")
-        print("  What to do: take a model that supports tool calling, or another gateway.")
-        return 1
+def _explain_no_tool_calls(modes: dict[str, ProbeResult]) -> None:
+    """Four ways to answer without calling a tool, and only the wording tells
+    them apart — which is the whole reason for probing before a run."""
+    print("Verdict: the gateway returned no real tool_call at all.")
+    if any(modes[k].legacy_function_call for k in modes):
+        print("  A legacy function_call field arrived instead of tool_calls — the gateway")
+        print("  speaks the pre-June-2023 protocol. The reviewer will not understand it.")
+    elif any(modes[k].content_looks_like_call for k in modes):
+        print("  Instead of a call, text that looks like one arrived: the gateway does not")
+        print("  parse tool_call, it just retells it in words. The reviewer will try to pull")
+        print("  JSON out of the text, but it will not be reliable — findings will be lost.")
+    else:
+        print("  The model simply answered with text. Either it cannot do tool calling, or")
+        print("  the gateway drops the tools field from the request.")
+    print("  What to do: take a model that supports tool calling, or another gateway.")
 
-    # The reviewer needs "auto" during the run and the terminal mode on the last turn.
-    if "auto" not in working:
-        print("Verdict: tool calling works, but not with tool_choice = \"auto\".")
-        print("  The reviewer runs on auto: it decides for itself whether to read files, and")
-        print("  forces a call only on the last turn. This gateway will not do.")
-        return 1
 
+def _explain_auto_missing() -> None:
+    print('Verdict: tool calling works, but not with tool_choice = "auto".')
+    print("  The reviewer runs on auto: it decides for itself whether to read files, and")
+    print("  forces a call only on the last turn. This gateway will not do.")
+
+
+def _recommend_terminal_choice(working: list[str]) -> None:
+    """The strongest mode the gateway actually supports, and what it costs when
+    that is not the default."""
     best = next(key for key in ("forced", "required", "auto") if key in working)
     print("Verdict: the gateway supports tool calling.")
     if best == "forced":
         print('  The default setting fits: terminal_tool_choice = "forced".')
-        return 0
+        return
 
     print('  But "forced" mode is not supported. Put this in the config:')
-    print('    [provider]')
+    print("    [provider]")
     print(f'    terminal_tool_choice = "{best}"')
     if best == "auto":
         print("  On auto the reviewer cannot make the agent submit its result on the last")
-        print("  turn — some items will fail with \"the model never called submit_findings\".")
+        print('  turn — some items will fail with "the model never called submit_findings".')
         print("  Raising max_turns helps.")
-    return 0
 
 
 def check_provider(provider: ProviderConfig) -> int:
