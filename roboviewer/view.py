@@ -11,6 +11,12 @@ over a state and the numbers, not a paragraph.
 
 User templates read these fields, so renaming one breaks them. That is why the
 model stays deliberately small.
+
+Two shapes here, and which one a class is says something. `FindingView` extends
+`Finding`: a finding means the same thing in a report as it does in the run, and
+the report only knows more about it. `ItemView` and `ReviewView` project instead
+— they answer questions (`findings_count`, `failed_items`) rather than carry
+fields, and their names are chosen for a template rather than for the pipeline.
 """
 
 from __future__ import annotations
@@ -19,7 +25,7 @@ import hashlib
 from collections import Counter
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .models import (
     SEVERITY_ORDER,
@@ -56,6 +62,11 @@ class CacheView(BaseModel):
 
 
 class RunMeta(BaseModel):
+    """Which run this was. Read off `ReviewRun` by name, so the two cannot
+    disagree about what a base sha is called."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     run_id: str
     repo_root: str
     branch: str
@@ -81,25 +92,32 @@ class RunStats(BaseModel):
     by_severity: list[SeverityCount] = Field(default_factory=list)
 
 
-class FindingView(BaseModel):
-    id: str
-    file: str
-    line: int | None
-    end_line: int | None
-    location: str
-    severity: Severity
-    category: str
-    confidence: float
-    title: str
-    rationale: str
-    suggestion: str | None
-    sources: list[str]
-    verdict: VerdictKind | None
+class FindingView(Finding):
+    """The finding plus what only the finished run knows about it.
+
+    Inherited rather than restated: every field a template reads off a finding —
+    file, line, severity, title — means the same thing here, and the copy that
+    used to declare them again went out of step with `Finding` field by field.
+    """
+
+    verdict: VerdictKind | None = None
     # Set only when the judge actually said something about this finding: an
     # `unreviewed` verdict carries no judgement and must not be shown as one.
-    verdict_reason: str | None
+    verdict_reason: str | None = None
     # Identity across runs, for consumers that track issues between pipelines
     fingerprint: str
+
+    @field_validator("title", "rationale")
+    @classmethod
+    def _trim(cls, value: str) -> str:
+        """Trailing whitespace in model prose is an accident, and every template
+        would otherwise have to guard against the blank line it produces."""
+        return value.strip()
+
+    @field_validator("suggestion")
+    @classmethod
+    def _blank_is_nothing(cls, value: str | None) -> str | None:
+        return _text(value)
 
 
 class ItemView(BaseModel):
@@ -190,18 +208,7 @@ def _finding(finding: Finding, run: ReviewRun, fingerprint: str) -> FindingView:
     if verdict is not None and verdict.verdict != "unreviewed":
         reason = _text(verdict.reason)
     return FindingView(
-        id=finding.id,
-        file=finding.file,
-        line=finding.line,
-        end_line=finding.end_line,
-        location=finding.location,
-        severity=finding.severity,
-        category=finding.category,
-        confidence=finding.confidence,
-        title=finding.title.strip(),
-        rationale=finding.rationale.strip(),
-        suggestion=_text(finding.suggestion),
-        sources=list(finding.sources),
+        **finding.model_dump(),
         verdict=verdict.verdict if verdict is not None else None,
         verdict_reason=reason,
         fingerprint=fingerprint,
@@ -233,17 +240,7 @@ def build_view(run: ReviewRun) -> ReviewView:
     items = [_item(i) for i in run.items]
 
     return ReviewView(
-        meta=RunMeta(
-            run_id=run.run_id,
-            repo_root=run.repo_root,
-            branch=run.branch,
-            target=run.target,
-            base_sha=run.base_sha,
-            head_sha=run.head_sha,
-            model=run.model,
-            started_at=run.started_at,
-            finished_at=run.finished_at,
-        ),
+        meta=RunMeta.model_validate(run),
         stats=RunStats(
             files_changed=len(run.files),
             added=sum(f.added for f in run.files),

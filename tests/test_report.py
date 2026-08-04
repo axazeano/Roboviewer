@@ -250,6 +250,24 @@ def test_view_hides_reason_of_unreviewed_finding() -> None:
     assert unreviewed.verdict_reason is None
 
 
+def test_a_finding_reaches_the_template_whole() -> None:
+    """FindingView extends Finding rather than restating it, and templates read
+    fields off either. A field that stopped coming through would be missing from
+    a report without anything failing."""
+    run = full_run()
+    view = build_view(run)
+
+    for finding in run.findings:
+        shown = next(f for f in view.findings + view.rejected if f.id == finding.id)
+        for name in Finding.model_fields:
+            expected = getattr(finding, name)
+            # Prose arrives trimmed; that is the one thing the view does to it
+            assert getattr(shown, name) == (
+                expected.strip() if isinstance(expected, str) else expected
+            ), name
+        assert shown.location == finding.location
+
+
 def test_view_tells_the_three_cache_states_apart() -> None:
     assert build_view(full_run()).cache.state is CacheState.HIT
     assert build_view(empty_run()).cache.state is CacheState.UNKNOWN
