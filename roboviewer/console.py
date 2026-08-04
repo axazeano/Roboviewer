@@ -16,9 +16,9 @@ from pathlib import Path
 from . import sources
 from .checklist import ChecklistItem
 from .config import Config, home_config_path, repo_config_path
+from .events import Event
 from .gitdiff import DiffBundle
 from .models import SEVERITY_LABEL, ReviewRun
-from .pipeline import Event
 from .prompts import PromptError, language_name
 
 

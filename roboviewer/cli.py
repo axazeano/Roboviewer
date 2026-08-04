@@ -112,12 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-judge", action="store_true", help="Skip the final judge pass")
     parser.add_argument(
         "--judge-mode",
-        choices=("batch", "per-finding", "two-stage"),
+        choices=("batch", "two-stage"),
         help=(
             "How findings get verified: 'batch' is one pass over the whole list, "
-            "'per-finding' spends a separate pass on each, 'two-stage' does that "
-            "and then rules on the survivors together. Without the flag, "
-            "whatever the config says"
+            "'two-stage' spends a separate pass on each finding and then rules on "
+            "the survivors together. Without the flag, whatever the config says"
         ),
     )
     parser.add_argument(
@@ -126,8 +125,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help=(
             "Turn budget for one judging pass. Without the flag it follows "
-            "max_turns — worth lowering with --judge-mode per-finding, where a "
-            "pass has a single claim to settle"
+            "max_turns — worth lowering with --judge-mode two-stage, where the "
+            "first stage gives each pass a single claim to settle"
         ),
     )
     parser.add_argument(

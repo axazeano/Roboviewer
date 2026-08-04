@@ -137,20 +137,17 @@ enforce_scope = true
 scope_margin = 5
 enable_judge = true
 # How findings get verified. Overridden by --judge-mode.
-#   "batch"       — one pass rules on the whole list. Cheap, and the judge sees
-#                   every finding at once, so it catches duplicates naturally.
-#   "per_finding" — a separate pass per finding. The turn budget goes to one
-#                   claim instead of being split across all of them, and a pass
-#                   that fails costs one verdict rather than every verdict.
-#                   Costs N passes; each is handed a one-line roster of the other
-#                   findings so `duplicate` still works.
-#   "two_stage"   — per_finding, then one pass over what survived it. Severity is
-#                   comparative and a pass holding one claim has no scale, so the
-#                   second pass calibrates the set, collapses repetition and
-#                   writes the verdict on the MR. Costs N + 1 passes.
+#   "batch"     — one pass rules on the whole list. Cheap, and the judge sees
+#                 every finding at once, so it catches duplicates naturally.
+#   "two_stage" — a separate pass per finding, then one pass over what survived.
+#                 Each claim gets a whole turn budget, and a pass that fails
+#                 costs one verdict rather than every verdict. Severity is
+#                 comparative and a pass holding one claim has no scale, so the
+#                 second pass calibrates the set, collapses repetition and writes
+#                 the verdict on the MR. Costs N + 1 passes.
 judge_mode = "batch"
 # Turn budget for one judging pass; 0 follows max_turns. Worth lowering in
-# per_finding and two_stage modes, where each pass has a single claim to settle.
+# two_stage mode, where the first stage gives each pass a single claim to settle.
 judge_max_turns = 0
 max_read_lines = 800
 

@@ -194,16 +194,14 @@ class RunConfig(BaseModel):
     scope_margin: int = 5
     enable_judge: bool = True
     # "batch" — one pass over the whole list, the cheap default.
-    # "per_finding" — one agent per finding, so the turn budget goes to a single
-    # claim instead of being split across all of them. Costs N passes and gives
-    # up the judge's cross-finding view; the roster of the other findings is
-    # handed to each pass so `duplicate` still works.
-    # "two_stage" — per_finding, then one pass over the survivors. Buys back the
-    # cross-finding view the split gives up: severity is comparative, and a pass
-    # holding one claim has no scale to judge it against.
-    judge_mode: Literal["batch", "per_finding", "two_stage"] = "batch"
+    # "two_stage" — a pass per finding, then one pass over what survived. The
+    # split gives each claim a whole turn budget and limits a failure to one
+    # verdict; the second pass buys back the cross-finding view it gives up,
+    # because severity is comparative and a pass holding one claim has no scale
+    # to judge it against.
+    judge_mode: Literal["batch", "two_stage"] = "batch"
     # Turn budget for one judging pass. 0 follows max_turns — worth lowering in
-    # per_finding mode, where each pass has one claim to settle.
+    # two_stage mode, where the first stage gives each pass one claim to settle.
     judge_max_turns: int = 0
     # Search the tree once, before the fan-out, for references the diff
     # introduces that resolve to nothing — missing symbols, storyboards,

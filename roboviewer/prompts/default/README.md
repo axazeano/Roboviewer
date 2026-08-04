@@ -27,7 +27,7 @@ items.
 ² Used when `run.judge_mode = "batch"`, the default: one pass rules on the whole
 list at once.
 
-³ Used when `run.judge_mode = "per_finding"` or `"two_stage"`: one pass per
+³ Used when `run.judge_mode = "two_stage"`, as its first stage: one pass per
 finding, each seeing a single claim. `{roster}` is a one-line-per-finding list of
 everything else in the run, so a `duplicate` verdict is still possible; it is
 assembled by the code and comes out empty when there is nothing else to list.

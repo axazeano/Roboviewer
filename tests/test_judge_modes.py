@@ -1,15 +1,18 @@
-"""Judging modes: one pass over the whole list, one pass per finding, or both.
+"""Judging modes: one pass over the whole list, or a pass per finding and then one.
 
-The per-finding mode exists because a single batch pass spreads its turn budget
-across every claim and confirms what merely reads as plausible. These tests pin
-the properties that make the split worth its N passes: the verdict lands on the
-finding the pass was actually given, one failure costs one verdict, and a
-`duplicate` verdict survives the loss of the batch judge's view of the list.
+The two-stage mode exists because a single batch pass spreads its turn budget
+across every claim and confirms what merely reads as plausible. Its first stage
+is what these tests mostly pin: the verdict lands on the finding the pass was
+actually given, one failure costs one verdict, and a `duplicate` verdict
+survives the loss of the batch judge's view of the list.
 
-The two-stage mode buys that view back with one more pass. Its tests pin what
-the second stage may and may not touch: it sees the survivors and their
-verification notes, it recalibrates severity, and it cannot resurrect a finding
-the verification already rejected.
+The second stage buys that view back. Its tests pin what it may and may not
+touch: it sees the survivors and their verification notes, it recalibrates
+severity, and it cannot resurrect a finding the verification already rejected.
+
+Where a test is about the first stage alone, the ruling is scripted to change
+nothing — the stage is not optional, so it has to be there and stay out of the
+way.
 """
 
 from __future__ import annotations
@@ -80,8 +83,16 @@ class VerdictRunner(Runner):
     def judging(self) -> list[AgentRequest]:
         return [r for r in self.requests if r.metadata.get("stage") == "judge"]
 
+    def verifications(self) -> list[AgentRequest]:
+        """The first stage only: one request per finding."""
+        return [r for r in self.requests if r.metadata.get("finding_id")]
+
     def final(self) -> AgentRequest | None:
         return next((r for r in self.requests if r.metadata.get("pass") == "final"), None)
+
+
+# A second stage that rules on nothing, for the tests that are about the first
+NO_RULING = AgentOutcome(payload={"summary": "", "verdicts": []}, usage=Usage(), turns=1)
 
 
 def _run(
@@ -90,7 +101,7 @@ def _run(
     findings: list[Finding],
     verdicts: dict[str, Any],
     *,
-    mode: str = "per_finding",
+    mode: str = "two_stage",
     final: AgentOutcome | None = None,
 ) -> tuple[Any, VerdictRunner]:
     config.run.enable_judge = True
@@ -98,10 +109,11 @@ def _run(
     runner = VerdictRunner(
         ok_outcome(findings=[f.model_dump(mode="json") for f in findings]),
         verdicts,
-        final,
+        final if final is not None else NO_RULING,
     )
     run = asyncio.run(ReviewPipeline(config, make_bundle(tmp_path), [ITEM], runner).execute())
     return run, runner
+
 
 
 def _ruling(summary: str, verdicts: list[dict[str, Any]]) -> AgentOutcome:
@@ -135,12 +147,12 @@ def test_one_pass_per_finding_each_seeing_only_its_own(tmp_path: Path, config) -
         },
     )
 
-    judging = runner.judging()
-    assert len(judging) == 2
-    assert all(r.terminal_tool is SUBMIT_VERDICT_TOOL for r in judging)
+    verifications = runner.verifications()
+    assert len(verifications) == 2
+    assert all(r.terminal_tool is SUBMIT_VERDICT_TOOL for r in verifications)
 
     # Each pass carries the claim it is meant to settle, and not the other one
-    by_id = {r.metadata["finding_id"]: r.prompt for r in judging}
+    by_id = {r.metadata["finding_id"]: r.prompt for r in verifications}
     assert "Off-by-one" in by_id["F001"] and "rationale for Off-by-one" in by_id["F001"]
     assert "rationale for Unclosed file" not in by_id["F001"]
 
@@ -180,7 +192,7 @@ def test_the_roster_lists_the_others_so_duplicates_stay_findable(tmp_path: Path,
         },
     )
 
-    by_id = {r.metadata["finding_id"]: r.prompt for r in runner.judging()}
+    by_id = {r.metadata["finding_id"]: r.prompt for r in runner.verifications()}
     assert "F002" in by_id["F001"] and "Unclosed file" in by_id["F001"]
     # The roster names the others; the finding under test is above it, in full
     assert "- F001" not in by_id["F001"]
@@ -191,7 +203,7 @@ def test_a_single_finding_gets_no_roster(tmp_path: Path, config) -> None:
         config, tmp_path, [_finding(42, "Off-by-one")],
         {"F001": {"verdict": "confirmed", "reason": "ok"}},
     )
-    assert "The other findings" not in runner.judging()[0].prompt
+    assert "The other findings" not in runner.verifications()[0].prompt
 
 
 # ------------------------------------------------------------------ resilience

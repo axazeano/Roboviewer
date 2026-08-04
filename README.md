@@ -155,16 +155,15 @@ agent that discards false positives and downgrades inflated severities. Rejectin
 a third of them is a normal outcome.
 
 By default that is one pass over the whole list, which is cheap and catches
-duplicates naturally. `judge_mode = "per_finding"` spends a separate pass on each
-finding instead: the turn budget goes to one claim rather than being split across
+duplicates naturally. `judge_mode = "two_stage"` spends a separate pass on each
+finding first: the turn budget goes to one claim rather than being split across
 all of them, a pass that dies costs one verdict instead of every verdict, and
-each pass still gets a one-line roster of the other findings so duplicates remain
-findable. It costs N passes — worth it when the judge is confirming claims that
-merely read as plausible.
+each pass gets a one-line roster of the other findings so duplicates remain
+findable.
 
-`judge_mode = "two_stage"` runs those passes and then hands what survived to a
-single judge. Verification and calibration are different jobs: a pass holding
-one claim can settle whether it is true, but severity is comparative and it has
+Those passes settle facts, not proportion — and the second stage is what makes
+them usable. Verification and calibration are different jobs: a pass holding one
+claim can settle whether it is true, but severity is comparative and it has
 nothing to compare against, so severities drift up and the same complaint
 confirmed once per file arrives five times. The second pass sees the survivors
 together — with the note each verification wrote, so it reads the check instead
@@ -293,10 +292,10 @@ bigger budget buys nothing. Measured on a 64-file MR: 15 → 25 turns left the
 same seven of eight agents cut off and cost 67% more tokens.
 
 Beyond that, `--model` swaps the model for a single run, `-j` changes how many
-items run concurrently, `--judge-mode per-finding` gives every finding its own
-verification pass (`two-stage` adds a judge over the survivors), and
-`--no-judge` skips verification entirely — useful when you are iterating on a
-prompt and want the raw output.
+items run concurrently, `--judge-mode two-stage` gives every finding its own
+verification pass and then a judge over the survivors, and `--no-judge` skips
+verification entirely — useful when you are iterating on a prompt and want the
+raw output.
 
 ## What it doesn't do
 
