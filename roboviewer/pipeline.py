@@ -159,6 +159,22 @@ class ReviewPipeline:
         self._tools = tool_schemas(diff.base_sha)
 
     async def execute(self) -> ReviewRun:
+        """The steps, in the order they run and with what each hands on."""
+        run = self._start_run()
+        if not self._diff.files:
+            return self._finish_run(run, "No changes relative to the target branch")
+
+        run.items = await self._review_every_item()
+        run.findings = merge_findings(run.items, self._cfg.run.min_confidence)
+        self._announce_merge(run.findings)
+        run.findings, run.out_of_scope = self._split_off_out_of_scope(run.findings)
+        await self._judge_findings(run)
+        return self._finish_run(run)
+
+    # ------------------------------------------------------------------ steps
+
+    def _start_run(self) -> ReviewRun:
+        """The record every step writes into, with a pending result per item."""
         run = ReviewRun(
             run_id=datetime.now().strftime("%Y%m%d-%H%M%S"),
             repo_root=str(self._diff.root),
@@ -171,7 +187,6 @@ class ReviewPipeline:
             files=self._diff.files,
             items=[ItemResult(item_id=i.id, item_title=i.title) for i in self._items],
         )
-
         self._emit(
             Event(
                 "run_start",
@@ -180,19 +195,21 @@ class ReviewPipeline:
                 data={"files": len(self._diff.files), "items": len(self._items)},
             )
         )
+        return run
 
-        if not self._diff.files:
-            run.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
-            self._emit(Event("run_done", "No changes relative to the target branch"))
-            return run
+    async def _review_every_item(self) -> list[ItemResult]:
+        """One agent per checklist item, `concurrency` of them at a time.
 
+        Comes back in checklist order rather than in the order the agents
+        finished — the report lists aspects the way the checklist does.
+        """
         semaphore = asyncio.Semaphore(max(1, self._cfg.run.concurrency))
-        slot_of = {item.id: index for index, item in enumerate(self._items)}
 
-        async def worker(item: ChecklistItem) -> None:
+        async def review(item: ChecklistItem) -> ItemResult:
+            # The event goes out before the slot is released, so an item is
+            # reported done before the next one is reported started.
             async with semaphore:
-                result = await self._run_item(item)
-                run.items[slot_of[item.id]] = result
+                result = await self._review_one_item(item)
                 self._emit(
                     Event(
                         "item_done",
@@ -201,46 +218,23 @@ class ReviewPipeline:
                         data={"result": result},
                     )
                 )
+            return result
 
-        await asyncio.gather(*(worker(item) for item in self._items))
+        return list(await asyncio.gather(*(review(item) for item in self._items)))
 
-        run.findings = merge_findings(run.items, self._cfg.run.min_confidence)
-        self._emit(
-            Event(
-                "merge_done",
-                f"After merge and deduplication: {len(run.findings)} findings",
-                data={"count": len(run.findings)},
-            )
-        )
+    def _split_off_out_of_scope(
+        self, findings: list[Finding]
+    ) -> tuple[list[Finding], list[Finding]]:
+        """(what this MR changed, what it did not) — and nothing split off when
+        the gate is switched off.
 
-        if self._cfg.run.enforce_scope:
-            run.findings, run.out_of_scope = self._split_by_scope(run.findings)
-            if run.out_of_scope:
-                self._emit(
-                    Event(
-                        "merge_done",
-                        f"{len(run.out_of_scope)} pointed outside the changed lines "
-                        f"and are listed separately",
-                        data={"count": len(run.out_of_scope)},
-                    )
-                )
+        Ids are reassigned so the report numbers what it shows. Judging runs on
+        the first list only: verifying a remark about code the MR never touched
+        costs a pass to earn a line the author has no reason to act on here.
+        """
+        if not self._cfg.run.enforce_scope:
+            return findings, []
 
-        if run.findings and self._cfg.run.enable_judge:
-            await self._run_judge(run)
-        else:
-            run.verdicts = {
-                f.id: Verdict(finding_id=f.id, verdict="unreviewed") for f in run.findings
-            }
-
-        run.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
-        self._emit(Event("run_done", "Review finished", data={"run": run}))
-        return run
-
-    def _split_by_scope(self, findings: list[Finding]) -> tuple[list[Finding], list[Finding]]:
-        """In-scope first, then the rest — ids are reassigned so the report
-        numbers what it shows. Judging runs on the first list only: verifying a
-        remark about code the MR never touched costs a pass to earn a line the
-        author has no reason to act on in this review."""
         margin = self._cfg.run.scope_margin
         keep: list[Finding] = []
         drop: list[Finding] = []
@@ -252,11 +246,75 @@ class ReviewPipeline:
             finding.id = f"F{index:03d}"
         for index, finding in enumerate(drop, start=1):
             finding.id = f"X{index:03d}"
+
+        if drop:
+            self._emit(
+                Event(
+                    "merge_done",
+                    f"{len(drop)} pointed outside the changed lines and are listed separately",
+                    data={"count": len(drop)},
+                )
+            )
         return keep, drop
 
-    # ------------------------------------------------------------------ stages
+    async def _judge_findings(self, run: ReviewRun) -> None:
+        """Fills in `run.verdicts`, and with a judge on, `run.judge_summary` and
+        any corrected severity. Nothing to judge and nobody to judge it both end
+        as `unreviewed`, which is what the report shows."""
+        if not (run.findings and self._cfg.run.enable_judge):
+            run.verdicts = {
+                f.id: Verdict(finding_id=f.id, verdict="unreviewed") for f in run.findings
+            }
+            return
 
-    async def _run_item(self, item: ChecklistItem) -> ItemResult:
+        passes = Passes(
+            settings=JudgeSettings(
+                mode=self._cfg.run.judge_mode,
+                model=self._cfg.provider.resolve_judge_model(),
+                max_turns=self._cfg.run.resolve_judge_max_turns(),
+                enable_thinking=self._cfg.provider.resolve_judge_enable_thinking(),
+                concurrency=self._cfg.run.concurrency,
+            ),
+            prompts=self._prompts,
+            diff=self._diff,
+            runner=self._runner,
+            tools=self._tools,
+            emit=self._emit,
+        )
+        await judge_for(passes).rule(run)
+
+        # Report order, applied after judging rather than inside it: the judge may
+        # have moved a finding up or down the scale, and which order the report
+        # wants is not something a judging mode should have an opinion about.
+        run.findings.sort(
+            key=lambda f: (SEVERITY_ORDER[f.severity], -f.confidence, f.file, f.line or 0)
+        )
+        confirmed = len(run.confirmed())
+        self._emit(
+            Event(
+                "judge_done",
+                f"Confirmed {confirmed} of {len(run.findings)}",
+                data={"confirmed": confirmed, "total": len(run.findings)},
+            )
+        )
+
+    def _finish_run(self, run: ReviewRun, message: str = "Review finished") -> ReviewRun:
+        run.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
+        self._emit(Event("run_done", message, data={"run": run}))
+        return run
+
+    def _announce_merge(self, findings: list[Finding]) -> None:
+        self._emit(
+            Event(
+                "merge_done",
+                f"After merge and deduplication: {len(findings)} findings",
+                data={"count": len(findings)},
+            )
+        )
+
+    # ------------------------------------------------------------------ one item
+
+    async def _review_one_item(self, item: ChecklistItem) -> ItemResult:
         self._emit(Event("item_start", f"Started: {item.title}", item_id=item.id))
         started = time.monotonic()
         result = ItemResult(item_id=item.id, item_title=item.title, status="running")
@@ -291,38 +349,6 @@ class ReviewPipeline:
         result.summary, result.findings = _findings_from_payload(outcome.payload, item.id)
         result.status = "truncated" if outcome.truncated else "ok"
         return result
-
-    async def _run_judge(self, run: ReviewRun) -> None:
-        passes = Passes(
-            settings=JudgeSettings(
-                mode=self._cfg.run.judge_mode,
-                model=self._cfg.provider.resolve_judge_model(),
-                max_turns=self._cfg.run.resolve_judge_max_turns(),
-                enable_thinking=self._cfg.provider.resolve_judge_enable_thinking(),
-                concurrency=self._cfg.run.concurrency,
-            ),
-            prompts=self._prompts,
-            diff=self._diff,
-            runner=self._runner,
-            tools=self._tools,
-            emit=self._emit,
-        )
-        await judge_for(passes).rule(run)
-
-        # Report order, applied after judging rather than inside it: the judge may
-        # have moved a finding up or down the scale, and which order the report
-        # wants is not something a judging mode should have an opinion about.
-        run.findings.sort(
-            key=lambda f: (SEVERITY_ORDER[f.severity], -f.confidence, f.file, f.line or 0)
-        )
-        confirmed = len(run.confirmed())
-        self._emit(
-            Event(
-                "judge_done",
-                f"Confirmed {confirmed} of {len(run.findings)}",
-                data={"confirmed": confirmed, "total": len(run.findings)},
-            )
-        )
 
 
 def output_dir_for(cfg: Config, root: Path, run_id: str) -> Path:
