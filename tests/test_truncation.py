@@ -75,12 +75,14 @@ def _drive(tmp_path: Path, script: list, max_turns: int, seen: list | None = Non
     runner = _runner(tmp_path)
     remaining = list(script)
 
-    async def fake_complete(**kw):
+    # Patched at the request boundary rather than above it, so the loop under
+    # test still assembles the body it would really have sent.
+    async def fake_send(kwargs, emit):
         if seen is not None:
-            seen.append([dict(m) for m in kw["messages"]])
+            seen.append([dict(m) for m in kwargs["messages"]])
         return remaining.pop(0)
 
-    runner._complete = fake_complete  # type: ignore[method-assign]
+    runner._send = fake_send  # type: ignore[method-assign]
     return asyncio.run(runner.run(_request(max_turns)))
 
 

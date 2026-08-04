@@ -21,6 +21,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -79,17 +81,14 @@ class OpenAIAgentRunner(Runner):
 
     # ------------------------------------------------------------------ public
 
-    async def run(self, request: AgentRequest, on_progress: ProgressHook | None = None) -> AgentOutcome:
+    async def run(
+        self, request: AgentRequest, on_progress: ProgressHook | None = None
+    ) -> AgentOutcome:
         def emit(kind: str, detail: str) -> None:
             if on_progress:
                 on_progress(kind, detail)
 
-        budget = BUDGET_NOTE.format(max_turns=request.max_turns, terminal=request.terminal_name)
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": request.system + budget},
-            {"role": "user", "content": request.prompt},
-        ]
-        all_tools = [*request.tools, request.terminal_tool]
+        transcript = _Transcript.open(request)
         usage = Usage()
         turns = 0
 
@@ -97,21 +96,15 @@ class OpenAIAgentRunner(Runner):
             turns = turn
             last_turn = turn == request.max_turns
             try:
+                # On the last turn leave no choice: submit the result
                 completion = await self._complete(
-                    model=request.model,
-                    messages=messages,
-                    tools=all_tools,
-                    # On the last turn leave no choice: submit the result
-                    force_tool=request.terminal_name if last_turn else None,
-                    enable_thinking=request.enable_thinking,
-                    emit=emit,
+                    request, transcript, force_terminal=last_turn, emit=emit
                 )
             except Exception as exc:  # noqa: BLE001 — surfaced upward as the item status
                 return AgentOutcome(payload=None, usage=usage, turns=turns, error=_describe(exc))
 
             usage = usage + _extract_usage(completion)
-            choice = completion.choices[0]
-            message = choice.message
+            message = completion.choices[0].message
             tool_calls = list(message.tool_calls or [])
 
             if not tool_calls:
@@ -126,70 +119,26 @@ class OpenAIAgentRunner(Runner):
                         payload=None,
                         usage=usage,
                         turns=turns,
-                        error=f"the model never called {request.terminal_name} in {request.max_turns} turns",
-                    )
-                messages.append({"role": "assistant", "content": message.content or ""})
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Keep going. {request.max_turns - turn} turn(s) left, and "
-                            f"you must call the {request.terminal_name} tool before they run out."
+                        error=(
+                            f"the model never called {request.terminal_name} "
+                            f"in {request.max_turns} turns"
                         ),
-                    }
+                    )
+                transcript.add_reply(message.content)
+                transcript.say(
+                    f"Keep going. {request.max_turns - turn} turn(s) left, and "
+                    f"you must call the {request.terminal_name} tool before they run out."
                 )
                 continue
 
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": message.content or None,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"},
-                        }
-                        for tc in tool_calls
-                    ],
-                }
-            )
-
-            for call in tool_calls:
-                fn_name = call.function.name
-                args = parse_arguments(call.function.arguments or "")
-
-                if fn_name == request.terminal_name:
-                    # On the last turn tool_choice left the model no other move,
-                    # so this submission is the limit talking, not the agent.
-                    emit("submit", f"turn {turn}" + (" (forced by the turn limit)" if last_turn else ""))
-                    return AgentOutcome(
-                        payload=args, usage=usage, turns=turns, truncated=last_turn
-                    )
-
-                emit("tool", f"{fn_name}({_short_args(args)})")
-                output = await asyncio.to_thread(
-                    dispatch,
-                    self._root,
-                    fn_name,
-                    args,
-                    base_ref=self._base_ref,
-                    head_ref=self._head_ref,
-                    max_read_lines=self._run_cfg.max_read_lines,
+            transcript.add_reply(message.content, tool_calls)
+            submitted = await self._answer_calls(tool_calls, request, transcript, turn, emit)
+            if submitted is not None:
+                return AgentOutcome(
+                    payload=submitted, usage=usage, turns=turns, truncated=last_turn
                 )
-                messages.append({"role": "tool", "tool_call_id": call.id, "content": output})
 
-            # Said after the tool results, so it is the last thing the agent reads
-            # before deciding what to do with the turn it has left.
-            left = request.max_turns - turn
-            if 0 < left <= WRAP_UP_MARGIN:
-                emit("wrap-up", f"{left} turn(s) left")
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": WRAP_UP_NOTE.format(left=left, terminal=request.terminal_name),
-                    }
-                )
+            _wrap_up(request, transcript, turn, emit)
 
         return AgentOutcome(
             payload=None, usage=usage, turns=turns, error="turn limit exhausted"
@@ -197,33 +146,76 @@ class OpenAIAgentRunner(Runner):
 
     # ----------------------------------------------------------------- private
 
+    async def _answer_calls(
+        self,
+        tool_calls: list[Any],
+        request: AgentRequest,
+        transcript: _Transcript,
+        turn: int,
+        emit: ProgressHook,
+    ) -> dict[str, Any] | None:
+        """Runs the tools the model asked for, and returns the submitted payload
+        as soon as one of the calls is the terminal one — the review is over at
+        that point, and any call after it in the same reply is moot."""
+        last_turn = turn == request.max_turns
+        for call in tool_calls:
+            fn_name = call.function.name
+            args = parse_arguments(call.function.arguments or "")
+
+            if fn_name == request.terminal_name:
+                # On the last turn tool_choice left the model no other move,
+                # so this submission is the limit talking, not the agent.
+                forced = " (forced by the turn limit)" if last_turn else ""
+                emit("submit", f"turn {turn}{forced}")
+                return args
+
+            emit("tool", f"{fn_name}({_short_args(args)})")
+            output = await asyncio.to_thread(
+                dispatch,
+                self._root,
+                fn_name,
+                args,
+                base_ref=self._base_ref,
+                head_ref=self._head_ref,
+                max_read_lines=self._run_cfg.max_read_lines,
+            )
+            transcript.add_tool_result(call.id, output)
+        return None
+
     async def _complete(
         self,
+        request: AgentRequest,
+        transcript: _Transcript,
         *,
-        model: str,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]],
-        force_tool: str | None,
-        enable_thinking: bool | None,
-        emit: Any,
+        force_terminal: bool,
+        emit: ProgressHook,
     ) -> Any:
+        return await self._send(self._body(request, transcript, force_terminal), emit)
+
+    def _body(
+        self, request: AgentRequest, transcript: _Transcript, force_terminal: bool
+    ) -> dict[str, Any]:
+        """One request, in the shape this provider was configured to want."""
         kwargs: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "tools": tools,
+            "model": request.model,
+            "messages": transcript.messages,
+            "tools": [*request.tools, request.terminal_tool],
             "temperature": self._provider.temperature,
             "max_tokens": self._provider.max_tokens,
             "extra_headers": self._headers,
         }
-        if body := self._provider.request_body(enable_thinking):
+        if body := self._provider.request_body(request.enable_thinking):
             kwargs["extra_body"] = body
-        if force_tool:
-            kwargs["tool_choice"] = self._provider.terminal_tool_choice_value(force_tool)
+        if force_terminal:
+            kwargs["tool_choice"] = self._provider.terminal_tool_choice_value(request.terminal_name)
         else:
             kwargs["tool_choice"] = "auto"
         if not self._provider.parallel_tool_calls:
             kwargs["parallel_tool_calls"] = False
+        return kwargs
 
+    async def _send(self, kwargs: dict[str, Any], emit: ProgressHook) -> Any:
+        """Retries what is worth retrying, with the delay doubling each time."""
         delay = 2.0
         last_exc: Exception | None = None
         for attempt in range(1, self._provider.max_retries + 1):
@@ -231,7 +223,10 @@ class OpenAIAgentRunner(Runner):
                 return await self._client.chat.completions.create(**kwargs)
             except (RateLimitError, APITimeoutError) as exc:
                 last_exc = exc
-                emit("retry", f"attempt {attempt}/{self._provider.max_retries}: {type(exc).__name__}")
+                emit(
+                    "retry",
+                    f"attempt {attempt}/{self._provider.max_retries}: {type(exc).__name__}",
+                )
             except APIError as exc:
                 status = getattr(exc, "status_code", None)
                 # 4xx other than 429 is our own fault; retrying will not help
@@ -246,6 +241,66 @@ class OpenAIAgentRunner(Runner):
 
         assert last_exc is not None
         raise last_exc
+
+
+@dataclass
+class _Transcript:
+    """The conversation as the API wants to see it.
+
+    Assembling these dicts by hand at five points of a turn was most of what
+    made the loop hard to read; the shapes live here and the loop is left with
+    what it decides.
+    """
+
+    messages: list[dict[str, Any]]
+
+    @classmethod
+    def open(cls, request: AgentRequest) -> _Transcript:
+        budget = BUDGET_NOTE.format(max_turns=request.max_turns, terminal=request.terminal_name)
+        return cls(
+            [
+                {"role": "system", "content": request.system + budget},
+                {"role": "user", "content": request.prompt},
+            ]
+        )
+
+    def add_reply(self, content: str | None, tool_calls: Sequence[Any] = ()) -> None:
+        if not tool_calls:
+            self.messages.append({"role": "assistant", "content": content or ""})
+            return
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content": content or None,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments or "{}",
+                        },
+                    }
+                    for tc in tool_calls
+                ],
+            }
+        )
+
+    def add_tool_result(self, call_id: str, output: str) -> None:
+        self.messages.append({"role": "tool", "tool_call_id": call_id, "content": output})
+
+    def say(self, text: str) -> None:
+        """A user-role note between turns: the nudge and the wrap-up warning."""
+        self.messages.append({"role": "user", "content": text})
+
+
+def _wrap_up(request: AgentRequest, transcript: _Transcript, turn: int, emit: ProgressHook) -> None:
+    """Said after the tool results, so it is the last thing the agent reads
+    before deciding what to do with the turn it has left."""
+    left = request.max_turns - turn
+    if 0 < left <= WRAP_UP_MARGIN:
+        emit("wrap-up", f"{left} turn(s) left")
+        transcript.say(WRAP_UP_NOTE.format(left=left, terminal=request.terminal_name))
 
 
 def _describe(exc: Exception) -> str:
