@@ -320,25 +320,40 @@ def _declared_anywhere(root: Path, head: str, names: list[str]) -> set[str]:
 def _resource_misses(
     root: Path, head: str, added: dict[str, list[str]]
 ) -> list[tuple[str, str, str, str]]:
-    misses: list[tuple[str, str, str, str]] = []
-    seen: set[tuple[str, str]] = set()
+    """Every reference a rule can decide, that turns out to point at nothing."""
     tree = _tree(root, head)
+    return [
+        (rule.name, rule.question, value, path)
+        for rule, value, path in _rule_matches(added)
+        if not _resolves(root, head, rule, value, tree)
+    ]
 
+
+def _rule_matches(added: dict[str, list[str]]) -> Iterator[tuple[ResourceRule, str, str]]:
+    """What each rule finds on the added lines, first occurrence only.
+
+    The same storyboard named in ten files is one question, and answering it
+    costs a search of the tree — so a value is yielded once per rule, carrying
+    the file that introduced it first.
+    """
+    seen: set[tuple[str, str]] = set()
     for rule in RESOURCE_RULES:
         for path, lines in added.items():
-            suffix = Path(path).suffix
-            if suffix in GENERATED_SUFFIX and suffix not in rule.sources:
+            if _off_limits(rule, path):
                 continue
             for line in lines:
                 for value in rule.pattern.findall(line):
-                    key = (rule.name, value)
-                    if key in seen:
+                    if (rule.name, value) in seen:
                         continue
-                    seen.add(key)
-                    if _resolves(root, head, rule, value, tree):
-                        continue
-                    misses.append((rule.name, rule.question, value, path))
-    return misses
+                    seen.add((rule.name, value))
+                    yield rule, value, path
+
+
+def _off_limits(rule: ResourceRule, path: str) -> bool:
+    """A generated file is mined only by a rule that asked for it — a storyboard
+    naming another storyboard is the case that needs it."""
+    suffix = Path(path).suffix
+    return suffix in GENERATED_SUFFIX and suffix not in rule.sources
 
 
 def _resolves(root: Path, head: str, rule: ResourceRule, value: str, tree: list[str]) -> bool:
