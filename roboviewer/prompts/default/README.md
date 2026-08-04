@@ -1,6 +1,6 @@
 # Prompts
 
-The four files in this directory are the texts that go to the model verbatim.
+The files in this directory are the texts that go to the model verbatim.
 Edit them freely; the placeholders in curly braces are substituted by the code.
 Literal braces in the text must be doubled: `{{` and `}}`.
 
@@ -13,12 +13,30 @@ to the model.
 |---|---|---|
 | `item_system.md` | system prompt of the reviewer agent¹ | — |
 | `item_user.md` | task for the reviewer agent | `{context}` `{item_title}` `{item_body}` |
-| `judge_system.md` | system prompt of the judge | — |
-| `judge_user.md` | task for the judge | `{context}` `{count}` `{findings}` |
+| `judge_system.md` | system prompt of the judge² | — |
+| `judge_user.md` | task for the judge² | `{context}` `{count}` `{findings}` |
+| `judge_one_system.md` | system prompt of a per-finding judge³ | — |
+| `judge_one_user.md` | task for a per-finding judge³ | `{context}` `{finding}` `{roster}` |
+| `judge_final_system.md` | system prompt of the second-stage judge⁴ | — |
+| `judge_final_user.md` | task for the second-stage judge⁴ | `{context}` `{count}` `{findings}` |
 
 ¹ A checklist set can replace the reviewer's system prompt with its own
 `_system.md` in the set's directory — then `item_system.md` is not used for its
 items.
+
+² Used when `run.judge_mode = "batch"`, the default: one pass rules on the whole
+list at once.
+
+³ Used when `run.judge_mode = "per_finding"` or `"two_stage"`: one pass per
+finding, each seeing a single claim. `{roster}` is a one-line-per-finding list of
+everything else in the run, so a `duplicate` verdict is still possible; it is
+assembled by the code and comes out empty when there is nothing else to list.
+
+⁴ Used when `run.judge_mode = "two_stage"`, for the pass that follows those:
+`{findings}` holds only the findings that survived verification, each carrying a
+`Verified` line with what its own pass reported checking. This one rules on the
+set — severity relative to the others, duplicates, the verdict on the MR — so it
+is the text to edit when severities come out miscalibrated.
 
 The `{context}` block — the MR header, the list of changed files, the files
 themselves with markup, and the legend for it — is assembled by the code

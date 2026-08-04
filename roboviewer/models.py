@@ -151,6 +151,10 @@ class ReviewRun(BaseModel):
     files: list[DiffStat] = Field(default_factory=list)
     items: list[ItemResult] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
+    # Findings that pointed away from what the MR changed. Kept out of the report
+    # proper and out of the judging, but written down: a dropped finding the
+    # author cannot see is indistinguishable from one that was never made.
+    out_of_scope: list[Finding] = Field(default_factory=list)
     verdicts: dict[str, Verdict] = Field(default_factory=dict)
     judge_summary: str = ""
     judge_usage: Usage = Field(default_factory=Usage)

@@ -57,7 +57,25 @@ def _relative(root: Path, path: str) -> str:
     return _safe_path(root, path).relative_to(root.resolve()).as_posix()
 
 
-def read_file(root: Path, path: str, start_line: int | None = None, end_line: int | None = None,
+def _line_number(value: Any) -> int | None:
+    """A line number as the model actually sends it.
+
+    JSON arguments come back as whatever the model felt like emitting — `264`,
+    `"264"`, `264.0`, `""` — and arithmetic on a string is a TypeError deep
+    inside a tool call. Anything unusable becomes None, which every caller
+    already treats as "not given".
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        # Through float, so `264.0` and `"264.0"` land on the same line as `264`
+        number = int(float(str(value).strip()))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if number > 0 else None
+
+
+def read_file(root: Path, path: str, start_line: Any = None, end_line: Any = None,
               max_lines: int = 800, ref: str = "HEAD") -> str:
     target = _safe_path(root, path)
     if target.suffix.lower() in _TEXT_SUFFIX_BLOCKLIST:
@@ -71,8 +89,9 @@ def read_file(root: Path, path: str, start_line: int | None = None, end_line: in
         raise ToolError(f"Binary file, reading is not supported: {path}")
 
     lines = content.splitlines()
-    start = max(1, start_line or 1)
-    end = min(len(lines), end_line or start + max_lines - 1)
+    first, last = _line_number(start_line), _line_number(end_line)
+    start = first or 1
+    end = min(len(lines), last or start + max_lines - 1)
     if end - start + 1 > max_lines:
         end = start + max_lines - 1
 
@@ -291,6 +310,37 @@ SUBMIT_VERDICTS_TOOL: dict[str, Any] = {
 }
 
 
+SUBMIT_VERDICT_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "submit_verdict",
+        "description": "Finish judging and return the verdict on the one finding you were given.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "verdict": {
+                    "type": "string",
+                    "enum": ["confirmed", "false_positive", "nitpick", "duplicate"],
+                },
+                "severity": {
+                    "type": "string",
+                    "enum": ["blocker", "major", "minor", "nit"],
+                    "description": "Corrected severity, when the original one is wrong",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": (
+                        "One or two sentences: what you checked and what it showed. "
+                        "Name the file and line you verified against."
+                    ),
+                },
+            },
+            "required": ["verdict", "reason"],
+        },
+    },
+}
+
+
 def dispatch(root: Path, name: str, args: dict[str, Any], *, base_ref: str, head_ref: str,
              max_read_lines: int) -> str:
     """Run a tool. Errors go back to the agent as text so it can correct itself."""
@@ -315,6 +365,13 @@ def dispatch(root: Path, name: str, args: dict[str, Any], *, base_ref: str, head
         return f"ERROR: required parameter missing: {exc}"
     except (ToolError, subprocess.SubprocessError, OSError) as exc:
         return f"ERROR: {exc}"
+    except Exception as exc:  # noqa: BLE001
+        # The arguments are model output, so the shapes they arrive in are not
+        # ours to enumerate. A tool call that blows up in an unforeseen way is
+        # one wasted turn for one agent; letting it out of here takes down the
+        # whole review, which is how a run of eight agents died on a `start_line`
+        # that arrived as a string.
+        return f"ERROR: the call failed ({type(exc).__name__}: {exc})"
 
 
 def parse_arguments(raw: str) -> dict[str, Any]:

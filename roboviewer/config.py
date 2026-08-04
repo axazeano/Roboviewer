@@ -182,9 +182,40 @@ class RunConfig(BaseModel):
     exclude_globs: list[str] = Field(default_factory=lambda: list(DEFAULT_EXCLUDES))
     # Drop findings below this confidence before the judge even sees them.
     min_confidence: float = 0.0
+    # Keep only findings that point at what the MR changed. Reviewers are given
+    # changed files in full — which is what stops them inventing missing handling
+    # that sits twenty lines above — and the cost of that is a standing
+    # temptation to report the untouched 98% of the file. Line arithmetic, so it
+    # holds for any language. What it drops is listed in the report, not lost.
+    enforce_scope: bool = True
+    # How far from a changed line a finding may sit and still count as being
+    # about the change. Covers the declaration a few lines above an edit and the
+    # neighbour of a deleted block. Raising it lets more pre-existing code back in.
+    scope_margin: int = 5
     enable_judge: bool = True
+    # "batch" — one pass over the whole list, the cheap default.
+    # "per_finding" — one agent per finding, so the turn budget goes to a single
+    # claim instead of being split across all of them. Costs N passes and gives
+    # up the judge's cross-finding view; the roster of the other findings is
+    # handed to each pass so `duplicate` still works.
+    # "two_stage" — per_finding, then one pass over the survivors. Buys back the
+    # cross-finding view the split gives up: severity is comparative, and a pass
+    # holding one claim has no scale to judge it against.
+    judge_mode: Literal["batch", "per_finding", "two_stage"] = "batch"
+    # Turn budget for one judging pass. 0 follows max_turns — worth lowering in
+    # per_finding mode, where each pass has one claim to settle.
+    judge_max_turns: int = 0
+    # Search the tree once, before the fan-out, for references the diff
+    # introduces that resolve to nothing — missing symbols, storyboards,
+    # localization keys, unconnected outlets, files no build manifest mentions.
+    # The result goes into the shared context, so it costs one prefix rather
+    # than one lookup per agent. It reads the files `exclude_globs` drops.
+    resolve_references: bool = True
     # Maximum lines returned by a single read_file call.
     max_read_lines: int = 800
+
+    def resolve_judge_max_turns(self) -> int:
+        return self.judge_max_turns or self.max_turns
 
 
 class Config(BaseModel):

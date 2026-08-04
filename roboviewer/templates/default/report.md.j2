@@ -41,6 +41,20 @@ No findings.
 {{ parts.finding(finding) }}
 {% endfor %}
 {% endif %}
+{% if out_of_scope %}
+<details>
+<summary>Outside the changed lines ({{ out_of_scope | length }})</summary>
+
+Reported against code this merge request did not touch, so they were not
+verified and are not counted above. They may still be true.
+
+{% for finding in out_of_scope %}
+- `{{ finding.location }}` {{ finding.title }}
+{% endfor %}
+
+</details>
+
+{% endif %}
 {% if rejected %}
 <details>
 <summary>Rejected by the judge ({{ rejected | length }})</summary>

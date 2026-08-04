@@ -48,6 +48,19 @@ the prefix differs every time, or caching is off on the provider's side.</dd>
 {% endfor %}
 {% endif %}
 
+{% if out_of_scope %}
+<details>
+<summary>Outside the changed lines ({{ out_of_scope | length }})</summary>
+<p>Reported against code this merge request did not touch, so they were not
+verified and are not counted above. They may still be true.</p>
+<ul>
+{% for finding in out_of_scope %}
+<li><code>{{ finding.location }}</code> {{ finding.title }}</li>
+{% endfor %}
+</ul>
+</details>
+{% endif %}
+
 {% if rejected %}
 <details>
 <summary>Rejected by the judge ({{ rejected | length }})</summary>

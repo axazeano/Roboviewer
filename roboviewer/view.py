@@ -124,6 +124,10 @@ class ReviewView(BaseModel):
     judge_summary: str
     findings: list[FindingView]
     rejected: list[FindingView]
+    # Pointed away from what the MR changed, so never judged. Shown apart from
+    # the findings and left out of every count: they may well be true, and they
+    # are still not this review's business.
+    out_of_scope: list[FindingView]
     items: list[ItemView]
     failed_items: list[ItemView]
     # Items the turn limit cut off. Their findings are in `findings`, but the
@@ -221,9 +225,10 @@ def _item(item: ItemResult) -> ItemView:
 
 def build_view(run: ReviewRun) -> ReviewView:
     # Over all findings at once: uniqueness has to hold across the report
-    prints = _fingerprints(run.findings)
+    prints = _fingerprints(run.findings + run.out_of_scope)
     confirmed = [_finding(f, run, prints[f.id]) for f in run.confirmed()]
     rejected = [_finding(f, run, prints[f.id]) for f in run.rejected()]
+    out_of_scope = [_finding(f, run, prints[f.id]) for f in run.out_of_scope]
     counts = Counter(f.severity for f in confirmed)
     items = [_item(i) for i in run.items]
 
@@ -253,6 +258,7 @@ def build_view(run: ReviewRun) -> ReviewView:
         judge_summary=run.judge_summary.strip(),
         findings=confirmed,
         rejected=rejected,
+        out_of_scope=out_of_scope,
         items=items,
         failed_items=[i for i in items if i.status == "failed"],
         truncated_items=[i for i in items if i.status == "truncated"],

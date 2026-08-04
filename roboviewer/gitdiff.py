@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .models import DiffStat
+from .resolve import ReferenceReport
+from .resolve import check as resolve_check
 
 
 class GitError(RuntimeError):
@@ -223,6 +225,38 @@ def change_map(root: Path, base: str, source: str, files: list[str]) -> dict[str
     return result
 
 
+def normalise_path(path: str) -> str:
+    return path.strip().lstrip("./")
+
+
+def in_scope(
+    changes: dict[str, FileChanges], file: str, line: int | None, margin: int
+) -> bool:
+    """Does a finding point at what this MR did?
+
+    Line arithmetic over the same map that marked up the files the agent read,
+    so the gate and the prompt cannot disagree about what "changed" means. It
+    knows nothing about languages: a changed line is a changed line in Swift, Go
+    and YAML alike.
+
+    A removal is an anchor too — deleting a method from a protocol is a change,
+    and the only line left to point at is the neighbour that survived. Hence the
+    margin, which is also what covers a finding that names the declaration a few
+    lines above the edit. It is a heuristic and the report keeps what it drops.
+    """
+    if not changes:
+        return True  # no map, no gate — never silently drop everything
+
+    entry = changes.get(normalise_path(file))
+    if entry is None:
+        return False  # a file this MR never touched
+    if line is None:
+        return True  # about the file as a whole, which the MR did touch
+
+    anchors = entry.added | set(entry.removed_before)
+    return any(abs(line - anchor) <= margin for anchor in anchors)
+
+
 def looks_binary(text: str) -> bool:
     return "\x00" in text[:4000]
 
@@ -251,6 +285,7 @@ def build_annotated(
     source: str,
     files: list[DiffStat],
     *,
+    changes: dict[str, FileChanges],
     max_lines: int,
     max_total_chars: int,
 ) -> tuple[str, list[str], list[str]]:
@@ -260,7 +295,6 @@ def build_annotated(
     The budget is handed out starting from the most heavily changed files: if it
     cannot cover everything, the ones with more edits should be the ones inlined.
     """
-    changes = change_map(root, base, source, [f.file for f in files])
     rendered: dict[str, str] = {}
     fallback: list[str] = []
     budget = max_total_chars
@@ -309,6 +343,14 @@ class DiffBundle:
     fallback: list[str]
     text: str
     truncated: bool
+    # Which lines of each changed file the MR touched — the same map the markup
+    # above was rendered from, reused to tell a finding about the change from a
+    # finding about the code that happened to be nearby. Empty disables that.
+    changes: dict[str, FileChanges] = field(default_factory=dict)
+    # What the diff introduces that resolves to nothing. Computed once, before
+    # the fan-out, so every agent shares it and the prompt prefix stays
+    # identical — see resolve.py. None when the pass is switched off.
+    references: "ReferenceReport | None" = None
 
     @property
     def file_list(self) -> list[str]:
@@ -335,6 +377,7 @@ def collect(
     excludes: list[str],
     inline_max_lines: int = 600,
     inline_max_total_chars: int = 400_000,
+    resolve_references: bool = True,
 ) -> DiffBundle:
     """Collects the review context for a pair of branches.
 
@@ -359,8 +402,9 @@ def collect(
 
     base = merge_base(root, resolved_target, resolved_source)
     files = changed_files(root, base, resolved_source, excludes)
+    changes = change_map(root, base, resolved_source, [f.file for f in files])
     annotated, inlined, fallback = build_annotated(
-        root, base, resolved_source, files,
+        root, base, resolved_source, files, changes=changes,
         max_lines=inline_max_lines, max_total_chars=inline_max_total_chars,
     )
     # Hunks are only needed for what was not inlined in full
@@ -379,4 +423,8 @@ def collect(
         fallback=fallback,
         text=text,
         truncated=truncated,
+        changes=changes,
+        # Deliberately not filtered by `excludes`: the storyboards and manifests
+        # dropped from the context are exactly what has to be searched here.
+        references=resolve_check(root, base, resolved_source) if resolve_references else None,
     )

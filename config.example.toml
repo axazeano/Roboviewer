@@ -113,7 +113,45 @@ inline_max_total_chars = 400000
 diff_context_lines = 12
 diff_max_chars = 300000
 min_confidence = 0.0
+# Before the review starts, search the tree once for references this diff
+# introduces that resolve to nothing: symbols with no declaration, storyboards
+# named but never added, localization keys with no entry, outlets no nib
+# connects, source files no build manifest mentions. The result goes into the
+# shared context, so it costs one prefix instead of a lookup per agent.
+#
+# It reads the files exclude_globs drops — a 539 KB pbxproj is the wrong thing
+# to show a model and the right thing to search. Resource rules are Xcode/Swift
+# specific and live in roboviewer/resolve.py; the symbol census is not.
+resolve_references = true
+# Keep only findings that point at what this MR changed. Reviewers get changed
+# files in full — that is what stops them reporting handling that already exists
+# further up — and the price is a pull towards reviewing the untouched rest of
+# the file. Measured on a 64-file MR: eleven of fifteen confirmed findings sat on
+# lines the branch never touched, and the author read the report as noise.
+# Line arithmetic, so it holds for any language. What it sets aside is listed in
+# the report under "Outside the changed lines", never silently dropped.
+enforce_scope = true
+# How far from a changed line a finding may sit and still count as being about
+# the change: reaches the declaration above an edit and the neighbour of a
+# deleted block. Raise it to let more of the surrounding file back in.
+scope_margin = 5
 enable_judge = true
+# How findings get verified. Overridden by --judge-mode.
+#   "batch"       — one pass rules on the whole list. Cheap, and the judge sees
+#                   every finding at once, so it catches duplicates naturally.
+#   "per_finding" — a separate pass per finding. The turn budget goes to one
+#                   claim instead of being split across all of them, and a pass
+#                   that fails costs one verdict rather than every verdict.
+#                   Costs N passes; each is handed a one-line roster of the other
+#                   findings so `duplicate` still works.
+#   "two_stage"   — per_finding, then one pass over what survived it. Severity is
+#                   comparative and a pass holding one claim has no scale, so the
+#                   second pass calibrates the set, collapses repetition and
+#                   writes the verdict on the MR. Costs N + 1 passes.
+judge_mode = "batch"
+# Turn budget for one judging pass; 0 follows max_turns. Worth lowering in
+# per_finding and two_stage modes, where each pass has a single claim to settle.
+judge_max_turns = 0
 max_read_lines = 800
 
 # Files kept out of the review entirely. Defaults are stack-agnostic: lockfiles,

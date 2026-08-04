@@ -23,6 +23,7 @@ from pathlib import Path
 from ..checklist import ChecklistItem
 from ..gitdiff import ANNOTATION_LEGEND, DiffBundle
 from ..models import Finding
+from ..resolve import ReferenceReport
 
 DEFAULT_DIR = Path(__file__).resolve().parent / "default"
 
@@ -32,6 +33,10 @@ NAMES = (
     "item_user",
     "judge_system",
     "judge_user",
+    "judge_one_system",
+    "judge_one_user",
+    "judge_final_system",
+    "judge_final_user",
 )
 
 # Structure rather than wording — see the module docstring.
@@ -52,7 +57,39 @@ Merge base: {base_sha}
 {legend}
 
 {annotated}
-{fallback_block}"""
+{fallback_block}{references_block}"""
+
+# Output of the resolution pre-pass. Two sections, worded differently on
+# purpose: the resource misses are search results, the symbol list is a lead the
+# agent has to finish checking. Saying so is what keeps it from being quoted as
+# proof — an unverified claim costs the author more than a missing one.
+REFERENCES_BLOCK = """
+# Reference check
+
+Run over the whole tree before this review, including files not attached above
+(storyboards, build manifests, strings). Findings here are worth reporting, but
+report them in your own words and only after you have looked at the code.
+{sections}"""
+
+RESOURCE_SECTION = """
+## References that resolve to nothing ({count})
+
+Searched and absent. These are search results, not guesses.
+
+{rows}"""
+
+SYMBOL_SECTION = """
+## Identifiers with no definition in this repository ({count})
+
+Introduced by this diff, used in a position that has to resolve, and found
+nowhere outside the files the diff touches, with no declaration anywhere.
+
+This list cannot see your dependencies, so symbols from frameworks and the SDK
+legitimately appear in it and are NOT problems. Decide which is which; when a
+name looks like it should belong to this repository, `grep` it yourself before
+reporting anything.
+
+{rows}"""
 
 FALLBACK_BLOCK = """
 ## Files not attached in full
@@ -64,6 +101,16 @@ contents with `read_file`, and the state before the changes with `git_show`.
 {diff}
 ```
 """
+
+# Handed to a per-finding judge so it can still recognise a duplicate without
+# seeing the other findings in full. Structure, not wording — see the docstring.
+ROSTER_BLOCK = """\
+# The other findings in this review
+
+Listed so you can recognise a duplicate. Judge only the finding above; a
+`duplicate` verdict is for the same problem already reported under a LOWER id.
+
+{roster}"""
 
 # Appended to the system prompt when a language is configured.
 LANGUAGE_DIRECTIVE = """
@@ -142,6 +189,8 @@ class Prompts:
         for item in items:
             self.build_item_prompt(item, diff)
         self.build_judge_prompt([], diff)
+        self.build_judge_one_prompt(_PLACEHOLDER_FINDING, [], diff)
+        self.build_judge_final_prompt([], {}, diff)
 
     # ---------------------------------------------------------------- rendering
 
@@ -152,6 +201,14 @@ class Prompts:
     @property
     def judge_system(self) -> str:
         return self._with_language(self.texts["judge_system"])
+
+    @property
+    def judge_one_system(self) -> str:
+        return self._with_language(self.texts["judge_one_system"])
+
+    @property
+    def judge_final_system(self) -> str:
+        return self._with_language(self.texts["judge_final_system"])
 
     def system_for(self, item: ChecklistItem) -> str:
         """The reviewer's system prompt for one item. A checklist set may replace
@@ -199,6 +256,39 @@ class Prompts:
             )
         )
 
+    def build_judge_one_prompt(
+        self, finding: Finding, others: list[Finding], diff: DiffBundle
+    ) -> str:
+        """The task for a judge that settles a single claim. `others` is every
+        other finding in the run — a one-line roster, so `duplicate` survives the
+        loss of the batch judge's view of the whole list."""
+        return self._with_reminder(
+            self._fmt(
+                "judge_one_user",
+                context=_context_block(diff),
+                finding=_render_finding(finding),
+                roster=_render_roster(others),
+            )
+        )
+
+    def build_judge_final_prompt(
+        self, findings: list[Finding], notes: dict[str, str], diff: DiffBundle
+    ) -> str:
+        """The task for the pass that rules on findings which already passed
+        verification. `notes` is what each finding's own pass reported checking,
+        keyed by finding id — carried over so this pass reads the check instead
+        of repeating it."""
+        return self._with_reminder(
+            self._fmt(
+                "judge_final_user",
+                context=_context_block(diff),
+                count=len(findings),
+                findings="\n\n".join(
+                    _render_finding(f, notes.get(f.id)) for f in findings
+                ),
+            )
+        )
+
 
 def _context_block(diff: DiffBundle) -> str:
     fallback = ""
@@ -216,12 +306,50 @@ def _context_block(diff: DiffBundle) -> str:
         legend=ANNOTATION_LEGEND,
         annotated=diff.annotated or "(no file was attached in full)",
         fallback_block=fallback,
+        references_block=_references_block(diff.references),
     )
 
 
-def _render_finding(finding: Finding) -> str:
+def _references_block(report: "ReferenceReport | None") -> str:
+    """The pre-pass result. Absent when it did not run — an empty section would
+    read as "nothing was found", which is a different claim."""
+    if report is None or report.empty:
+        return ""
+
+    sections: list[str] = []
+    if report.resource_misses:
+        # Grouped by question and file: forty keys missing from one file is one
+        # fact stated once, not forty repetitions of the same sentence.
+        groups: dict[tuple[str, str], list[str]] = {}
+        for _, question, value, path in report.resource_misses:
+            groups.setdefault((question, path), []).append(value)
+        rows = "\n".join(
+            f"- {question}\n  in `{path}`: " + ", ".join(f"`{v}`" for v in values)
+            for (question, path), values in groups.items()
+        )
+        sections.append(
+            RESOURCE_SECTION.format(count=len(report.resource_misses), rows=rows)
+        )
+
+    if report.unresolved_symbols:
+        rows = "\n".join(
+            f"- `{name}` — referenced in {', '.join(f'`{p}`' for p in paths[:3])}"
+            for name, paths in sorted(report.unresolved_symbols.items())
+        )
+        if report.symbols_truncated:
+            # Never let a cap read as coverage
+            rows += f"\n- [... {report.symbols_truncated} more, not listed ...]"
+        sections.append(
+            SYMBOL_SECTION.format(count=len(report.unresolved_symbols), rows=rows)
+        )
+
+    return REFERENCES_BLOCK.format(sections="\n".join(sections))
+
+
+def _render_finding(finding: Finding, note: str | None = None) -> str:
     """A finding as the judge sees it — structure, not prose, so it stays in
-    code rather than in a template."""
+    code rather than in a template. `note` is the verification a previous pass
+    already did, shown only to a judge that comes after one."""
     lines = [
         f"## {finding.id} — {finding.title}",
         f"- File: `{finding.location}`",
@@ -233,4 +361,29 @@ def _render_finding(finding: Finding) -> str:
     ]
     if finding.suggestion:
         lines.append(f"- Suggestion: {finding.suggestion}")
+    if note:
+        lines.append(f"- Verified: {note}")
     return "\n".join(lines)
+
+
+def _render_roster(others: list[Finding]) -> str:
+    """One line per other finding. Enough to spot a duplicate, cheap enough to
+    repeat in every per-finding pass."""
+    if not others:
+        return ""
+    lines = [
+        f"- {f.id} ({f.severity.value}) `{f.location}` — {f.title}"
+        for f in sorted(others, key=lambda f: f.id)
+    ]
+    return ROSTER_BLOCK.format(roster="\n".join(lines))
+
+
+# Only ever rendered by `validate`, to prove the template resolves before any
+# tokens are spent.
+_PLACEHOLDER_FINDING = Finding(
+    id="F000",
+    file="path/to/file",
+    line=1,
+    title="placeholder",
+    rationale="placeholder",
+)

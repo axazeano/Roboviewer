@@ -111,6 +111,26 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-j", "--concurrency", type=int, help="How many items to review in parallel")
     parser.add_argument("--no-judge", action="store_true", help="Skip the final judge pass")
     parser.add_argument(
+        "--judge-mode",
+        choices=("batch", "per-finding", "two-stage"),
+        help=(
+            "How findings get verified: 'batch' is one pass over the whole list, "
+            "'per-finding' spends a separate pass on each, 'two-stage' does that "
+            "and then rules on the survivors together. Without the flag, "
+            "whatever the config says"
+        ),
+    )
+    parser.add_argument(
+        "--judge-turns",
+        type=int,
+        metavar="N",
+        help=(
+            "Turn budget for one judging pass. Without the flag it follows "
+            "max_turns — worth lowering with --judge-mode per-finding, where a "
+            "pass has a single claim to settle"
+        ),
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -151,6 +171,11 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
         cfg.run.output_language = args.language
     if args.concurrency:
         cfg.run.concurrency = args.concurrency
+    if args.judge_mode:
+        # Hyphen on the command line, underscore in the config
+        cfg.run.judge_mode = args.judge_mode.replace("-", "_")
+    if args.judge_turns:
+        cfg.run.judge_max_turns = args.judge_turns
     if args.no_judge:
         cfg.run.enable_judge = False
     return cfg
@@ -245,7 +270,13 @@ def _print_config(cfg: Config, root: Path) -> None:
     print(f"  output_dir     {cfg.run.output_dir}")
     print(f"  concurrency    {cfg.run.concurrency}")
     print(f"  max_turns      {cfg.run.max_turns}")
-    print(f"  judge          {'on' if cfg.run.enable_judge else 'off'}")
+    print(f"  reference pass {'on' if cfg.run.resolve_references else 'off'}")
+    scope_state = f"±{cfg.run.scope_margin} lines" if cfg.run.enforce_scope else "off"
+    print(f"  scope gate     {scope_state}")
+    judge_state = "off" if not cfg.run.enable_judge else cfg.run.judge_mode.replace("_", "-")
+    print(f"  judge          {judge_state}")
+    print(f"  judge_turns    {cfg.run.resolve_judge_max_turns()}"
+          f"{' (follows max_turns)' if not cfg.run.judge_max_turns else ''}")
 
 
 def _print_event(event: Event, verbose: bool = False) -> None:
@@ -378,6 +409,7 @@ def main(argv: list[str] | None = None) -> int:
             excludes=cfg.run.exclude_globs,
             inline_max_lines=cfg.run.inline_max_lines,
             inline_max_total_chars=cfg.run.inline_max_total_chars,
+            resolve_references=cfg.run.resolve_references,
         )
     except gitdiff.GitError as exc:
         print(f"Git error: {exc}", file=sys.stderr)
