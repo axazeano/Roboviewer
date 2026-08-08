@@ -89,6 +89,10 @@ export ROBOVIEWER_API_KEY=...
 Set `provider.base_url` and `provider.model`. Everything else has working
 defaults and is documented inline in [config.example.toml](config.example.toml).
 
+That path is the only file a run reads on its own. `--config PATH` reads a
+different one **instead of** it, not on top of it, so the file you name carries
+everything the run needs. `--show-config` prints which file is in use.
+
 Then check the gateway actually works:
 
 ```bash
@@ -125,6 +129,7 @@ roboviewer -C ~/projects/app develop  # a repository living elsewhere
 | `--format md,html` | Which reports to write; HTML is one self-contained file |
 | `--language ru` | Language the model writes findings in |
 | `--fail-on major` | Exit 1 on a confirmed finding this bad or worse, so CI goes red |
+| `--config PATH` | Read this file instead of the one in `~/.config/roboviewer/` |
 | `--check-provider` | Diagnose the gateway and stop |
 
 `ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` cover `-C`/`-o` if you set them once.
@@ -222,8 +227,12 @@ Both runners clone shallow by default, and the branch point is usually missing
 from such a clone: give the job full history, or the run stops on code `2`
 saying so.
 
-Put `base_url` and `model` in `.roboviewer/config.toml` in the repository, where
-the pipeline and everyone's laptop read the same settings, and pass the key as
+A runner has no `~/.config/roboviewer/config.toml`, so the pipeline has to say
+where its settings are. Commit a config into the repository — `.roboviewer/`
+next to the run output is the obvious place — and name it with `--config`, and
+then the pipeline and everyone's laptop read the same file. Nothing is picked
+up implicitly: a file inside the repository under review is read when the
+command line names it and not otherwise. The key stays out of it and arrives as
 `ROBOVIEWER_API_KEY`.
 
 ```yaml
@@ -236,7 +245,7 @@ review:
     ROBOVIEWER_API_KEY: $LLM_API_KEY
   script:
     - pip install -q git+https://github.com/axazeano/Roboviewer.git
-    - roboviewer --format md,codequality --fail-on blocker
+    - roboviewer --config .roboviewer/config.toml --format md,codequality --fail-on blocker
   after_script:                        # runs even when the gate failed the job
     - cp .roboviewer/runs/latest/{gl-code-quality-report.json,report.md} .
   artifacts:
@@ -262,7 +271,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - run: pip install -q git+https://github.com/axazeano/Roboviewer.git
-      - run: roboviewer --format md,sarif --fail-on blocker
+      - run: roboviewer --config .roboviewer/config.toml --format md,sarif --fail-on blocker
         env:
           ROBOVIEWER_API_KEY: ${{ secrets.LLM_API_KEY }}
       - if: always()
@@ -323,12 +332,21 @@ checklist that brings its own `_system.md`.
 
 ## Tuning
 
-The four texts the agents actually run on — the reviewer's system prompt and
-task, the judge's — are markdown files in `roboviewer/prompts/default/`. Drop a
-changed copy of any of them into `.roboviewer/prompts/` inside the repository
-being reviewed and it wins; the rest keep coming from the bundled set.
-`--show-config` prints which file came from where, and a typo in a placeholder
-fails the run before the first request instead of eight agents deep.
+The eight texts the agents actually run on are markdown files in
+`roboviewer/prompts/default/`: a system prompt and a task for the reviewer, and
+three such pairs for the judge — the batch pass, the per-finding verification
+and the final calibration. Drop a changed copy of any of them into
+`.roboviewer/prompts/` inside the repository being reviewed and it wins; the
+rest keep coming from the bundled set, so a custom set carries only the files
+it changes. `--show-config` prints which text came from where, and a typo in a
+placeholder fails the run before the first request instead of eight agents
+deep.
+
+Prompts and templates are not configuration, even though `.roboviewer/` holds
+both. These two directories **are** picked up from the repository under review
+just by existing, and they merge with the bundled set file by file. The config
+file does neither: it is read only where you point it. Same directory, opposite
+rules.
 
 Three checklist sets ship with the tool, differing only in how the aspects are
 distributed between agents — the aspect texts themselves are identical, so

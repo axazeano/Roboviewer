@@ -1,5 +1,6 @@
-# Copy to .roboviewer/config.toml inside the reviewed repository,
-# or to ~/.config/roboviewer/config.toml.
+# Copy to ~/.config/roboviewer/config.toml — the one file a run reads on its
+# own. Keep it anywhere else and name it with --config, which reads that file
+# instead of this one rather than in addition to it.
 
 [provider]
 # OpenAI-compatible endpoint of the custom provider

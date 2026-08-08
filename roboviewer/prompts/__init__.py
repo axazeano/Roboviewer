@@ -1,7 +1,9 @@
 """Prompt templates, loaded from files.
 
-Four texts get rewritten while tuning a model — the reviewer's system prompt and
-task, the judge's — so they live in markdown rather than in string literals.
+Eight texts get rewritten while tuning a model — a system prompt and a task for
+the reviewer, and a pair each for the judge's batch pass, its per-finding
+verification and its final calibration — so they live in markdown rather than
+in string literals. `NAMES` below is the list that counts.
 
 The scaffolding below stays in code. The context block, the tail listing files
 that did not fit and the annotation legend are assembly over `DiffBundle`

@@ -81,7 +81,15 @@ def build_parser() -> argparse.ArgumentParser:
             "review; point it outside to keep the working tree clean"
         ),
     )
-    parser.add_argument("--config", type=Path, help="Explicit path to config.toml")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help=(
+            "Read this file instead of ~/.config/roboviewer/config.toml. It "
+            "replaces that file rather than adding to it, so it carries every "
+            "setting the run needs"
+        ),
+    )
     parser.add_argument("--checklist", help="Directory holding the checklist items")
     parser.add_argument("--only", help="Run only these items, comma-separated")
     parser.add_argument("--model", help="Override the model")
