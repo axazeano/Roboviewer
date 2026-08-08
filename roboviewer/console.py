@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import gate, sources
 from .checklist import ChecklistItem
-from .config import Config, home_config_path, repo_config_path
+from .config import Config, home_config_path
 from .events import Event
 from .gitdiff import DiffBundle
 from .models import SEVERITY_LABEL, Finding, ReviewRun
@@ -34,7 +34,9 @@ def notice(message: str) -> None:
 
 def run_header(cfg: Config) -> None:
     origin = cfg.provider.base_url.split("//", 1)[-1].split("/", 1)[0]
-    print(f"▸ {cfg.provider.model} @ {origin} · config files picked up: {len(cfg.sources)}")
+    # The file, not a count: when a run goes to an endpoint nobody expected,
+    # this is the line that says which file sent it there.
+    print(f"▸ {cfg.provider.model} @ {origin} · config: {cfg.source or 'built-in defaults'}")
 
 
 def event(entry: Event, verbose: bool = False) -> None:
@@ -107,23 +109,20 @@ def diff_summary(diff: DiffBundle) -> None:
 
 
 def config(cfg: Config, root: Path) -> None:
-    _config_layers(cfg, root)
+    _config_source(cfg)
     print()
     _provider(cfg)
     print()
     _run(cfg, root)
 
 
-def _config_layers(cfg: Config, root: Path) -> None:
-    print("Config layers (each one overrides the previous):")
-    known = {str(home_config_path()): "home", str(repo_config_path(root)): "repository"}
-    for path in cfg.sources:
-        print(f"  ✓ {path}   [{known.get(path, 'explicit --config')}]")
-    for path, label in known.items():
-        if path not in cfg.sources:
-            print(f"  · {path}   [{label}, no file]")
-    if not cfg.sources:
-        print("  (no files at all — everything on defaults)")
+def _config_source(cfg: Config) -> None:
+    print("Config:")
+    if cfg.source is None:
+        print(f"  · {home_config_path()}   [no file — everything on defaults]")
+        return
+    origin = "default location" if cfg.source == str(home_config_path()) else "--config"
+    print(f"  ✓ {cfg.source}   [{origin}]")
 
 
 def _provider(cfg: Config) -> None:

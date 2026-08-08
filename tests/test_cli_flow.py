@@ -22,8 +22,8 @@ from roboviewer.prompts import PromptError
 
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Config stacking starts at ~/.config/roboviewer/config.toml, and the
-    developer running these tests has one. Point HOME somewhere empty."""
+    """A run reads ~/.config/roboviewer/config.toml, and the developer running
+    these tests has one. Point HOME somewhere empty."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
 
 

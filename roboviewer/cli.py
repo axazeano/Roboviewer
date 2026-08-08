@@ -247,7 +247,7 @@ def _execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     # Diagnostic commands work without branches and outside a repository
     informational = args.list_items or args.show_config or args.check_provider
     root = _repo_root(args.repo, required=not informational)
-    cfg = _apply_overrides(_config(root, args.config), args)
+    cfg = _apply_overrides(_config(args.config), args)
 
     if args.show_config:
         console.config(cfg, root)
@@ -313,9 +313,9 @@ def _repo_root(requested: str, *, required: bool) -> Path:
         return path
 
 
-def _config(root: Path, explicit: Path | None) -> Config:
+def _config(explicit: Path | None) -> Config:
     try:
-        return load_config(root, explicit)
+        return load_config(explicit)
     except (FileNotFoundError, ValueError) as exc:
         raise CLIError(f"Config error: {exc}") from exc
 

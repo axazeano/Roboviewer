@@ -1,16 +1,16 @@
 """Configuration loading.
 
-Layers are stacked from general to specific:
+One file, and the file you can point at:
 
     built-in defaults
-    → ~/.config/roboviewer/config.toml     (provider, shared across repositories)
-    → <repo>/.roboviewer/config.toml       (per-project specifics)
-    → --config PATH                         (explicitly given file)
+    → ~/.config/roboviewer/config.toml, or the file --config names instead
     → CLI flags
 
-Stacking, not "first match wins": otherwise a repo config holding nothing but a
-[run] section would wipe out the provider from the home config and the run would
-silently go to the wrong endpoint.
+`--config` replaces rather than adds. Settings used to arrive from three files
+merged key by key, which meant the value in effect was written down nowhere: to
+answer "which endpoint is this run using" you had to read three files and
+reproduce the merge. Flags over a file stay, because a flag is visible in the
+command that produced the run.
 """
 
 from __future__ import annotations
@@ -227,44 +227,33 @@ class RunConfig(BaseModel):
 class Config(BaseModel):
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
     run: RunConfig = Field(default_factory=RunConfig)
-    # Which files took part, in stacking order.
-    sources: list[str] = Field(default_factory=list)
+    # The file this came from; None means nothing but the defaults below.
+    source: str | None = None
 
 
 def home_config_path() -> Path:
     return Path.home() / ".config" / "roboviewer" / "config.toml"
 
 
-def repo_config_path(repo_root: Path) -> Path:
-    return repo_root / ".roboviewer" / "config.toml"
+def load_config(explicit: Path | None = None) -> Config:
+    """The one file a run reads, or the defaults when there is none.
 
-
-def _deep_merge(base: dict, overlay: dict) -> dict:
-    merged = dict(base)
-    for key, value in overlay.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _deep_merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
-def load_config(repo_root: Path, explicit: Path | None = None) -> Config:
-    layers: list[Path] = [
-        p for p in (home_config_path(), repo_config_path(repo_root)) if p.is_file()
-    ]
-
-    if explicit is not None:
+    An absent home file is normal — the defaults are a working configuration
+    apart from the provider. An absent `--config` is a typo: somebody named a
+    file, and quietly running on something else is the wrong kindness.
+    """
+    if explicit is None:
+        path = home_config_path()
+        if not path.is_file():
+            return Config()
+    else:
         path = explicit.expanduser().resolve()
         if not path.is_file():
             raise FileNotFoundError(f"Config not found: {path}")
-        layers.append(path)
 
-    raw: dict = {}
-    for path in layers:
-        with path.open("rb") as fh:
-            raw = _deep_merge(raw, tomllib.load(fh))
+    with path.open("rb") as fh:
+        raw = tomllib.load(fh)
 
     cfg = Config.model_validate(raw)
-    cfg.sources = [str(p) for p in layers]
+    cfg.source = str(path)
     return cfg
