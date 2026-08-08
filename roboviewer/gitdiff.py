@@ -69,7 +69,20 @@ def resolve_ref(root: Path, ref: str, *, kind: str = "Branch") -> str:
 
 
 def merge_base(root: Path, target: str, source: str = "HEAD") -> str:
-    return _git(["merge-base", target, source], root).strip()
+    try:
+        return _git(["merge-base", target, source], root).strip()
+    except GitError as exc:
+        # git says only "→ 1" here, and in CI the reason is nearly always the
+        # same one: the branch point was never fetched.
+        raise GitError(
+            f"{target} and {source} have no common commit in this clone, "
+            f"so there is no branch point to diff from"
+        ) from exc
+
+
+def is_shallow(root: Path) -> bool:
+    """A clone cut off at N commits — the default in both GitLab and GitHub CI."""
+    return _git(["rev-parse", "--is-shallow-repository"], root).strip() == "true"
 
 
 def head_sha(root: Path, ref: str = "HEAD") -> str:

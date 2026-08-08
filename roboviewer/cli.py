@@ -14,7 +14,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import console, gitdiff, renders, sources
+from . import ci, console, gate, gitdiff, renders, sources
 from .checklist import ChecklistItem, load_checklist
 from .config import Config, load_config
 from .pipeline import ReviewPipeline, output_dir_for
@@ -112,6 +112,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--fail-on",
+        choices=gate.THRESHOLDS,
+        metavar="SEVERITY",
+        help=(
+            "Exit 1 when a confirmed finding of this severity or worse is left "
+            f"standing, so a CI job goes red on it: {', '.join(gate.THRESHOLDS)}. "
+            "Without the flag, whatever the config says"
+        ),
+    )
+    parser.add_argument(
         "-j", "--concurrency", type=int, help="How many items to review in parallel"
     )
     parser.add_argument("--no-judge", action="store_true", help="Skip the final judge pass")
@@ -167,7 +177,7 @@ class CLIError(RuntimeError):
     own — thirteen of those in one function was most of what made it unreadable.
     """
 
-    def __init__(self, message: str, hint: str = "", code: int = 2) -> None:
+    def __init__(self, message: str, hint: str = "", code: int = gate.SETUP) -> None:
         super().__init__(message)
         self.message = message
         self.hint = hint
@@ -221,6 +231,8 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
         cfg.run.judge_mode = args.judge_mode.replace("-", "_")
     if args.judge_turns:
         cfg.run.judge_max_turns = args.judge_turns
+    if args.fail_on:
+        cfg.run.fail_on = args.fail_on
     if args.no_judge:
         cfg.run.enable_judge = False
     return cfg
@@ -234,9 +246,6 @@ def _execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     """
     # Diagnostic commands work without branches and outside a repository
     informational = args.list_items or args.show_config or args.check_provider
-    if not args.target and not informational:
-        parser.error("no target branch given: roboviewer <target> [source]")
-
     root = _repo_root(args.repo, required=not informational)
     cfg = _apply_overrides(_config(root, args.config), args)
 
@@ -253,7 +262,12 @@ def _execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         console.checklist_items(items)
         return 0
 
-    diff = _diff(cfg, root, args.target, args.source)
+    # Every command that works without branches has returned by now
+    target = args.target or _target_from_ci()
+    if not target:
+        parser.error("no target branch given: roboviewer <target> [source]")
+
+    diff = _diff(cfg, root, target, args.source)
     if args.diff_only:
         console.diff_summary(diff)
         return 0
@@ -267,6 +281,22 @@ def _execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
             f"Reviewing branch {diff.branch} ({diff.head[:12]}); the working copy is untouched."
         )
     return asyncio.run(_review(plan, args.verbose))
+
+
+def _target_from_ci() -> str | None:
+    """The target branch a merge-request pipeline already names in a variable.
+
+    Announced rather than assumed: a review is against a branch, and which one
+    should be readable in the job log without knowing the runner's variables.
+    """
+    environment = ci.detect()
+    if environment is None:
+        return None
+    console.notice(
+        f"Target branch from {environment.name}: "
+        f"{environment.target} (${environment.variable})"
+    )
+    return environment.target
 
 
 def _repo_root(requested: str, *, required: bool) -> Path:
@@ -314,7 +344,23 @@ def _diff(cfg: Config, root: Path, target: str, source: str | None) -> gitdiff.D
             resolve_references=cfg.run.resolve_references,
         )
     except gitdiff.GitError as exc:
-        raise CLIError(f"Git error: {exc}") from exc
+        raise CLIError(f"Git error: {exc}", _depth_hint(root)) from exc
+
+
+def _depth_hint(root: Path) -> str:
+    """Both runners clone shallow by default, and every git failure that causes
+    looks like something else — a branch that does not exist, a diff with no
+    branch point. Say it once, where the failure surfaces."""
+    try:
+        if not gitdiff.is_shallow(root):
+            return ""
+    except gitdiff.GitError:
+        return ""
+    return (
+        "This clone is shallow, so the branch point may simply be missing. "
+        "Deepen it (git fetch --unshallow, or GIT_DEPTH: 0 in .gitlab-ci.yml, "
+        "or fetch-depth: 0 for actions/checkout)."
+    )
 
 
 def _plan(
@@ -374,9 +420,11 @@ async def _review(plan: RunPlan, verbose: bool) -> int:
     except renders.RenderError as exc:
         # The run itself is already on disk; only the readable part is missing
         console.error(f"Report failed to render: {exc}", f"Run data saved: {directory}")
-        return 2
+        return gate.SETUP
     console.summary(run, reports, directory)
-    return 1 if any(i.status == "failed" for i in run.items) else 0
+    threshold = plan.cfg.run.fail_on
+    console.gate_result(gate.blocking(run, threshold), threshold)
+    return gate.exit_code(run, threshold)
 
 
 if __name__ == "__main__":

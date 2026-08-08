@@ -215,6 +215,10 @@ class RunConfig(BaseModel):
     resolve_references: bool = True
     # Maximum lines returned by a single read_file call.
     max_read_lines: int = 800
+    # Severity at which the run exits 1, so a CI job can go red on it. Counts
+    # confirmed findings that are in scope; "never" reports and exits 0.
+    # Overridden by --fail-on.
+    fail_on: Literal["never", "blocker", "major", "minor", "nit"] = "never"
 
     def resolve_judge_max_turns(self) -> int:
         return self.judge_max_turns or self.max_turns

@@ -150,6 +150,14 @@ judge_mode = "batch"
 # two_stage mode, where the first stage gives each pass a single claim to settle.
 judge_max_turns = 0
 max_read_lines = 800
+# Severity at which the run exits 1, so a CI job can go red on it:
+#   "never"  — report and exit 0, whatever was found (the default)
+#   "blocker" / "major" / "minor" / "nit" — that severity and everything worse
+# Counts confirmed findings inside the changed lines only: one the judge rejected
+# or one about untouched code must never fail somebody's pipeline. Exit codes are
+# 0 clean, 1 gate tripped, 2 the tool could not run, 3 a checklist item failed.
+# Overridden by --fail-on.
+fail_on = "never"
 
 # Files kept out of the review entirely. Defaults are stack-agnostic: lockfiles,
 # generated code, vendored dependencies, snapshots.

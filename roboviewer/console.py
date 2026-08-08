@@ -13,12 +13,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from . import sources
+from . import gate, sources
 from .checklist import ChecklistItem
 from .config import Config, home_config_path, repo_config_path
 from .events import Event
 from .gitdiff import DiffBundle
-from .models import SEVERITY_LABEL, ReviewRun
+from .models import SEVERITY_LABEL, Finding, ReviewRun
 from .prompts import PromptError, language_name
 
 
@@ -80,6 +80,22 @@ def summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> None:
         print(f"No reports requested; run data: {reports_dir}")
 
 
+def gate_result(blocking: list[Finding], threshold: str) -> None:
+    """Why the run is about to exit non-zero.
+
+    Printed only when a gate is set: a run nobody asked to gate should not have
+    a line about gating in it. The severity is named because the reader's next
+    move is either to fix the finding or to lower the threshold.
+    """
+    if threshold == gate.NEVER:
+        return
+    if not blocking:
+        print(f"✔ Gate: nothing at {threshold} or worse.")
+        return
+    print(f"✗ Gate: {len(blocking)} finding(s) at {threshold} or worse — "
+          f"{', '.join(f.id for f in blocking)}")
+
+
 def checklist_items(items: list[ChecklistItem]) -> None:
     for item in items:
         print(f"{item.id:<20} {item.title}")
@@ -136,6 +152,8 @@ def _run(cfg: Config, root: Path) -> None:
     print(f"  reference pass {'on' if cfg.run.resolve_references else 'off'}")
     scope_state = f"±{cfg.run.scope_margin} lines" if cfg.run.enforce_scope else "off"
     print(f"  scope gate     {scope_state}")
+    print(f"  fail_on        {cfg.run.fail_on}"
+          f"{'' if cfg.run.fail_on == gate.NEVER else ' (exits 1 at this severity or worse)'}")
     judge_state = "off" if not cfg.run.enable_judge else cfg.run.judge_mode.replace("_", "-")
     print(f"  judge          {judge_state}")
     print(f"  judge_turns    {cfg.run.resolve_judge_max_turns()}"

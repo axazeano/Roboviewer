@@ -124,6 +124,7 @@ roboviewer -C ~/projects/app develop  # a repository living elsewhere
 | `-v, --verbose` | Stream agent activity: tool calls, retries, errors |
 | `--format md,html` | Which reports to write; HTML is one self-contained file |
 | `--language ru` | Language the model writes findings in |
+| `--fail-on major` | Exit 1 on a confirmed finding this bad or worse, so CI goes red |
 | `--check-provider` | Diagnose the gateway and stop |
 
 `ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` cover `-C`/`-o` if you set them once.
@@ -190,20 +191,91 @@ of `git status`.
 | `sarif` | `report.sarif` | SARIF 2.1.0: GitHub Code Scanning, the VS Code viewer, SonarQube |
 | `codequality` | `gl-code-quality-report.json` | The Code Quality widget in a GitLab merge request |
 
-```yaml
-# .gitlab-ci.yml
-review:
-  script: roboviewer develop --format md,codequality
-  artifacts:
-    reports:
-      codequality: .roboviewer/runs/latest/gl-code-quality-report.json
-```
-
 `md` and `html` are Jinja templates in `roboviewer/templates/default/`; drop a
 changed copy into `.roboviewer/templates/` to override one file by file, or add
 a new `report.<name>.j2` and `--format <name>` picks it up without touching
 Python. `sarif` and `codequality` are serialization rather than documents, so
 they are plain Python and never go near a template.
+
+## Continuous integration
+
+There is nothing to install on your forge. The run writes files, the pipeline
+publishes them, and the one thing a runner reads back is the exit code.
+
+| Code | Means |
+| --- | --- |
+| `0` | Nothing at or above `--fail-on` |
+| `1` | Confirmed findings at or above `--fail-on` — the branch has work to do |
+| `2` | The tool could not run: bad config, no branch point, nowhere to write |
+| `3` | The review ran, but a checklist item failed and its aspect went unreviewed |
+
+`--fail-on` takes `blocker`, `major`, `minor`, `nit` or `never`, and defaults to
+`never`: reporting is the job, failing the build is opt-in. Only confirmed
+findings inside the changed lines count — one the judge threw out, or one
+pointing at code the branch never touched, must never turn a pipeline red. Codes
+`1` and `3` are separate because one is fixed in the branch and the other rerun.
+
+In a merge-request pipeline the target branch comes from the environment —
+`CI_MERGE_REQUEST_TARGET_BRANCH_NAME` or `GITHUB_BASE_REF` — so the command line
+carries no branch at all, and the source is whatever the runner checked out.
+Both runners clone shallow by default, and the branch point is usually missing
+from such a clone: give the job full history, or the run stops on code `2`
+saying so.
+
+Put `base_url` and `model` in `.roboviewer/config.toml` in the repository, where
+the pipeline and everyone's laptop read the same settings, and pass the key as
+`ROBOVIEWER_API_KEY`.
+
+```yaml
+# .gitlab-ci.yml
+review:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0                       # the branch point has to exist locally
+    ROBOVIEWER_API_KEY: $LLM_API_KEY
+  script:
+    - pip install -q git+https://github.com/axazeano/Roboviewer.git
+    - roboviewer --format md,codequality --fail-on blocker
+  after_script:                        # runs even when the gate failed the job
+    - cp .roboviewer/runs/latest/{gl-code-quality-report.json,report.md} .
+  artifacts:
+    when: always
+    paths: [report.md]
+    reports:
+      codequality: gl-code-quality-report.json
+```
+
+That puts every finding in the merge request widget and on the diff itself,
+without anything of yours leaving the runner.
+
+```yaml
+# .github/workflows/review.yml
+on: pull_request
+permissions:
+  contents: read
+  security-events: write               # for the SARIF upload
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: pip install -q git+https://github.com/axazeano/Roboviewer.git
+      - run: roboviewer --format md,sarif --fail-on blocker
+        env:
+          ROBOVIEWER_API_KEY: ${{ secrets.LLM_API_KEY }}
+      - if: always()
+        run: cp .roboviewer/runs/latest/report.sarif report.sarif
+      - if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with: { sarif_file: report.sarif }
+```
+
+Findings arrive as Code Scanning alerts, matched across runs by fingerprint, so
+a finding you fixed closes itself. Both jobs copy the files out of
+`runs/latest/` rather than pointing at the symlink: what an uploader does with a
+symlink differs between runners, and a copy behaves the same everywhere.
 
 ## Customise the checklist
 
@@ -299,8 +371,9 @@ raw output.
 
 ## What it doesn't do
 
-- It does not post comments on your merge request, and does not talk to GitHub or
-  GitLab at all. Output is files on disk.
+- It does not post comments on your merge request, and does not talk to GitHub
+  or GitLab at all. Output is files on disk; in CI it is the pipeline that
+  publishes them, from formats the forge already understands.
 - It does not modify your code. The agents get read-only tools —
   `read_file`, `grep`, `list_files`, `git_show` — and nothing else.
 - It does not replace a human reviewer. It catches the class of problem that
