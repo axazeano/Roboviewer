@@ -2,6 +2,10 @@
 # own. Keep it anywhere else and name it with --config, which reads that file
 # instead of this one rather than in addition to it.
 
+# Two kinds of setting, two kinds of section. [provider] is how to reach the
+# gateway — set once by whoever runs it. [reviewer] and [judge] are what to ask
+# of a model, which is what gets turned while fitting the tool to one.
+
 [provider]
 # OpenAI-compatible endpoint of the custom provider
 base_url = "https://your-gateway.example.com/v1"
@@ -10,37 +14,10 @@ api_key_env = "ROBOVIEWER_API_KEY"
 # ...or is set right here, which takes precedence over the variable.
 # Handy while debugging; make sure a file holding the key never reaches git.
 # api_key = "sk-..."
-model = "your-model-name"
-# The judge may be a stronger model; defaults to the same `model`
-# judge_model = "your-stronger-model"
-temperature = 0.1
-max_tokens = 8000
 timeout_s = 300
 max_retries = 3
 # Set to false if the gateway cannot handle several tool_calls in one response
 parallel_tool_calls = true
-
-# Reasoning ("thinking") tokens, for models that emit them. Unset leaves the
-# model on its own default; false sends chat_template_kwargs.enable_thinking =
-# false, which Qwen-style chat templates understand and which leaves tool calling
-# working.
-#
-# Thinking is decoded one token at a time and is usually the largest term in how
-# long a run takes — the context block resent on every turn comes back from the
-# provider's prefix cache. Switching it off trades review depth for speed by an
-# amount that depends on the model, so it is worth running both ways against a
-# merge request whose problems are already known.
-# `--thinking on|off` overrides this for a single run.
-# enable_thinking = false
-# The judge checks stated claims against the code rather than looking for them.
-# Defaults to `enable_thinking`.
-# judge_enable_thinking = false
-
-# Provider-specific request fields the OpenAI SDK has no parameter for, sent in
-# the body as-is. Gateways tend to accept unknown fields in silence, so check
-# that the model reacts to one before relying on it.
-# [provider.extra_body]
-# top_k = 20
 
 # How to pass the key. Defaults to the OpenAI way: Authorization: Bearer <key>.
 # Valid key + valid address but still 401 — almost always this.
@@ -62,6 +39,44 @@ terminal_tool_choice = "forced"
 # Extra headers, if the gateway requires them
 # [provider.extra_headers]
 # X-Project = "roboviewer"
+
+[reviewer]
+model = "your-model-name"
+temperature = 0.1
+max_tokens = 8000
+# Turns one reviewing agent gets. It is told its budget and asked to land before
+# running out; an agent still cut off at the limit was not short of turns, so
+# read its conclusion in the report before raising this.
+max_turns = 25
+
+# Reasoning ("thinking") tokens, for models that emit them. Unset leaves the
+# model on its own default; false sends chat_template_kwargs.enable_thinking =
+# false, which Qwen-style chat templates understand and which leaves tool calling
+# working.
+#
+# Thinking is decoded one token at a time and is usually the largest term in how
+# long a run takes — the context block resent on every turn comes back from the
+# provider's prefix cache. Switching it off trades review depth for speed by an
+# amount that depends on the model, so it is worth running both ways against a
+# merge request whose problems are already known.
+# `--thinking on|off` overrides this for a single run.
+# enable_thinking = false
+
+# Request fields the OpenAI SDK has no parameter for, sent in the body as-is.
+# Gateways tend to accept unknown fields in silence, so check that the model
+# reacts to one before relying on it.
+# [reviewer.extra_body]
+# top_k = 20
+
+# Everything about the judge, and nothing else. Leave the whole section out and
+# the judge runs on the settings above — that is the only way to say "the same",
+# so there is no value here that secretly means "inherit".
+# [judge]
+# The judge may be a stronger model, since it settles claims rather than finding them
+# model = "your-stronger-model"
+# Worth lowering with judge_mode = "two_stage", where a pass holds one claim
+# max_turns = 6
+# enable_thinking = false
 
 [run]
 # Branches are not configurable: the target is a CLI argument, the source defaults
@@ -102,8 +117,6 @@ output_dir = ".roboviewer/runs"
 # How many checklist items are reviewed at the same time — concurrent requests to
 # the model, not OS threads. The judge runs afterwards, on its own.
 concurrency = 4
-# Cap on agent turns (tool calls) per checklist item
-max_turns = 25
 # Changed files go to the agent in full, with changed lines marked up.
 # A file longer than inline_max_lines falls back to hunks — the agent reads the
 # rest via read_file.
@@ -146,9 +159,6 @@ enable_judge = true
 #                 second pass calibrates the set, collapses repetition and writes
 #                 the verdict on the MR. Costs N + 1 passes.
 judge_mode = "batch"
-# Turn budget for one judging pass; 0 follows max_turns. Worth lowering in
-# two_stage mode, where the first stage gives each pass a single claim to settle.
-judge_max_turns = 0
 max_read_lines = 800
 # Severity at which the run exits 1, so a CI job can go red on it:
 #   "never"  — report and exit 0, whatever was found (the default)

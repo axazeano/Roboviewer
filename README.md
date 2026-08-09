@@ -86,8 +86,15 @@ cp config.example.toml ~/.config/roboviewer/config.toml
 export ROBOVIEWER_API_KEY=...
 ```
 
-Set `provider.base_url` and `provider.model`. Everything else has working
+Set `provider.base_url` and `reviewer.model`. Everything else has working
 defaults and is documented inline in [config.example.toml](config.example.toml).
+
+The file has two kinds of section. `[provider]` is how to reach the gateway —
+address, key, auth — and is usually set once by whoever runs it. `[reviewer]`
+and `[judge]` are what to ask of a model, and are what you turn while fitting
+the tool to one. Leave `[judge]` out entirely and the judge runs on the
+reviewer's settings; that absence is the only way to say "the same", so no
+value in the file secretly means "inherit".
 
 That path is the only file a run reads on its own. `--config PATH` reads a
 different one **instead of** it, not on top of it, so the file you name carries
@@ -371,11 +378,11 @@ with that switched off — a large speedup, and a large risk to depth, so it
 belongs on a merge request whose problems are already known.
 
 Watch the status column for ⚠️. On its last turn an agent is forced to submit
-whatever it has, so an aspect that ran out of `max_turns` hands back a thin
+whatever it has, so an aspect that ran out of `reviewer.max_turns` hands back a thin
 result that reads exactly like a clean pass. The report calls those out under
 *Cut off by the turn limit*, together with whatever conclusion each one reached.
 
-Read that conclusion before raising `max_turns`. An agent is told its budget and
+Read that conclusion before raising `reviewer.max_turns`. An agent is told its budget and
 asked to land before it runs out, but if it still gets cut off while its summary
 already reads as finished, it was not short of turns — it never stopped, and a
 bigger budget buys nothing. Measured on a 64-file MR: 15 → 25 turns left the

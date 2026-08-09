@@ -20,7 +20,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # A key nobody reads is a setting nobody applied, and ignoring it silently — the
 # pydantic default — means a typo leaves the run on defaults while the person
@@ -53,8 +53,40 @@ DEFAULT_EXCLUDES = [
 ]
 
 
+class ModelConfig(BaseModel):
+    """What to ask of a model — one of these per role.
+
+    Separate from `ProviderConfig` because the two are set by different people
+    at different times: the gateway is configured once by whoever runs it, and
+    this is what gets turned while fitting the tool to a model.
+    """
+
+    model_config = STRICT
+
+    model: str = "gpt-4o"
+    temperature: float = 0.1
+    max_tokens: int = 8000
+    max_turns: int = 25
+    # None sends nothing and leaves the model on its own default; False sends
+    # chat_template_kwargs.enable_thinking = false, which Qwen-style chat
+    # templates understand without breaking tool calling.
+    enable_thinking: bool | None = None
+    # Fields the SDK has no typed parameter for, merged into the body as-is.
+    # `enable_thinking` wins over a colliding key. Here rather than on the
+    # provider because it carries the thinking switch, which is per role.
+    extra_body: dict[str, Any] = Field(default_factory=dict)
+
+    def request_body(self) -> dict[str, Any]:
+        body: dict[str, Any] = dict(self.extra_body)
+        if self.enable_thinking is not None:
+            template_kwargs = dict(body.get("chat_template_kwargs") or {})
+            template_kwargs["enable_thinking"] = self.enable_thinking
+            body["chat_template_kwargs"] = template_kwargs
+        return body
+
+
 class ProviderConfig(BaseModel):
-    """OpenAI-compatible provider. base_url points at the custom gateway."""
+    """How to reach the gateway. What to ask of it is `ModelConfig`."""
 
     model_config = STRICT
 
@@ -63,25 +95,11 @@ class ProviderConfig(BaseModel):
     # Key inlined in the config: takes precedence over the environment variable.
     # Handy while debugging, but such a file must never reach git.
     api_key: str | None = None
-    model: str = "gpt-4o"
-    judge_model: str | None = None  # None → same as model
-    temperature: float = 0.1
-    max_tokens: int = 8000
     timeout_s: float = 300.0
     max_retries: int = 3
     # Some gateways cannot handle several tool_calls in one response.
     parallel_tool_calls: bool = True
     extra_headers: dict[str, str] = Field(default_factory=dict)
-
-    # None sends nothing and leaves the model on its own default; False sends
-    # chat_template_kwargs.enable_thinking = false, which Qwen-style chat
-    # templates understand without breaking tool calling.
-    enable_thinking: bool | None = None
-    # None follows `enable_thinking`.
-    judge_enable_thinking: bool | None = None
-    # Provider fields the SDK has no typed parameter for, merged into the body
-    # as-is. `enable_thinking` wins over a colliding key.
-    extra_body: dict[str, Any] = Field(default_factory=dict)
 
     # Defaults to the OpenAI way, Authorization: Bearer <key>; gateways often
     # want something else. See config.example.toml for the combinations.
@@ -137,23 +155,6 @@ class ProviderConfig(BaseModel):
             return f"(short, {len(key)} chars)"
         return f"{key[:4]}…{key[-4:]} ({len(key)} chars)"
 
-    def resolve_judge_model(self) -> str:
-        return self.judge_model or self.model
-
-    def resolve_judge_enable_thinking(self) -> bool | None:
-        if self.judge_enable_thinking is not None:
-            return self.judge_enable_thinking
-        return self.enable_thinking
-
-    def request_body(self, enable_thinking: bool | None) -> dict[str, Any]:
-        """Provider-specific request body the SDK has no typed fields for."""
-        body: dict[str, Any] = dict(self.extra_body)
-        if enable_thinking is not None:
-            template_kwargs = dict(body.get("chat_template_kwargs") or {})
-            template_kwargs["enable_thinking"] = enable_thinking
-            body["chat_template_kwargs"] = template_kwargs
-        return body
-
     def terminal_tool_choice_value(self, tool_name: str) -> Any:
         if self.terminal_tool_choice == "forced":
             return {"type": "function", "function": {"name": tool_name}}
@@ -182,7 +183,6 @@ class RunConfig(BaseModel):
     # Checklist items reviewed at the same time — concurrent requests to the model,
     # not OS threads.
     concurrency: int = 4
-    max_turns: int = 25
     # Changed files go to the agent in full with changed lines marked up.
     # Anything longer falls back to hunks; the agent reads the rest via read_file.
     inline_max_lines: int = 600
@@ -212,9 +212,6 @@ class RunConfig(BaseModel):
     # because severity is comparative and a pass holding one claim has no scale
     # to judge it against.
     judge_mode: Literal["batch", "two_stage"] = "batch"
-    # Turn budget for one judging pass. 0 follows max_turns — worth lowering in
-    # two_stage mode, where the first stage gives each pass one claim to settle.
-    judge_max_turns: int = 0
     # Search the tree once, before the fan-out, for references the diff
     # introduces that resolve to nothing — missing symbols, storyboards,
     # localization keys, unconnected outlets, files no build manifest mentions.
@@ -228,21 +225,54 @@ class RunConfig(BaseModel):
     # Overridden by --fail-on.
     fail_on: Literal["never", "blocker", "major", "minor", "nit"] = "never"
 
-    def resolve_judge_max_turns(self) -> int:
-        return self.judge_max_turns or self.max_turns
-
-
 class Config(BaseModel):
     model_config = STRICT
 
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
+    reviewer: ModelConfig = Field(default_factory=ModelConfig)
+    # No [judge] section means the judge runs on the reviewer's settings. The
+    # rule is here, once, rather than as a fallback inside each field: three
+    # fields with three different spellings of "unset" is what this replaced.
+    judge: ModelConfig | None = None
     run: RunConfig = Field(default_factory=RunConfig)
     # The file this came from; None means nothing but the defaults below.
     source: str | None = None
 
+    def for_judge(self) -> ModelConfig:
+        return self.judge or self.reviewer
+
+
+# Settings that used to live somewhere else. `extra="forbid"` already stops a
+# config in the old shape, but "not permitted" only says a key is wrong — for a
+# key that moved, the useful half of the answer is where it went.
+MOVED: dict[str, str] = {
+    "provider.model": "reviewer.model",
+    "provider.temperature": "reviewer.temperature",
+    "provider.max_tokens": "reviewer.max_tokens",
+    "provider.enable_thinking": "reviewer.enable_thinking",
+    "provider.extra_body": "reviewer.extra_body",
+    "provider.judge_model": "judge.model, in a [judge] section of its own",
+    "provider.judge_enable_thinking": "judge.enable_thinking, in a [judge] section",
+    "run.max_turns": "reviewer.max_turns",
+    "run.judge_max_turns": "judge.max_turns, in a [judge] section",
+    "run.min_confidence": "gone — the judge and the scope gate decide what survives",
+}
+
 
 def home_config_path() -> Path:
     return Path.home() / ".config" / "roboviewer" / "config.toml"
+
+
+def _moved_hint(exc: ValidationError) -> str:
+    """Names the new home of every moved key the file still uses."""
+    hits = [
+        f"  {key} is now {MOVED[key]}"
+        for error in exc.errors()
+        if (key := ".".join(str(part) for part in error["loc"])) in MOVED
+    ]
+    if not hits:
+        return ""
+    return "\n\nSettings moved:\n" + "\n".join(hits)
 
 
 def load_config(explicit: Path | None = None) -> Config:
@@ -264,6 +294,9 @@ def load_config(explicit: Path | None = None) -> Config:
     with path.open("rb") as fh:
         raw = tomllib.load(fh)
 
-    cfg = Config.model_validate(raw)
+    try:
+        cfg = Config.model_validate(raw)
+    except ValidationError as exc:
+        raise ValueError(f"{exc}{_moved_hint(exc)}") from exc
     cfg.source = str(path)
     return cfg

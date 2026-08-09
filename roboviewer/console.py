@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import gate, sources
 from .checklist import ChecklistItem
-from .config import Config, home_config_path
+from .config import Config, ModelConfig, home_config_path
 from .events import Event
 from .gitdiff import DiffBundle
 from .models import SEVERITY_LABEL, Finding, ReviewRun
@@ -36,7 +36,7 @@ def run_header(cfg: Config) -> None:
     origin = cfg.provider.base_url.split("//", 1)[-1].split("/", 1)[0]
     # The file, not a count: when a run goes to an endpoint nobody expected,
     # this is the line that says which file sent it there.
-    print(f"▸ {cfg.provider.model} @ {origin} · config: {cfg.source or 'built-in defaults'}")
+    print(f"▸ {cfg.reviewer.model} @ {origin} · config: {cfg.source or 'built-in defaults'}")
 
 
 def event(entry: Event, verbose: bool = False) -> None:
@@ -113,6 +113,8 @@ def config(cfg: Config, root: Path) -> None:
     print()
     _provider(cfg)
     print()
+    _roles(cfg)
+    print()
     _run(cfg, root)
 
 
@@ -129,12 +131,27 @@ def _provider(cfg: Config) -> None:
     _, key_source = cfg.provider.api_key_source()
     print("Provider:")
     print(f"  base_url     {cfg.provider.base_url}")
-    print(f"  model        {cfg.provider.model}")
-    print(f"  judge_model  {cfg.provider.resolve_judge_model()}")
-    print(f"  reasoning    items: {_thinking(cfg.provider.enable_thinking)}, "
-          f"judge: {_thinking(cfg.provider.resolve_judge_enable_thinking())}")
     print(f"  key          {cfg.provider.masked_key()}")
     print(f"  source       {key_source}")
+
+
+def _roles(cfg: Config) -> None:
+    """Both roles, and whether the judge is a section of its own.
+
+    Printed together because the question people bring here is which model each
+    stage runs on, and that used to take reading two sections and a fallback.
+    """
+    _role("Reviewer", cfg.reviewer)
+    print()
+    _role("Judge", cfg.for_judge(), follows="" if cfg.judge else " (no [judge] section)")
+
+
+def _role(title: str, model: ModelConfig, follows: str = "") -> None:
+    print(f"{title}:{follows}")
+    print(f"  model        {model.model}")
+    print(f"  max_turns    {model.max_turns}")
+    print(f"  reasoning    {_thinking(model.enable_thinking)}")
+    print(f"  sampling     temperature {model.temperature}, max_tokens {model.max_tokens}")
 
 
 def _run(cfg: Config, root: Path) -> None:
@@ -147,7 +164,6 @@ def _run(cfg: Config, root: Path) -> None:
     print(f"  output lang    {language or 'not set (model answers in the prompt language)'}")
     print(f"  output_dir     {cfg.run.output_dir}")
     print(f"  concurrency    {cfg.run.concurrency}")
-    print(f"  max_turns      {cfg.run.max_turns}")
     print(f"  reference pass {'on' if cfg.run.resolve_references else 'off'}")
     scope_state = f"±{cfg.run.scope_margin} lines" if cfg.run.enforce_scope else "off"
     print(f"  scope gate     {scope_state}")
@@ -155,8 +171,6 @@ def _run(cfg: Config, root: Path) -> None:
           f"{'' if cfg.run.fail_on == gate.NEVER else ' (exits 1 at this severity or worse)'}")
     judge_state = "off" if not cfg.run.enable_judge else cfg.run.judge_mode.replace("_", "-")
     print(f"  judge          {judge_state}")
-    print(f"  judge_turns    {cfg.run.resolve_judge_max_turns()}"
-          f"{' (follows max_turns)' if not cfg.run.judge_max_turns else ''}")
 
 
 def _prompt_sources(cfg: Config, root: Path) -> None:

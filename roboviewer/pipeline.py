@@ -180,7 +180,7 @@ class ReviewPipeline:
             target=self._diff.target,
             base_sha=self._diff.base_sha,
             head_sha=self._diff.head,
-            model=self._cfg.provider.model,
+            model=self._cfg.reviewer.model,
             started_at=datetime.now(UTC).isoformat(timespec="seconds"),
             files=self._diff.files,
             items=[ItemResult(item_id=i.id, item_title=i.title) for i in self._items],
@@ -268,9 +268,7 @@ class ReviewPipeline:
         passes = Passes(
             settings=JudgeSettings(
                 mode=self._cfg.run.judge_mode,
-                model=self._cfg.provider.resolve_judge_model(),
-                max_turns=self._cfg.run.resolve_judge_max_turns(),
-                enable_thinking=self._cfg.provider.resolve_judge_enable_thinking(),
+                model=self._cfg.for_judge(),
                 concurrency=self._cfg.run.concurrency,
             ),
             prompts=self._prompts,
@@ -322,9 +320,7 @@ class ReviewPipeline:
             prompt=self._prompts.build_item_prompt(item, self._diff),
             tools=self._tools,
             terminal_tool=SUBMIT_FINDINGS_TOOL,
-            model=self._cfg.provider.model,
-            max_turns=self._cfg.run.max_turns,
-            enable_thinking=self._cfg.provider.enable_thinking,
+            settings=self._cfg.reviewer,
             metadata={"item_id": item.id},
         )
 

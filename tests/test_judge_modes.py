@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from roboviewer.checklist import ChecklistItem
-from roboviewer.config import RunConfig
+from roboviewer.config import Config, ModelConfig, RunConfig
 from roboviewer.models import Finding, Severity, Usage
 from roboviewer.pipeline import ReviewPipeline
 from roboviewer.runners import AgentOutcome, AgentRequest, ProgressHook, Runner
@@ -131,9 +131,12 @@ def _ruling(summary: str, verdicts: list[dict[str, Any]]) -> AgentOutcome:
 # ------------------------------------------------------------------ turn budget
 
 
-def test_judging_turns_follow_max_turns_until_set() -> None:
-    assert RunConfig(max_turns=25).resolve_judge_max_turns() == 25
-    assert RunConfig(max_turns=25, judge_max_turns=8).resolve_judge_max_turns() == 8
+def test_judging_turns_follow_the_reviewer_until_the_judge_has_a_section() -> None:
+    cfg = Config(reviewer=ModelConfig(max_turns=25))
+    assert cfg.for_judge().max_turns == 25
+
+    cfg.judge = ModelConfig(max_turns=8)
+    assert cfg.for_judge().max_turns == 8
 
 
 # ------------------------------------------------------------------ fan-out

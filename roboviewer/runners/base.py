@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..config import ModelConfig
 from ..models import Usage
 
 # (event, detail) — forwarded to the console: tool calls, retries, errors
@@ -23,11 +24,10 @@ class AgentRequest:
     prompt: str
     tools: list[dict[str, Any]]
     terminal_tool: dict[str, Any]
-    model: str
-    max_turns: int = 25
-    # Reasoning mode for this agent; the judge and the reviewers may differ.
-    # None leaves the model on its own default.
-    enable_thinking: bool | None = None
+    # What to ask of the model, carried per request rather than held by the
+    # runner: the judge and the reviewers may be configured differently, down
+    # to temperature and the request body.
+    settings: ModelConfig
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property

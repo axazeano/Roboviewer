@@ -92,9 +92,9 @@ class OpenAIAgentRunner(Runner):
         usage = Usage()
         turns = 0
 
-        for turn in range(1, request.max_turns + 1):
+        for turn in range(1, request.settings.max_turns + 1):
             turns = turn
-            last_turn = turn == request.max_turns
+            last_turn = turn == request.settings.max_turns
             try:
                 # On the last turn leave no choice: submit the result
                 completion = await self._complete(
@@ -121,12 +121,12 @@ class OpenAIAgentRunner(Runner):
                         turns=turns,
                         error=(
                             f"the model never called {request.terminal_name} "
-                            f"in {request.max_turns} turns"
+                            f"in {request.settings.max_turns} turns"
                         ),
                     )
                 transcript.add_reply(message.content)
                 transcript.say(
-                    f"Keep going. {request.max_turns - turn} turn(s) left, and "
+                    f"Keep going. {request.settings.max_turns - turn} turn(s) left, and "
                     f"you must call the {request.terminal_name} tool before they run out."
                 )
                 continue
@@ -157,7 +157,7 @@ class OpenAIAgentRunner(Runner):
         """Runs the tools the model asked for, and returns the submitted payload
         as soon as one of the calls is the terminal one — the review is over at
         that point, and any call after it in the same reply is moot."""
-        last_turn = turn == request.max_turns
+        last_turn = turn == request.settings.max_turns
         for call in tool_calls:
             fn_name = call.function.name
             args = parse_arguments(call.function.arguments or "")
@@ -197,14 +197,14 @@ class OpenAIAgentRunner(Runner):
     ) -> dict[str, Any]:
         """One request, in the shape this provider was configured to want."""
         kwargs: dict[str, Any] = {
-            "model": request.model,
+            "model": request.settings.model,
             "messages": transcript.messages,
             "tools": [*request.tools, request.terminal_tool],
-            "temperature": self._provider.temperature,
-            "max_tokens": self._provider.max_tokens,
+            "temperature": request.settings.temperature,
+            "max_tokens": request.settings.max_tokens,
             "extra_headers": self._headers,
         }
-        if body := self._provider.request_body(request.enable_thinking):
+        if body := request.settings.request_body():
             kwargs["extra_body"] = body
         if force_terminal:
             kwargs["tool_choice"] = self._provider.terminal_tool_choice_value(request.terminal_name)
@@ -256,7 +256,9 @@ class _Transcript:
 
     @classmethod
     def open(cls, request: AgentRequest) -> _Transcript:
-        budget = BUDGET_NOTE.format(max_turns=request.max_turns, terminal=request.terminal_name)
+        budget = BUDGET_NOTE.format(
+            max_turns=request.settings.max_turns, terminal=request.terminal_name
+        )
         return cls(
             [
                 {"role": "system", "content": request.system + budget},
@@ -297,7 +299,7 @@ class _Transcript:
 def _wrap_up(request: AgentRequest, transcript: _Transcript, turn: int, emit: ProgressHook) -> None:
     """Said after the tool results, so it is the last thing the agent reads
     before deciding what to do with the turn it has left."""
-    left = request.max_turns - turn
+    left = request.settings.max_turns - turn
     if 0 < left <= WRAP_UP_MARGIN:
         emit("wrap-up", f"{left} turn(s) left")
         transcript.say(WRAP_UP_NOTE.format(left=left, terminal=request.terminal_name))

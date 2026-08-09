@@ -28,6 +28,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from .config import ModelConfig
 from .events import Event, EventSink
 from .gitdiff import DiffBundle
 from .models import Finding, ReviewRun, Severity, Usage, Verdict
@@ -49,17 +50,16 @@ class Judge(Protocol):
 
 @dataclass(frozen=True)
 class JudgeSettings:
-    """The five values judging takes out of the config.
+    """What judging takes out of the config.
 
     Named apart so a judging pass can be built and tested without a whole
-    `Config`, and so it is visible at a glance that the judge may run on a
-    different model, budget and reasoning mode than the reviewers.
+    `Config`. `model` is a whole `ModelConfig` rather than a handful of copied
+    fields, which is what lets the judge differ from the reviewers in anything
+    at all — down to temperature — without another field appearing here.
     """
 
     mode: str
-    model: str
-    max_turns: int
-    enable_thinking: bool | None
+    model: ModelConfig
     concurrency: int
 
 
@@ -93,9 +93,7 @@ class Passes:
             prompt=prompt,
             tools=self.tools,
             terminal_tool=terminal_tool,
-            model=self.settings.model,
-            max_turns=self.settings.max_turns,
-            enable_thinking=self.settings.enable_thinking,
+            settings=self.settings.model,
             metadata=metadata,
         )
         return await self.runner.run(request, self._progress(label))

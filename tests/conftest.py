@@ -72,6 +72,6 @@ class ScriptedRunner(Runner):
 @pytest.fixture
 def config() -> Config:
     cfg = Config()
-    cfg.provider.model = "test-model"
+    cfg.reviewer.model = "test-model"
     cfg.run.enable_judge = False
     return cfg

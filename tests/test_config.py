@@ -21,11 +21,13 @@ from roboviewer.config import Config, home_config_path, load_config
 HOME_CONFIG = """\
 [provider]
 base_url = "https://gateway.internal/v1"
+
+[reviewer]
 model = "home-model"
 """
 
 OTHER_CONFIG = """\
-[provider]
+[reviewer]
 model = "named-model"
 """
 
@@ -52,14 +54,14 @@ def test_the_default_location_is_read_when_nothing_names_another() -> None:
 
     cfg = load_config()
 
-    assert cfg.provider.model == "home-model"
+    assert cfg.reviewer.model == "home-model"
     assert cfg.source == str(path)
 
 
 def test_no_file_at_all_leaves_the_built_in_defaults() -> None:
     cfg = load_config()
 
-    assert cfg.provider.model == Config().provider.model
+    assert cfg.reviewer.model == Config().reviewer.model
     assert cfg.source is None
 
 
@@ -72,7 +74,7 @@ def test_a_named_file_replaces_the_default_one_rather_than_layering_over_it(
 
     cfg = load_config(named)
 
-    assert cfg.provider.model == "named-model"
+    assert cfg.reviewer.model == "named-model"
     # base_url is set in the home file and absent from the named one. Under the
     # old stacking it survived; now the named file is the whole configuration.
     assert cfg.provider.base_url == Config().provider.base_url
@@ -149,8 +151,8 @@ def test_an_unknown_key_at_the_top_level_is_refused() -> None:
 def test_an_unknown_key_inside_provider_is_refused() -> None:
     # The one that matters: the outer model never sees inside a section, so a
     # policy set only there would let this through.
-    with pytest.raises(ValueError, match="jugde_model"):
-        Config.model_validate({"provider": {"jugde_model": "typo"}})
+    with pytest.raises(ValueError, match="bse_url"):
+        Config.model_validate({"provider": {"bse_url": "typo"}})
 
 
 def test_an_unknown_key_inside_run_is_refused() -> None:
@@ -161,9 +163,59 @@ def test_an_unknown_key_inside_run_is_refused() -> None:
 def test_a_typo_stops_the_run_and_names_the_key(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    write_home_config('[provider]\nmodel = "m"\njugde_model = "typo"\n')
+    write_home_config('[reviewer]\nmodel = "m"\nmodle = "typo"\n')
 
     # 2 is "the tool could not run", the same code every other setup failure uses
     assert main(["--show-config"]) == 2
 
-    assert "jugde_model" in capsys.readouterr().err
+    assert "modle" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------ the two kinds of section
+
+
+def test_a_config_in_the_old_shape_says_where_each_setting_went(tmp_path: Path) -> None:
+    old = tmp_path / "old.toml"
+    old.write_text(
+        '[provider]\nmodel = "m"\njudge_model = "strong"\n\n[run]\nmax_turns = 30\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as caught:
+        load_config(old)
+
+    message = str(caught.value)
+    # Naming the key is what forbidding extras already does; the useful half is
+    # where it went, and a reader with an old file needs all three at once.
+    assert "provider.model is now reviewer.model" in message
+    assert "judge.model" in message
+    assert "run.max_turns is now reviewer.max_turns" in message
+
+
+def test_a_removed_setting_says_so_rather_than_only_being_refused(tmp_path: Path) -> None:
+    old = tmp_path / "old.toml"
+    old.write_text("[run]\nmin_confidence = 0.4\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="gone"):
+        load_config(old)
+
+
+def test_no_judge_section_means_the_judge_runs_as_the_reviewer() -> None:
+    cfg = Config.model_validate({"reviewer": {"model": "m", "max_turns": 15}})
+
+    assert cfg.judge is None
+    assert cfg.for_judge() is cfg.reviewer
+    assert cfg.for_judge().max_turns == 15
+
+
+def test_a_judge_flag_gives_the_judge_settings_of_its_own(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Nothing to write on without a [judge] section, so the flag has to make one
+    write_home_config('[reviewer]\nmodel = "m"\nmax_turns = 15\n')
+
+    assert main(["--show-config", "--judge-turns", "6"]) == 0
+
+    out = capsys.readouterr().out
+    assert "max_turns    15" in out
+    assert "max_turns    6" in out

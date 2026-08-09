@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from roboviewer.checklist import ChecklistItem
-from roboviewer.config import ProviderConfig, RunConfig
+from roboviewer.config import ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import ItemResult, Usage
 from roboviewer.pipeline import ReviewPipeline
 from roboviewer.report import render_report
@@ -61,8 +61,7 @@ def _request(max_turns: int):
         prompt="p",
         tools=tool_schemas("base"),
         terminal_tool=SUBMIT_FINDINGS_TOOL,
-        model="m",
-        max_turns=max_turns,
+        settings=ModelConfig(model="m", max_turns=max_turns),
     )
 
 

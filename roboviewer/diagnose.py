@@ -180,7 +180,7 @@ class ProbeResult:
         return f"{marker} · finish_reason={self.finish_reason} · {text}"
 
 
-async def _request(provider: ProviderConfig, *, tools: bool, tool_choice: Any,
+async def _request(provider: ProviderConfig, model: str, *, tools: bool, tool_choice: Any,
                    wire: _Wire | None = None) -> ProbeResult:
     timeout = min(provider.timeout_s, 60.0)
     client = AsyncOpenAI(
@@ -191,7 +191,7 @@ async def _request(provider: ProviderConfig, *, tools: bool, tool_choice: Any,
         http_client=wire.http_client(timeout) if wire else None,
     )
     kwargs: dict[str, Any] = {
-        "model": provider.model,
+        "model": model,
         "messages": [{"role": "user", "content": "Call the pong tool with the word ping."
                       if tools else "ping"}],
         "max_tokens": 64,
@@ -239,16 +239,16 @@ def _print_auth_hints() -> None:
 
 
 async def _probe_all(
-    provider: ProviderConfig, wire: _Wire
+    provider: ProviderConfig, model: str, wire: _Wire
 ) -> tuple[ProbeResult, dict[str, ProbeResult]]:
     """Plain request first; tool modes are only worth probing if it succeeded."""
-    plain = await _request(provider, tools=False, tool_choice=None, wire=wire)
+    plain = await _request(provider, model, tools=False, tool_choice=None, wire=wire)
     if not plain.ok:
         return plain, {}
 
     modes: dict[str, ProbeResult] = {}
     for key, _, choice in TOOL_MODES:
-        modes[key] = await _request(provider, tools=True, tool_choice=choice)
+        modes[key] = await _request(provider, model, tools=True, tool_choice=choice)
     return plain, modes
 
 
@@ -321,12 +321,15 @@ def _recommend_terminal_choice(working: list[str]) -> None:
         print("  Raising max_turns helps.")
 
 
-def check_provider(provider: ProviderConfig) -> int:
+def check_provider(provider: ProviderConfig, model: str) -> int:
+    """The model is passed in rather than read off the provider: reaching the
+    gateway and choosing what to ask it are two settings now, and the probe
+    needs one name out of the second."""
     key, source = provider.api_key_source()
 
     print("Provider")
     print(f"  base_url       {provider.base_url}")
-    print(f"  model          {provider.model}")
+    print(f"  model          {model}")
     print(f"  key            {provider.masked_key()}")
     print(f"  key source     {source}")
     print(f"  auth           {provider.auth_header}: "
@@ -344,7 +347,7 @@ def check_provider(provider: ProviderConfig) -> int:
         print("⚠ The key has spaces or a newline at its edges — a common cause of 401.")
 
     wire = _Wire()
-    plain, modes = asyncio.run(_probe_all(provider, wire))
+    plain, modes = asyncio.run(_probe_all(provider, model, wire))
 
     print("1. Plain request")
     if plain.ok:
