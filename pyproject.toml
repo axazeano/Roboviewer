@@ -80,7 +80,9 @@ max-args = 6
 
 [tool.mypy]
 python_version = "3.11"
-files = ["roboviewer"]
+# `corpus` is not part of the wheel — it builds the measurement corpus beside
+# the tool — but it is held to the same types as the tool it measures.
+files = ["roboviewer", "corpus"]
 plugins = ["pydantic.mypy"]
 warn_redundant_casts = true
 warn_unused_ignores = true
