@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A push to a branch with an open pull request supersedes the previous run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The job name is the required-status-check context. Keep it stable: adding a
+  # version matrix would rename it, and the required check would stop running.
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"  # the minimum requires-python promises
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: install
+        run: pip install -e ".[dev]"
+
+      # Each check reports even when an earlier one failed, so one run shows all
+      # three verdicts. The job still fails: this reports more, not less.
+      - name: ruff
+        run: ruff check --output-format=github .
+
+      - name: mypy
+        if: always()
+        run: mypy
+
+      - name: pytest
+        if: always()
+        run: pytest -q
