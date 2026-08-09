@@ -133,14 +133,6 @@ def test_at_equal_severity_the_more_confident_wording_survives() -> None:
 # ------------------------------------------------------------------ the list itself
 
 
-def test_findings_below_min_confidence_never_reach_the_judge() -> None:
-    merged = merge_findings(
-        [_item("correctness", _finding(confidence=0.2, line=99))], min_confidence=0.5
-    )
-
-    assert merged == []
-
-
 def test_the_list_is_ordered_by_severity_then_confidence_and_numbered() -> None:
     merged = merge_findings(
         [

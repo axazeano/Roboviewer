@@ -26,7 +26,7 @@ from .tools import SUBMIT_FINDINGS_TOOL, tool_schemas
 # --------------------------------------------------------------------------- merge
 
 
-def merge_findings(results: list[ItemResult], min_confidence: float = 0.0) -> list[Finding]:
+def merge_findings(results: list[ItemResult]) -> list[Finding]:
     """Collapses duplicates: different checklist items often flag the same line.
 
     Grouping is coarse (file plus a 5-line window); inside a group titles and
@@ -34,7 +34,7 @@ def merge_findings(results: list[ItemResult], min_confidence: float = 0.0) -> li
     to show two similar findings than to lose a real one.
     """
     merged: list[Finding] = []
-    for group in _by_place(_reported(results, min_confidence)).values():
+    for group in _by_place(_reported(results)).values():
         merged.extend(_collapse(group))
 
     merged.sort(key=lambda f: (SEVERITY_ORDER[f.severity], -f.confidence, f.file, f.line or 0))
@@ -43,13 +43,11 @@ def merge_findings(results: list[ItemResult], min_confidence: float = 0.0) -> li
     return merged
 
 
-def _reported(results: list[ItemResult], min_confidence: float) -> list[Finding]:
+def _reported(results: list[ItemResult]) -> list[Finding]:
     """Everything worth carrying forward, each finding knowing who found it."""
     flat: list[Finding] = []
     for result in results:
         for finding in result.findings:
-            if finding.confidence < min_confidence:
-                continue
             finding.sources = finding.sources or [result.item_id]
             flat.append(finding)
     return flat
@@ -165,7 +163,7 @@ class ReviewPipeline:
             return self._finish_run(run, "No changes relative to the target branch")
 
         run.items = await self._review_every_item()
-        run.findings = merge_findings(run.items, self._cfg.run.min_confidence)
+        run.findings = merge_findings(run.items)
         self._announce_merge(run.findings)
         run.findings, run.out_of_scope = self._split_off_out_of_scope(run.findings)
         await self._judge_findings(run)

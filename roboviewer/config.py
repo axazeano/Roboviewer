@@ -184,8 +184,6 @@ class RunConfig(BaseModel):
     # Setting this in a config REPLACES the defaults rather than extending them —
     # copy DEFAULT_EXCLUDES into your list if you still want them.
     exclude_globs: list[str] = Field(default_factory=lambda: list(DEFAULT_EXCLUDES))
-    # Drop findings below this confidence before the judge even sees them.
-    min_confidence: float = 0.0
     # Keep only findings that point at what the MR changed. Reviewers are given
     # changed files in full — which is what stops them inventing missing handling
     # that sits twenty lines above — and the cost of that is a standing

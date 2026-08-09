@@ -113,7 +113,6 @@ inline_max_total_chars = 400000
 # Hunk context for files that were not inlined in full
 diff_context_lines = 12
 diff_max_chars = 300000
-min_confidence = 0.0
 # Before the review starts, search the tree once for references this diff
 # introduces that resolve to nothing: symbols with no declaration, storyboards
 # named but never added, localization keys with no entry, outlets no nib
