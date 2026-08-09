@@ -28,12 +28,22 @@ from typing import Any
 
 from openai import APIError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
 
+from .. import ratelimit
 from ..config import ProviderConfig, RunConfig
 from ..models import Usage
+from ..ratelimit import RateLimiter
 from ..tools import dispatch, parse_arguments
 from .base import AgentOutcome, AgentRequest, ProgressHook, Runner
 
 _JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+
+# First retry waits this long, then it doubles. A 429 that names its own delay
+# overrides it — the provider knows when its minute rolls over and we do not.
+RETRY_DELAY_S = 2.0
+
+# "Service overloaded": the provider shedding load rather than metering it, and
+# the answer is the same — come back later, all of us.
+SERVICE_OVERLOADED = 503
 
 # How many turns before the limit the agent is asked to land. Two leaves one turn
 # to finish the check it is on and one to submit; the forced tool_choice on the
@@ -75,6 +85,9 @@ class OpenAIAgentRunner(Runner):
         )
         # Auth headers go per-request: that is the only way to drop the Bearer header
         self._headers = provider.request_headers()
+        # One budget for the whole run. Every agent reserves from it, because
+        # the provider counts the run as a whole and so must we.
+        self._limiter = RateLimiter(provider.rate_limits)
 
     async def aclose(self) -> None:
         await self._client.close()
@@ -199,23 +212,32 @@ class OpenAIAgentRunner(Runner):
         return kwargs
 
     async def _send(self, kwargs: dict[str, Any], emit: ProgressHook) -> Any:
-        """Retries what is worth retrying, with the delay doubling each time."""
-        delay = 2.0
+        """Waits for the run's share of the provider, then retries what is worth
+        retrying with the delay doubling each time."""
+        delay = RETRY_DELAY_S
         last_exc: Exception | None = None
         for attempt in range(1, self._provider.max_retries + 1):
             try:
-                return await self._client.chat.completions.create(**kwargs)
+                return await self._attempt(kwargs, emit)
             except (RateLimitError, APITimeoutError) as exc:
                 last_exc = exc
+                # Everyone waits, not only whoever was refused: the other agents
+                # are a moment from the same answer, and asking again together
+                # is what turns a busy minute into a failed run.
+                held = self._limiter.pause(ratelimit.retry_after(exc) or delay)
                 emit(
                     "retry",
-                    f"attempt {attempt}/{self._provider.max_retries}: {type(exc).__name__}",
+                    f"attempt {attempt}/{self._provider.max_retries}: "
+                    f"{type(exc).__name__}, holding every agent {held:.0f}s",
                 )
             except APIError as exc:
                 status = getattr(exc, "status_code", None)
                 # 4xx other than 429 is our own fault; retrying will not help
                 if status is not None and 400 <= status < 500 and status != 429:
                     raise
+                if status == SERVICE_OVERLOADED:
+                    # "Come back later" in a different number
+                    self._limiter.pause(ratelimit.retry_after(exc) or delay)
                 last_exc = exc
                 emit("retry", f"attempt {attempt}/{self._provider.max_retries}: HTTP {status}")
 
@@ -225,6 +247,38 @@ class OpenAIAgentRunner(Runner):
 
         assert last_exc is not None
         raise last_exc
+
+    async def _attempt(self, kwargs: dict[str, Any], emit: ProgressHook) -> Any:
+        """One request, paced against what the run has already spent.
+
+        The raw response rather than the parsed one, because the headers carry
+        the provider's current ceilings — and those are worth more than any
+        number configured here, since they move with usage.
+        """
+        reservation = await self._limiter.reserve(
+            prompt=ratelimit.estimate_tokens(kwargs["messages"]) + self._tools_estimate(kwargs),
+            generated=int(kwargs.get("max_tokens") or 0),
+        )
+        if reservation.held:
+            emit("paced", f"waited {reservation.waited:.0f}s on {reservation.reason}")
+
+        raw = await self._client.chat.completions.with_raw_response.create(**kwargs)
+        completion = await raw.parse()
+
+        if adopted := self._limiter.observe(raw.headers):
+            emit("limits", ", ".join(f"{name} {value}/min" for name, value in adopted.items()))
+        usage = _extract_usage(completion)
+        self._limiter.settle(
+            reservation,
+            prompt=usage.prompt_tokens,
+            uncached=max(0, usage.prompt_tokens - usage.cached_tokens),
+            generated=usage.completion_tokens,
+        )
+        return completion
+
+    def _tools_estimate(self, kwargs: dict[str, Any]) -> int:
+        """The schemas go out with every turn and are a real part of the prompt."""
+        return ratelimit.estimate_tokens(kwargs.get("tools") or [])
 
 
 @dataclass
