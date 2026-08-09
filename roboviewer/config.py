@@ -20,7 +20,13 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+# A key nobody reads is a setting nobody applied, and ignoring it silently — the
+# pydantic default — means a typo leaves the run on defaults while the person
+# who wrote it believes otherwise. Set on every model: a stray key inside
+# [provider] is checked by ProviderConfig, not by the outer one.
+STRICT = ConfigDict(extra="forbid")
 
 try:  # private SDK API: the only way to drop the built-in Authorization header
     from openai._types import Omit as _OmitType
@@ -49,6 +55,8 @@ DEFAULT_EXCLUDES = [
 
 class ProviderConfig(BaseModel):
     """OpenAI-compatible provider. base_url points at the custom gateway."""
+
+    model_config = STRICT
 
     base_url: str = "https://api.openai.com/v1"
     api_key_env: str = "ROBOVIEWER_API_KEY"
@@ -153,6 +161,8 @@ class ProviderConfig(BaseModel):
 
 
 class RunConfig(BaseModel):
+    model_config = STRICT
+
     # Branches are deliberately absent: the target is always a CLI argument and
     # the source defaults to the current branch.
     checklist_dir: str = "checklists/default"
@@ -223,6 +233,8 @@ class RunConfig(BaseModel):
 
 
 class Config(BaseModel):
+    model_config = STRICT
+
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
     run: RunConfig = Field(default_factory=RunConfig)
     # The file this came from; None means nothing but the defaults below.

@@ -136,3 +136,34 @@ def test_show_config_says_so_when_there_is_no_file(
     assert main(["--show-config"]) == 0
 
     assert "everything on defaults" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ keys nobody reads
+
+
+def test_an_unknown_key_at_the_top_level_is_refused() -> None:
+    with pytest.raises(ValueError, match="nonsense"):
+        Config.model_validate({"nonsense": 1})
+
+
+def test_an_unknown_key_inside_provider_is_refused() -> None:
+    # The one that matters: the outer model never sees inside a section, so a
+    # policy set only there would let this through.
+    with pytest.raises(ValueError, match="jugde_model"):
+        Config.model_validate({"provider": {"jugde_model": "typo"}})
+
+
+def test_an_unknown_key_inside_run_is_refused() -> None:
+    with pytest.raises(ValueError, match="max_turnss"):
+        Config.model_validate({"run": {"max_turnss": 30}})
+
+
+def test_a_typo_stops_the_run_and_names_the_key(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    write_home_config('[provider]\nmodel = "m"\njugde_model = "typo"\n')
+
+    # 2 is "the tool could not run", the same code every other setup failure uses
+    assert main(["--show-config"]) == 2
+
+    assert "jugde_model" in capsys.readouterr().err
