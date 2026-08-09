@@ -16,7 +16,7 @@ from pathlib import Path
 
 from . import ci, console, gate, gitdiff, renders, sources
 from .checklist import ChecklistItem, load_checklist
-from .config import Config, ModelConfig, load_config
+from .config import Config, load_config
 from .pipeline import ReviewPipeline, output_dir_for
 from .prompts import PromptError, Prompts
 from .report import save
@@ -92,15 +92,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--checklist", help="Directory holding the checklist items")
     parser.add_argument("--only", help="Run only these items, comma-separated")
-    parser.add_argument("--model", help="Override the model")
-    parser.add_argument(
-        "--thinking",
-        choices=("on", "off"),
-        help=(
-            "Reasoning mode for this run, for both the items and the judge. "
-            "Without the flag, whatever the config says"
-        ),
-    )
     parser.add_argument(
         "--format",
         type=report_formats,
@@ -133,25 +124,6 @@ def build_parser() -> argparse.ArgumentParser:
         "-j", "--concurrency", type=int, help="How many items to review in parallel"
     )
     parser.add_argument("--no-judge", action="store_true", help="Skip the final judge pass")
-    parser.add_argument(
-        "--judge-mode",
-        choices=("batch", "two-stage"),
-        help=(
-            "How findings get verified: 'batch' is one pass over the whole list, "
-            "'two-stage' spends a separate pass on each finding and then rules on "
-            "the survivors together. Without the flag, whatever the config says"
-        ),
-    )
-    parser.add_argument(
-        "--judge-turns",
-        type=int,
-        metavar="N",
-        help=(
-            "Turn budget for one judging pass. Without the flag it follows "
-            "max_turns — worth lowering with --judge-mode two-stage, where the "
-            "first stage gives each pass a single claim to settle"
-        ),
-    )
     parser.add_argument(
         "-v",
         "--verbose",
@@ -219,53 +191,20 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
         cfg.run.output_dir = str(Path(args.output).expanduser())
     if args.checklist:
         cfg.run.checklist_dir = args.checklist
-    if args.model:
-        # Only the reviewer: with no [judge] section the judge follows it, and
-        # with one it named its own model on purpose.
-        cfg.reviewer.model = args.model
     if args.format:
         # Replaces the configured list rather than extending it: --format md is a
         # way to say "just markdown this time", and appending would make that
         # impossible.
         cfg.run.report_formats = args.format
-    if args.thinking:
-        # Overrides both stages; telling them apart is a config-level choice
-        for role in _configured_roles(cfg):
-            role.enable_thinking = args.thinking == "on"
     if args.language:
         cfg.run.output_language = args.language
     if args.concurrency:
         cfg.run.concurrency = args.concurrency
-    if args.judge_mode:
-        # Hyphen on the command line, underscore in the config
-        cfg.run.judge_mode = args.judge_mode.replace("-", "_")
-    if args.judge_turns:
-        _judge_role(cfg).max_turns = args.judge_turns
     if args.fail_on:
         cfg.run.fail_on = args.fail_on
     if args.no_judge:
         cfg.run.enable_judge = False
     return cfg
-
-
-def _configured_roles(cfg: Config) -> list[ModelConfig]:
-    """Every role the config actually spells out.
-
-    A flag meant for both stages writes on the judge only when the judge is
-    its own section; otherwise it follows the reviewer already.
-    """
-    return [cfg.reviewer] if cfg.judge is None else [cfg.reviewer, cfg.judge]
-
-
-def _judge_role(cfg: Config) -> ModelConfig:
-    """The judge's settings, made concrete so a flag has something to write on.
-
-    Without a `[judge]` section there is nothing to set, so it starts as a copy
-    of the reviewer — which is what having no section already meant.
-    """
-    if cfg.judge is None:
-        cfg.judge = cfg.reviewer.model_copy(deep=True)
-    return cfg.judge
 
 
 def _execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:

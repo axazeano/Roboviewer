@@ -373,26 +373,30 @@ models tend to lose the later aspects when asked to hold many. Compare the
 A slow run is rarely slow for the reason it looks like. Resending the same
 context block to eight agents is the visible cost and usually not the real one:
 providers serve a repeated prefix from cache. The time goes into the model
-thinking, token by token, on every turn. `--thinking off` runs a reasoning model
-with that switched off — a large speedup, and a large risk to depth, so it
-belongs on a merge request whose problems are already known.
+thinking, token by token, on every turn. `enable_thinking = false` under
+`[reviewer]` runs a reasoning model with that switched off — a large speedup,
+and a large risk to depth, so it belongs on a merge request whose problems are
+already known.
 
 Watch the status column for ⚠️. On its last turn an agent is forced to submit
-whatever it has, so an aspect that ran out of `reviewer.max_turns` hands back a thin
-result that reads exactly like a clean pass. The report calls those out under
+whatever it has, so an aspect that ran out of `reviewer.max_turns` hands back a
+thin result that reads exactly like a clean pass. The report calls those out under
 *Cut off by the turn limit*, together with whatever conclusion each one reached.
 
-Read that conclusion before raising `reviewer.max_turns`. An agent is told its budget and
-asked to land before it runs out, but if it still gets cut off while its summary
+Read that conclusion before raising `reviewer.max_turns`. An agent is told its
+budget and asked to land before it runs out, but if it still gets cut off while its summary
 already reads as finished, it was not short of turns — it never stopped, and a
 bigger budget buys nothing. Measured on a 64-file MR: 15 → 25 turns left the
 same seven of eight agents cut off and cost 67% more tokens.
 
-Beyond that, `--model` swaps the model for a single run, `-j` changes how many
-items run concurrently, `--judge-mode two-stage` gives every finding its own
-verification pass and then a judge over the survivors, and `--no-judge` skips
-verification entirely — useful when you are iterating on a prompt and want the
-raw output.
+Everything else here is a config setting rather than a flag, which is
+deliberate: fitting the tool to a model is something you settle once and keep,
+not something you retype per run, and `--help` is shorter for the people who
+never do it. `judge_mode = "two_stage"` under `[run]` gives every finding its
+own verification pass and then a judge over the survivors; a `[judge]` section
+with a `model` of its own puts a stronger model on the verdicts. `--no-judge` stays on the command line, because skipping verification
+is what you do while iterating on a prompt and want the raw output, and `-j`
+stays because how many agents run at once is about the machine, not the model.
 
 ## What it doesn't do
 

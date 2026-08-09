@@ -59,7 +59,6 @@ max_turns = 25
 # provider's prefix cache. Switching it off trades review depth for speed by an
 # amount that depends on the model, so it is worth running both ways against a
 # merge request whose problems are already known.
-# `--thinking on|off` overrides this for a single run.
 # enable_thinking = false
 
 # Request fields the OpenAI SDK has no parameter for, sent in the body as-is.
@@ -149,7 +148,7 @@ enforce_scope = true
 # deleted block. Raise it to let more of the surrounding file back in.
 scope_margin = 5
 enable_judge = true
-# How findings get verified. Overridden by --judge-mode.
+# How findings get verified.
 #   "batch"     — one pass rules on the whole list. Cheap, and the judge sees
 #                 every finding at once, so it catches duplicates naturally.
 #   "two_stage" — a separate pass per finding, then one pass over what survived.

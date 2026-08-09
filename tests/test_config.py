@@ -208,13 +208,12 @@ def test_no_judge_section_means_the_judge_runs_as_the_reviewer() -> None:
     assert cfg.for_judge().max_turns == 15
 
 
-def test_a_judge_flag_gives_the_judge_settings_of_its_own(
+def test_the_judge_section_is_what_makes_the_two_roles_differ(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # Nothing to write on without a [judge] section, so the flag has to make one
-    write_home_config('[reviewer]\nmodel = "m"\nmax_turns = 15\n')
+    write_home_config('[reviewer]\nmodel = "m"\nmax_turns = 15\n\n[judge]\nmax_turns = 6\n')
 
-    assert main(["--show-config", "--judge-turns", "6"]) == 0
+    assert main(["--show-config"]) == 0
 
     out = capsys.readouterr().out
     assert "max_turns    15" in out
