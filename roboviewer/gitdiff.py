@@ -423,16 +423,29 @@ class DiffBundle:
         return "\n".join(rows)
 
 
+@dataclass(frozen=True)
+class DiffBudget:
+    """How much text one review is allowed to read.
+
+    The four numbers are one decision, not four: raising the inline budget
+    without raising the hunk one only moves where the same context is cut. They
+    travel together from the config down to the two renderers, so they arrive
+    together.
+    """
+
+    context_lines: int
+    max_chars: int
+    inline_max_lines: int = 600
+    inline_max_total_chars: int = 400_000
+
+
 def collect(
     root: Path,
     target: str,
     source: str | None = None,
     *,
-    context_lines: int,
-    max_chars: int,
+    budget: DiffBudget,
     excludes: list[str],
-    inline_max_lines: int = 600,
-    inline_max_total_chars: int = 400_000,
     resolve_references: bool = True,
 ) -> DiffBundle:
     """Collects the review context for a pair of branches.
@@ -461,10 +474,12 @@ def collect(
     changes = change_map(root, base, resolved_source, [f.file for f in files])
     annotated, inlined, fallback = build_annotated(
         root, resolved_source, files, changes=changes,
-        max_lines=inline_max_lines, max_total_chars=inline_max_total_chars,
+        max_lines=budget.inline_max_lines, max_total_chars=budget.inline_max_total_chars,
     )
     # Hunks are only needed for what was not inlined in full
-    text, truncated = diff_text(root, base, resolved_source, fallback, context_lines, max_chars)
+    text, truncated = diff_text(
+        root, base, resolved_source, fallback, budget.context_lines, budget.max_chars
+    )
     return DiffBundle(
         root=root,
         branch=branch_name,

@@ -305,11 +305,13 @@ def _diff(cfg: Config, root: Path, target: str, source: str | None) -> gitdiff.D
             root,
             target,
             source,
-            context_lines=cfg.run.diff_context_lines,
-            max_chars=cfg.run.diff_max_chars,
+            budget=gitdiff.DiffBudget(
+                context_lines=cfg.run.diff_context_lines,
+                max_chars=cfg.run.diff_max_chars,
+                inline_max_lines=cfg.run.inline_max_lines,
+                inline_max_total_chars=cfg.run.inline_max_total_chars,
+            ),
             excludes=cfg.run.exclude_globs,
-            inline_max_lines=cfg.run.inline_max_lines,
-            inline_max_total_chars=cfg.run.inline_max_total_chars,
             resolve_references=cfg.run.resolve_references,
         )
     except gitdiff.GitError as exc:

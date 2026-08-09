@@ -1,19 +1,62 @@
 # Baseline before the simplification work
 
-Measured on commit `e105f0d`, with the tool configuration in `pyproject.toml`.
-Nothing here is a target in itself — the point is that a later measurement can
-say whether a change made the code smaller or only moved it.
+**Historical snapshot.** Everything from "Totals" down was measured on commit
+`e105f0d` and is left as it was written; it is not kept current. The section
+directly below is the second measurement the snapshot existed to make possible.
+
+Measured with the tool configuration in `pyproject.toml`. Nothing here is a
+target in itself — the point is that a later measurement can say whether a
+change made the code smaller or only moved it.
 
 ```bash
 pip install -e ".[dev]"
-ruff check roboviewer tests      # style, bugs, cyclomatic complexity
+ruff check .                     # style, bugs, cyclomatic complexity
 mypy                             # types; files and plugins come from pyproject
 complexipy roboviewer            # cognitive complexity, which ruff has no rule for
 pytest -q
 ```
 
-Thresholds are configured but not enforced anywhere: no CI, no pre-commit hook.
-A failing count is a finding to read, not a build to break.
+The snapshot recorded that the thresholds were configured but enforced nowhere:
+no CI, no pre-commit hook, so a failing count was a finding to read rather than
+a build to break. Half of that is now false — TASK-2 put ruff, mypy and pytest
+in front of every push and pull request, and TASK-3 brought the counts to zero.
+There is still no pre-commit hook, and `complexipy` is still not in the
+pipeline: nothing enforces cognitive complexity.
+
+## The second measurement
+
+After TASK-3, on the same commands:
+
+| Measurement | `e105f0d` | now |
+| --- | --- | --- |
+| ruff findings | 116 (18 auto-fixable) | 0 |
+| mypy errors | 7 in 3 files, 24 files checked | 0, 30 files checked |
+| cognitive complexity, package total | 718 over 193 functions | 680 over 257 functions |
+| functions over the default limit of 15 | 8 | 2 |
+| package size | 4804 lines over 20 files | 5597 lines over 30 files |
+| tests | 176 passed | 247 passed |
+
+Two functions are still over the cognitive limit, and only one of them is from
+the original eight: `checklist.py::load_checklist`, unchanged at 19. The other
+seven are under the limit now, the three worst included — `change_map` at 30,
+`run` at 27, `_unresolved_symbols` at 26. The second one over is
+`resolve.py::_rule_matches` at 18, which did not exist at the baseline; it came
+out of `_resource_misses`, which was 24 then and is under the limit now. So the
+count went from eight to two, but one of the two is newly introduced rather than
+left over.
+
+This answers the question the baseline was taken to answer, and the answer is
+not the flattering one. The package grew: 800 more lines across ten more files.
+What fell is complexity per function — 3.7 down to 2.6 — because the growth went
+into more, smaller functions rather than into the existing ones. So the code did
+not get smaller. It got bigger and less tangled, which is a different claim and
+the only one these numbers support.
+
+Two counts moved because the bar moved rather than the code, and it is recorded
+in `pyproject.toml`: `max-args` is 6 rather than pylint's default 5, so PLR0913
+now counts a six-argument function as fine. Nothing else was silenced — no new
+`noqa` comments, and no per-file ignores beyond the ones for `tests/*` that were
+already there.
 
 ## Totals
 

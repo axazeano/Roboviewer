@@ -108,27 +108,11 @@ class OpenAIAgentRunner(Runner):
             tool_calls = list(message.tool_calls or [])
 
             if not tool_calls:
-                payload = _payload_from_text(message.content)
-                if payload is not None:
-                    emit("fallback", "payload extracted from the response text")
-                    return AgentOutcome(
-                        payload=payload, usage=usage, turns=turns, truncated=last_turn
-                    )
-                if last_turn:
-                    return AgentOutcome(
-                        payload=None,
-                        usage=usage,
-                        turns=turns,
-                        error=(
-                            f"the model never called {request.terminal_name} "
-                            f"in {request.settings.max_turns} turns"
-                        ),
-                    )
-                transcript.add_reply(message.content)
-                transcript.say(
-                    f"Keep going. {request.settings.max_turns - turn} turn(s) left, and "
-                    f"you must call the {request.terminal_name} tool before they run out."
+                outcome = _reply_without_tools(
+                    message.content, request, transcript, turn, usage, emit
                 )
+                if outcome is not None:
+                    return outcome
                 continue
 
             transcript.add_reply(message.content, tool_calls)
@@ -294,6 +278,42 @@ class _Transcript:
     def say(self, text: str) -> None:
         """A user-role note between turns: the nudge and the wrap-up warning."""
         self.messages.append({"role": "user", "content": text})
+
+
+def _reply_without_tools(
+    content: str | None,
+    request: AgentRequest,
+    transcript: _Transcript,
+    turn: int,
+    usage: Usage,
+    emit: ProgressHook,
+) -> AgentOutcome | None:
+    """A reply that called no tools. Returns the outcome when this ends the run,
+    or None to go round again after a nudge."""
+    last_turn = turn == request.settings.max_turns
+
+    payload = _payload_from_text(content)
+    if payload is not None:
+        emit("fallback", "payload extracted from the response text")
+        return AgentOutcome(payload=payload, usage=usage, turns=turn, truncated=last_turn)
+
+    if last_turn:
+        return AgentOutcome(
+            payload=None,
+            usage=usage,
+            turns=turn,
+            error=(
+                f"the model never called {request.terminal_name} "
+                f"in {request.settings.max_turns} turns"
+            ),
+        )
+
+    transcript.add_reply(content)
+    transcript.say(
+        f"Keep going. {request.settings.max_turns - turn} turn(s) left, and "
+        f"you must call the {request.terminal_name} tool before they run out."
+    )
+    return None
 
 
 def _wrap_up(request: AgentRequest, transcript: _Transcript, turn: int, emit: ProgressHook) -> None:

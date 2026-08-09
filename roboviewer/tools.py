@@ -397,7 +397,7 @@ def dispatch(root: Path, name: str, args: dict[str, Any], *, base_ref: str, head
     """Run a tool. Errors go back to the agent as text so it can correct itself."""
     try:
         if name == "read_file":
-            return read_file(
+            result = read_file(
                 root,
                 str(args["path"]),
                 args.get("start_line"),
@@ -405,13 +405,15 @@ def dispatch(root: Path, name: str, args: dict[str, Any], *, base_ref: str, head
                 max_lines=max_read_lines,
                 ref=head_ref,
             )
-        if name == "grep":
-            return grep(root, str(args["pattern"]), args.get("glob"), ref=head_ref)
-        if name == "list_files":
-            return list_files(root, str(args.get("directory", ".")), ref=head_ref)
-        if name == "git_show":
-            return git_show(root, str(args["path"]), base_ref)
-        return f"ERROR: unknown tool '{name}'"
+        elif name == "grep":
+            result = grep(root, str(args["pattern"]), args.get("glob"), ref=head_ref)
+        elif name == "list_files":
+            result = list_files(root, str(args.get("directory", ".")), ref=head_ref)
+        elif name == "git_show":
+            result = git_show(root, str(args["path"]), base_ref)
+        else:
+            return f"ERROR: unknown tool '{name}'"
+        return result
     except KeyError as exc:
         return f"ERROR: required parameter missing: {exc}"
     except (ToolError, subprocess.SubprocessError, OSError) as exc:

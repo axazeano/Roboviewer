@@ -66,6 +66,13 @@ select = [
 [tool.ruff.lint.mccabe]
 max-complexity = 8
 
+[tool.ruff.lint.pylint]
+# Six, not pylint's default five. The recurring shape here is three arguments
+# naming the work and up to three keyword-only knobs the caller reads out of
+# the config; bundling one of those knobs into an object to satisfy five hides
+# what the call does. Nine is a different matter — see gitdiff.DiffBudget.
+max-args = 6
+
 [tool.ruff.lint.per-file-ignores]
 # Fixtures assemble models by hand, and the Cyrillic in them is the point: those
 # tests check what the tool does with output in another language.
