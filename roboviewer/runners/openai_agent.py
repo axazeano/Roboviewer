@@ -19,6 +19,7 @@ Tolerance for custom-provider quirks:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
 from collections.abc import Sequence
@@ -260,10 +261,14 @@ class OpenAIAgentRunner(Runner):
             generated=int(kwargs.get("max_tokens") or 0),
         )
         if reservation.held:
-            emit("paced", f"waited {reservation.waited:.0f}s on {reservation.reason}")
+            # Seconds to a whole number reads as "waited 0s" for anything under
+            # half of one, which says the opposite of what happened.
+            held = reservation.waited
+            emit("paced", f"waited {held:.0f}s on {reservation.reason}" if held >= 1
+                 else f"waited {held:.1f}s on {reservation.reason}")
 
         raw = await self._client.chat.completions.with_raw_response.create(**kwargs)
-        completion = await raw.parse()
+        completion = await _parsed(raw)
 
         if adopted := self._limiter.observe(raw.headers):
             emit("limits", ", ".join(f"{name} {value}/min" for name, value in adopted.items()))
@@ -377,6 +382,19 @@ def _wrap_up(request: AgentRequest, transcript: _Transcript, turn: int, emit: Pr
     if 0 < left <= WRAP_UP_MARGIN:
         emit("wrap-up", f"{left} turn(s) left")
         transcript.say(WRAP_UP_NOTE.format(left=left, terminal=request.terminal_name))
+
+
+async def _parsed(raw: Any) -> Any:
+    """The completion out of a raw response, whichever wrapper the SDK returned.
+
+    `with_raw_response` hands back the legacy wrapper, whose `parse()` is an
+    ordinary method — while the newer `AsyncAPIResponse.parse` is a coroutine.
+    Awaiting the wrong one raises `'ChatCompletion' object can't be awaited` on
+    the very first turn, which is exactly how this was found: on a live gateway,
+    not in a test whose stub had been written from the same wrong assumption.
+    """
+    parsed = raw.parse()
+    return await parsed if inspect.isawaitable(parsed) else parsed
 
 
 def _describe(exc: Exception) -> str:

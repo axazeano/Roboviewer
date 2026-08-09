@@ -319,14 +319,25 @@ class StubClient:
         answer = self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
         if isinstance(answer, Exception):
             raise answer
-        return SimpleNamespace(headers=self.headers, parse=_returning(answer))
+        return self.wrapper(answer, self.headers)
+
+    @staticmethod
+    def wrapper(completion: object, headers: dict[str, str]) -> object:
+        """What `with_raw_response` hands back: the legacy wrapper, whose
+        `parse()` is an ordinary method rather than a coroutine."""
+        return SimpleNamespace(headers=headers, parse=lambda: completion)
 
 
-def _returning(value: object) -> object:
-    async def parse() -> object:
-        return value
+class NewStyleClient(StubClient):
+    """The other wrapper the SDK has — `AsyncAPIResponse`, where `parse()` is a
+    coroutine. Both shapes exist in the wild; the runner must not care."""
 
-    return parse
+    @staticmethod
+    def wrapper(completion: object, headers: dict[str, str]) -> object:
+        async def parse() -> object:
+            return completion
+
+        return SimpleNamespace(headers=headers, parse=parse)
 
 
 def runner_with(
@@ -428,6 +439,17 @@ def test_a_wait_is_announced_rather_than_looking_like_a_hang(tmp_path: Path) -> 
     assert [kind for kind, _ in events] == ["paced"]
     assert "prompt tokens" in events[0][1]
     assert fake.slept
+
+
+def test_both_raw_response_shapes_are_handled(tmp_path: Path) -> None:
+    # The SDK has two: `with_raw_response` gives the legacy wrapper with a plain
+    # parse(), the newer AsyncAPIResponse.parse is a coroutine. Awaiting the
+    # wrong one fails on the first turn of every agent, which is how it was found.
+    for client in (StubClient(completion()), NewStyleClient(completion())):
+        runner, _ = runner_with(client, tmp_path)
+
+        assert send(runner) is not None
+        assert client.sent == 1
 
 
 def test_a_bad_request_is_not_retried(tmp_path: Path) -> None:
