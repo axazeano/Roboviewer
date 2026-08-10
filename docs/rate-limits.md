@@ -74,6 +74,28 @@ same everywhere lives in [`roboviewer/ratelimit.py`](../roboviewer/ratelimit.py)
 **One budget for the whole run.** Every agent reserves from the same limiter,
 because the gateway counts the run as a whole and so must we.
 
+Every request goes round the same loop. What it books on the way out is a guess;
+what the answer reports replaces it.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Agent
+    participant L as RateLimiter
+    participant W as Window per bucket
+    participant G as Gateway
+
+    A->>L: reserve at the estimate
+    L->>W: does this fit?
+    W-->>L: no, wait until t
+    L->>L: sleep, then ask again
+    L-->>A: go ahead
+    A->>G: chat/completions
+    G-->>A: completion, usage and headers
+    A->>L: observe the headers, then settle
+    L->>W: overwrite the estimate with the truth
+```
+
 **A cooldown, always on.** When the gateway says 429 — or 503, which is the same
 message with a different number — every agent is held back, not just the one
 that was refused. The others are a moment away from the same answer, and
@@ -91,6 +113,44 @@ one request's worth of drift rather than compounding.
 Those two are not two mechanisms. A reported remainder is an authoritative
 settling of the whole window, so it goes through the same object as everything
 else — the local tally is simply what happens when nobody answers.
+
+```mermaid
+flowchart LR
+    C["Counted here"]
+    R["Taken from the gateway"]
+
+    C -->|"an answer carried a remainder"| R
+    R -->|"every later answer refreshes it"| R
+    R -->|"the reported reset passed"| C
+```
+
+| State | Where the number comes from |
+| --- | --- |
+| Counted here | the estimate charged on reserve, corrected on settle |
+| Taken from the gateway | `ceiling - remaining`, holding until the reported reset |
+
+**Whether to wait** is then one question asked of each bucket, and the longest
+answer across them is the one that counts.
+
+```mermaid
+flowchart TD
+    S["a request wants N from this bucket"] --> C{"is there a ceiling on this bucket at all?"}
+    C -->|no| GO["send now"]
+    C -->|yes| R{"does N fit in the room left, and is there any room?"}
+    R -->|yes| GO
+    R -->|no| BIG{"is N larger than the whole window?"}
+    BIG -->|yes| REFUSE["send now, and let the gateway be the one to refuse it"]
+    BIG -->|no| REP{"did the gateway say when the budget comes back?"}
+    REP -->|yes| W1["wait until that moment"]
+    REP -->|no| W2["wait for the oldest charges to age out"]
+```
+
+Two of those branches are not obvious. **"And is there any room"** is not
+redundant: a bucket at exactly zero would otherwise admit a request that books
+nothing against it, because `0 ≤ 0` reads as "it fits" — which is a live hole
+the moment a dialect stops booking the output ceiling. And **larger than the
+whole window means send it**, because waiting cannot make it fit and hanging
+forever is the worst of the three answers.
 
 ## The four families
 
@@ -163,6 +223,30 @@ documentation and covered by tests, not by a run against a live account. See
 `doc-14` for the numbers that do exist.
 
 ## Where the parts are
+
+One axis of variation, isolated. Everything a gateway disagrees about is stated
+once, in `dialects.py`; the config resolves which family is in play before the
+first request, and both the limiter and the sending path read it from there.
+
+```mermaid
+flowchart TD
+    CFG["config.py: family from base_url, ceilings checked against its buckets"]
+
+    subgraph differs ["Stated per gateway"]
+        D["dialects.py: buckets, header template, two flags"]
+    end
+    subgraph same ["The same for every gateway"]
+        RL["ratelimit.py: limiter, windows, cooldown"]
+    end
+    subgraph edge ["The sending path"]
+        RUN["openai_agent.py: reserve, send, observe, settle, retry"]
+    end
+
+    CFG --> D
+    D --> RL
+    RL --> RUN
+    D --> RUN
+```
 
 | Part | Where |
 | --- | --- |
