@@ -21,6 +21,7 @@ ENFORCED = [
     *sorted((PACKAGE / "renders").rglob("*.py")),
     PACKAGE / "cli.py",
     PACKAGE / "console.py",
+    PACKAGE / "dialects.py",
     PACKAGE / "events.py",
     PACKAGE / "judge.py",
     PACKAGE / "ratelimit.py",

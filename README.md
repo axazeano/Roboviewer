@@ -111,17 +111,20 @@ scheme, a `base_url` missing `/v1`, a gateway that cannot do tool calling —
 instead of leaving you to infer it from eight agents failing at once.
 
 **Rate limits.** A review is a burst — eight agents, each resending a large
-context every turn — and serverless providers meter that per minute. Nothing
-needs configuring for the usual case: a `429` (or a `503`, which is the same
-message with a different number) holds *every* agent back rather than only the
-one that was refused, for as long as the provider asks, and providers that
-advertise their current ceilings in the response headers have those adopted
-automatically. Set `[provider.rate_limits]` when yours does not advertise, or to
-stay deliberately under what you are entitled to; the buckets are separate
-because providers meter them separately, and the tightest one is usually
-uncached prompt tokens — which is exactly what a shared prompt prefix exists to
-keep low. A run that is being paced says so (`waited 12s on uncached prompt
-tokens`) rather than looking like a hang.
+context every turn — and hosted gateways meter that. Nothing needs configuring
+for the usual case. A `429` (or a `503`, which is the same message with a
+different number) holds *every* agent back rather than only the one that was
+refused, for as long as the gateway asks. Beyond that, what a gateway meters
+and what it will tell you about it differs by family, so the tool works out
+which family it is talking to from `base_url` and paces accordingly: from the
+remainder where that is reported, from its own count where only a ceiling is,
+and not at all where the gateway meters concurrency rather than a rate. Run
+`--check-provider` to see which it decided on. Set
+`[provider.rate_limits.per_minute]` to stay deliberately under what you are
+entitled to; a bucket name the gateway does not meter is refused at load time
+with the ones it does. A run that is being paced says so (`waited 12s on
+uncached prompt tokens`) rather than looking like a hang.
+[docs/rate-limits.md](docs/rate-limits.md) has the survey behind all of this.
 
 ## Use
 

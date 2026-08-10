@@ -29,8 +29,9 @@ from typing import Any
 
 from openai import APIError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
 
-from .. import ratelimit
+from .. import dialects
 from ..config import ProviderConfig, RunConfig
+from ..dialects import Shape, Spent
 from ..models import Usage
 from ..ratelimit import RateLimiter
 from ..tools import dispatch, parse_arguments
@@ -88,7 +89,12 @@ class OpenAIAgentRunner(Runner):
         self._headers = provider.request_headers()
         # One budget for the whole run. Every agent reserves from it, because
         # the provider counts the run as a whole and so must we.
-        self._limiter = RateLimiter(provider.rate_limits)
+        dialect, _ = provider.dialect()
+        self._limiter = RateLimiter(
+            dialect,
+            provider.rate_limits.per_minute,
+            adopt_advertised=provider.rate_limits.adopt_advertised,
+        )
 
     async def aclose(self) -> None:
         await self._client.close()
@@ -225,7 +231,7 @@ class OpenAIAgentRunner(Runner):
                 # Everyone waits, not only whoever was refused: the other agents
                 # are a moment from the same answer, and asking again together
                 # is what turns a busy minute into a failed run.
-                held = self._limiter.pause(ratelimit.retry_after(exc) or delay)
+                held = self._limiter.pause(dialects.retry_after(exc) or delay)
                 emit(
                     "retry",
                     f"attempt {attempt}/{self._provider.max_retries}: "
@@ -238,7 +244,7 @@ class OpenAIAgentRunner(Runner):
                     raise
                 if status == SERVICE_OVERLOADED:
                     # "Come back later" in a different number
-                    self._limiter.pause(ratelimit.retry_after(exc) or delay)
+                    self._limiter.pause(dialects.retry_after(exc) or delay)
                 last_exc = exc
                 emit("retry", f"attempt {attempt}/{self._provider.max_retries}: HTTP {status}")
 
@@ -257,8 +263,13 @@ class OpenAIAgentRunner(Runner):
         number configured here, since they move with usage.
         """
         reservation = await self._limiter.reserve(
-            prompt=ratelimit.estimate_tokens(kwargs["messages"]) + self._tools_estimate(kwargs),
-            generated=int(kwargs.get("max_tokens") or 0),
+            Shape(
+                prompt=dialects.estimate_tokens(kwargs["messages"]) + self._tools_estimate(kwargs),
+                # The ceiling the request carries, which is the only number that
+                # exists before the fact. Whether it is charged at all is the
+                # gateway's business, so the dialect decides what to do with it.
+                output_ceiling=int(kwargs.get("max_tokens") or 0),
+            )
         )
         if reservation.held:
             # Seconds to a whole number reads as "waited 0s" for anything under
@@ -275,15 +286,17 @@ class OpenAIAgentRunner(Runner):
         usage = _extract_usage(completion)
         self._limiter.settle(
             reservation,
-            prompt=usage.prompt_tokens,
-            uncached=max(0, usage.prompt_tokens - usage.cached_tokens),
-            generated=usage.completion_tokens,
+            Spent(
+                prompt=usage.prompt_tokens,
+                uncached=max(0, usage.prompt_tokens - usage.cached_tokens),
+                generated=usage.completion_tokens,
+            ),
         )
         return completion
 
     def _tools_estimate(self, kwargs: dict[str, Any]) -> int:
         """The schemas go out with every turn and are a real part of the prompt."""
-        return ratelimit.estimate_tokens(kwargs.get("tools") or [])
+        return dialects.estimate_tokens(kwargs.get("tools") or [])
 
 
 @dataclass

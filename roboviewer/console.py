@@ -16,6 +16,7 @@ from pathlib import Path
 from . import gate, sources
 from .checklist import ChecklistItem
 from .config import Config, ModelConfig, RateLimits, home_config_path
+from .dialects import Dialect
 from .events import Event
 from .gitdiff import DiffBundle
 from .models import SEVERITY_LABEL, Finding, ReviewRun
@@ -133,22 +134,33 @@ def _provider(cfg: Config) -> None:
     print(f"  base_url     {cfg.provider.base_url}")
     print(f"  key          {cfg.provider.masked_key()}")
     print(f"  source       {key_source}")
-    print(f"  pacing       {_pacing(cfg.provider.rate_limits)}")
+    dialect, why = cfg.provider.dialect()
+    print(f"  metering     {dialect.name} — {dialect.why}")
+    print(f"               ({why})")
+    print(f"  pacing       {_pacing(dialect, cfg.provider.rate_limits)}")
 
 
-def _pacing(limits: RateLimits) -> str:
-    """Per-minute ceilings a run will hold itself to. Worth printing: a run that
-    paces itself is slower on purpose, and that should not have to be guessed."""
-    configured = {
-        "prompt": limits.prompt_tokens_per_minute,
-        "uncached": limits.uncached_prompt_tokens_per_minute,
-        "generated": limits.generated_tokens_per_minute,
-        "requests": limits.requests_per_minute,
-    }
-    named = ", ".join(f"{name} {value}/min" for name, value in configured.items() if value)
-    adopting = "adopting what the provider advertises" if limits.adopt_advertised else ""
-    # A 429 holds every agent back whether or not anything here is set
-    return " · ".join(filter(None, [named or "no ceilings set", adopting]))
+def _pacing(dialect: Dialect, limits: RateLimits) -> str:
+    """How a run will hold itself back, and against which buckets.
+
+    Worth printing in full: a run that paces itself is slower on purpose, and
+    which gateway family it decided it was talking to is the one guess in here
+    that a person can correct.
+    """
+    if not dialect.paces:
+        # Only the cooldown after a refusal is left, and that needs no setting
+        return "none — concurrency is the only limit, plus a hold after any 429"
+    named = ", ".join(f"{name} {value}/min" for name, value in limits.per_minute.items() if value)
+    source = (
+        "pacing from what the gateway reports is left"
+        if dialect.reports_remaining and limits.adopt_advertised
+        else "keeping its own count between answers"
+    )
+    adopting = (
+        "adopting advertised ceilings" if limits.adopt_advertised else "ignoring what is advertised"
+    )
+    unset = f"no ceilings set for {', '.join(dialect.names())}"
+    return " · ".join([named or unset, source, adopting])
 
 
 def _roles(cfg: Config) -> None:

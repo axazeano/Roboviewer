@@ -53,18 +53,35 @@ terminal_tool_choice = "forced"
 # on every response — adopt_advertised picks those up, which beats a figure
 # typed here months ago on a plan whose limits move with usage.
 #
-# Fill these in when the provider does not advertise, or to stay deliberately
-# under what you are entitled to. Zero means "not known", not "none". The
-# buckets are separate because providers meter them separately: Fireworks, for
-# example, defaults to 21.6M total prompt, 5.4M uncached prompt and 216k
-# generated tokens per minute — the uncached one being the tightest by a factor
-# of four, and exactly the one a shared prompt prefix is designed to stay under.
+# What a gateway meters differs by family, and so do the bucket names you would
+# write here. The family is read off base_url and printed by --check-provider,
+# so run that first and use the names it lists:
+#
+#   openai      requests, tokens                     OpenAI, Groq, Mistral, and
+#                                                    most OpenAI-compatible gateways
+#   fireworks   prompt tokens, uncached prompt tokens,
+#               generated tokens, requests
+#   anthropic   requests, input tokens, output tokens
+#   none        nothing — the gateway meters concurrency, not a rate, so
+#               run.concurrency is the whole mechanism (DeepSeek, a local vLLM)
+#
+# Name the family yourself only when base_url hides it, such as behind a proxy.
+# See docs/rate-limits.md for what each gateway was found to report.
+#
+# Fill in per_minute when the gateway does not advertise its ceilings, or to
+# stay deliberately under what you are entitled to. An absent bucket means "not
+# known", not "none". Fireworks, for example, documents 21.6M total prompt, 5.4M
+# uncached prompt and 216k generated tokens per minute — the uncached one being
+# the tightest by a factor of four, and exactly the one a shared prompt prefix
+# is designed to stay under.
 # [provider.rate_limits]
-# prompt_tokens_per_minute = 21600000
-# uncached_prompt_tokens_per_minute = 5400000
-# generated_tokens_per_minute = 216000
-# requests_per_minute = 0
+# dialect = "auto"
 # adopt_advertised = true
+#
+# [provider.rate_limits.per_minute]
+# "prompt tokens" = 21600000
+# "uncached prompt tokens" = 5400000
+# "generated tokens" = 216000
 
 [reviewer]
 model = "your-model-name"

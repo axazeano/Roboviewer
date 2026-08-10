@@ -1,27 +1,28 @@
-"""Pacing a run so the provider does not have to say no.
+"""Pacing a run so the gateway does not have to say no.
 
 A review is a burst: several checklist items run at once, each resending a large
-context every turn. Serverless providers meter that per minute — Fireworks, for
-one, counts prompt tokens, uncached prompt tokens and generated tokens
-separately and answers 429 when a bucket is empty. Retrying into a full bucket
-does not help; the request has to be held back before it is sent.
+context every turn. Hosted gateways meter that and answer 429 when a bucket is
+empty. Retrying into a full bucket does not help; the request has to be held
+back before it is sent.
 
-Two mechanisms, and only one of them needs configuring:
+What is metered and what the gateway reports about it lives in `dialects`. What
+is here is the part that is the same everywhere:
 
-  * **A cooldown, always on.** When the provider says 429 (or 503, which is the
+  * **One budget for the whole run.** Every agent reserves from the same
+    limiter, because the gateway counts the run as a whole and so must we.
+
+  * **A cooldown, always on.** When the gateway says 429 (or 503, which is the
     same message with a different number), every agent is held back, not just
     the one that was refused. The others are a moment away from the same answer,
-    and hammering is what turns a busy minute into a failed run.
+    and hammering is what turns a busy minute into a failed run. This applies
+    even to a gateway that meters nothing — a refusal is a refusal.
 
-  * **Per-minute ceilings, when they are known.** A sliding sixty-second window
-    per bucket, so the run spreads itself out instead of arriving all at once.
-    The numbers come from the config, or from the provider itself: Fireworks
-    advertises the effective ceilings on every response and moves them with
-    usage, so what it says beats a number typed here months ago.
-
-The size of a request is estimated before sending — the exact count only exists
-in the response — and corrected the moment the answer arrives, so an estimate
-that was wrong costs one request's worth of drift rather than compounding.
+  * **A window per bucket**, filled one of two ways. If the gateway reports what
+    is left, that is taken as the truth and the run stops guessing. If it
+    reports only a ceiling, the run keeps its own count: the size of a request
+    is estimated before sending and corrected the moment the answer arrives, so
+    an estimate that was wrong costs one request's worth of drift rather than
+    compounding.
 
 Nothing here does any I/O, and the clock and the sleep are injected: a test can
 run an hour of pacing in a millisecond.
@@ -30,34 +31,14 @@ run an hour of pacing in a millisecond.
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
 
-from .config import RateLimits
+from .dialects import Allowance, Dialect, Shape, Spent, actual, estimate, read
 
-WINDOW_S = 60.0
-
-# Rough on purpose. The estimate only has to stop a burst from being planned,
-# and it is replaced by the reported count as soon as the response arrives.
-CHARS_PER_TOKEN = 4
-
-PROMPT = "prompt tokens"
-UNCACHED = "uncached prompt tokens"
-GENERATED = "generated tokens"
-REQUESTS = "requests"
-COOLDOWN = "the provider's 429"
-
-# What Fireworks puts on every response. Read case-insensitively: httpx headers
-# are, and a gateway that changes the casing is not changing the meaning.
-ADVERTISED = {
-    "x-ratelimit-limit-tokens-prompt": PROMPT,
-    "x-ratelimit-limit-tokens-cache-adjusted-prompt": UNCACHED,
-    "x-ratelimit-limit-tokens-generated": GENERATED,
-}
+COOLDOWN = "the gateway's 429"
 
 Clock = Callable[[], float]
 Sleeper = Callable[[float], Awaitable[None]]
@@ -65,7 +46,7 @@ Sleeper = Callable[[float], Awaitable[None]]
 
 @dataclass
 class Reservation:
-    """A place in the minute, charged at an estimate until the truth arrives."""
+    """A place in the window, charged at an estimate until the truth arrives."""
 
     entries: dict[str, list[float]] = field(default_factory=dict)
     waited: float = 0.0
@@ -77,65 +58,60 @@ class Reservation:
 
 
 class RateLimiter:
-    """The whole run's share of the provider, held in one place.
+    """The whole run's share of the gateway, held in one place.
 
     One of these per run, passed to every agent: budgets that are not shared are
-    not budgets, since the provider counts the run as a whole.
+    not budgets. What the buckets are, and whether the gateway will say how full
+    they are, comes from the dialect — this class only decides who waits.
     """
 
     def __init__(
         self,
-        limits: RateLimits,
+        dialect: Dialect,
+        ceilings: dict[str, int] | None = None,
         *,
+        adopt_advertised: bool = True,
         clock: Clock = time.monotonic,
         sleep: Sleeper = asyncio.sleep,
     ) -> None:
-        self._limits = limits
+        self._dialect = dialect
+        self._adopt = adopt_advertised
         self._clock = clock
         self._sleep = sleep
         self._lock = asyncio.Lock()
         self._cooldown_until = 0.0
+        configured = ceilings or {}
         self._windows = {
-            PROMPT: _Window(limits.prompt_tokens_per_minute),
-            UNCACHED: _Window(limits.uncached_prompt_tokens_per_minute),
-            GENERATED: _Window(limits.generated_tokens_per_minute),
-            REQUESTS: _Window(limits.requests_per_minute),
+            bucket.name: _Window(configured.get(bucket.name, 0), dialect.window_s)
+            for bucket in dialect.buckets
         }
 
-    async def reserve(self, *, prompt: int, generated: int) -> Reservation:
-        """Wait until this request fits, then charge it at the estimate.
-
-        `generated` is the cap the request carries rather than what it will use,
-        which is the only honest guess before the fact and errs towards patience.
-        """
+    async def reserve(self, shape: Shape) -> Reservation:
+        """Wait until this request fits, then charge it at the estimate."""
         # Counted from what we deliberately slept, not from the clock: a request
         # that sailed through must report a wait of zero, and two readings of a
         # clock are never quite equal.
         waited = 0.0
         reason = ""
+        wanted = estimate(self._dialect, shape)
         while True:
             async with self._lock:
                 now = self._clock()
-                delay, blocked_by = self._delay(prompt, generated, now)
+                delay, blocked_by = self._delay(wanted, now)
                 if delay <= 0.0:
                     return Reservation(
-                        entries=self._charge(prompt, generated, now),
-                        waited=waited,
-                        reason=reason,
+                        entries=self._charge(wanted, now), waited=waited, reason=reason
                     )
                 reason = blocked_by
             await self._sleep(delay)
             waited += delay
 
-    def settle(
-        self, reservation: Reservation, *, prompt: int, uncached: int, generated: int
-    ) -> None:
+    def settle(self, reservation: Reservation, spent: Spent) -> None:
         """Replace the estimates with what the response actually reported."""
-        exact = {PROMPT: prompt, UNCACHED: uncached, GENERATED: generated}
-        for name, amount in exact.items():
+        for name, amount in actual(self._dialect, spent).items():
             entry = reservation.entries.get(name)
             if entry is not None:
-                entry[1] = float(amount)
+                entry[1] = amount
 
     def pause(self, seconds: float) -> float:
         """Hold every agent back for a while. Returns how long the hold now runs.
@@ -147,104 +123,99 @@ class RateLimiter:
         self._cooldown_until = max(self._cooldown_until, until)
         return self._cooldown_until - self._clock()
 
-    def observe(self, headers: Any) -> dict[str, int]:
-        """Adopt the ceilings the provider advertises. Returns what changed.
+    def observe(self, headers: object) -> dict[str, int]:
+        """Take the gateway at its word. Returns the ceilings that changed.
 
-        Only upwards-or-downwards from what was configured — the provider is the
-        authority on its own limits, and on an adaptive plan yesterday's number
-        is wrong by design.
+        Two different pieces of news arrive on the same response. A **ceiling**
+        replaces what was configured, in either direction — on an adaptive plan
+        yesterday's number is wrong by design, and a figure typed into a config
+        months ago is not the authority on today's account. A **remainder**
+        replaces the run's own arithmetic outright: it is the one number that
+        also accounts for whatever else is spending the same key.
+
+        Only ceilings are returned, because only they are worth announcing; a
+        remainder changes every single response and saying so would be noise.
         """
-        if not self._limits.adopt_advertised or headers is None:
+        if not self._adopt:
             return {}
         changed: dict[str, int] = {}
-        for header, name in ADVERTISED.items():
-            value = _int_header(headers, header)
-            if value is None or value == self._windows[name].capacity:
+        now = self._clock()
+        for name, allowance in read(self._dialect, headers).items():
+            window = self._windows.get(name)
+            if window is None:
                 continue
-            self._windows[name].capacity = value
-            changed[name] = value
+            if allowance.limit is not None and allowance.limit != window.capacity:
+                window.capacity = allowance.limit
+                changed[name] = allowance.limit
+            _apply(window, allowance, now)
         return changed
 
-    def _delay(self, prompt: int, generated: int, now: float) -> tuple[float, str]:
+    def _delay(self, wanted: dict[str, float], now: float) -> tuple[float, str]:
         """How long before this request may go, and what is holding it."""
-        waits = [
-            (self._cooldown_until - now, COOLDOWN),
-            (self._windows[PROMPT].delay(prompt, now), PROMPT),
-            # Unknown before the fact: assume nothing is cached, correct after
-            (self._windows[UNCACHED].delay(prompt, now), UNCACHED),
-            (self._windows[GENERATED].delay(generated, now), GENERATED),
-            (self._windows[REQUESTS].delay(1, now), REQUESTS),
+        waits = [(self._cooldown_until - now, COOLDOWN)]
+        waits += [
+            (self._windows[name].delay(amount, now), name) for name, amount in wanted.items()
         ]
         return max(waits, key=lambda wait: wait[0])
 
-    def _charge(self, prompt: int, generated: int, now: float) -> dict[str, list[float]]:
-        estimates = {PROMPT: prompt, UNCACHED: prompt, GENERATED: generated, REQUESTS: 1}
-        return {
-            name: self._windows[name].add(float(amount), now)
-            for name, amount in estimates.items()
-        }
+    def _charge(self, wanted: dict[str, float], now: float) -> dict[str, list[float]]:
+        return {name: self._windows[name].add(amount, now) for name, amount in wanted.items()}
 
 
-def estimate_tokens(payload: Any) -> int:
-    """What a request will cost the prompt budget, before the provider says.
+@dataclass
+class _Reported:
+    """What the gateway last said was left, and until when it holds."""
 
-    Four characters to the token is the usual rule of thumb and wrong by a tenth
-    or so; that is fine here, because the number is only used to decide whether
-    to wait and is replaced by the reported count a moment later.
-    """
-    try:
-        text = json.dumps(payload, default=str)
-    except (TypeError, ValueError):
-        return 0
-    return len(text) // CHARS_PER_TOKEN
-
-
-def retry_after(exc: Exception) -> float | None:
-    """The provider's own answer to "when should I come back", if it gave one."""
-    headers = getattr(getattr(exc, "response", None), "headers", None)
-    if headers is None:
-        return None
-    raw = _header(headers, "retry-after")
-    if raw is None:
-        return None
-    try:
-        return max(0.0, float(raw))
-    except ValueError:
-        # The HTTP-date form. Rare from JSON APIs, and a date we cannot parse is
-        # better answered by the caller's backoff than by guessing.
-        return None
+    used: float
+    at: float
+    reset_at: float
 
 
 class _Window:
-    """One sliding minute of one budget.
+    """One budget, either counted here or read off the gateway.
 
-    Entries are kept as mutable pairs so a reservation can rewrite its own
+    Local entries are kept as mutable pairs so a reservation can rewrite its own
     amount once the response reports the real one; the total is summed on demand
     rather than carried, because a running total and an expiring deque disagree
     the first time a correction lands on an entry that has already aged out.
+
+    When the gateway reports a remainder, that becomes the floor and only
+    charges made *since* it are added on top. Requests already in flight when
+    the report was taken are therefore missed — bounded by the concurrency, and
+    corrected by the next response, which is a second away on a gateway that
+    reports at all.
     """
 
-    def __init__(self, capacity: int) -> None:
+    def __init__(self, capacity: int, window_s: float) -> None:
         self.capacity = capacity
+        self._window_s = window_s
         self._entries: deque[list[float]] = deque()
+        self._reported: _Reported | None = None
 
     def delay(self, amount: float, now: float) -> float:
         if self.capacity <= 0:
             return 0.0
-        self._expire(now)
-        room = self.capacity - self._total()
-        if amount <= room:
+        room = self.capacity - self._total(now)
+        if amount <= room and room > 0:
             return 0.0
+        # An exhausted bucket holds a request back even when the request books
+        # nothing against it. Where the output ceiling is not charged the
+        # booking is zero every time, and "zero fits in nothing" would let a run
+        # walk straight into a budget the gateway has already reported empty.
         if amount > self.capacity:
-            # One request larger than the whole minute. Waiting cannot make it
-            # fit, so let the provider be the one to refuse it.
+            # One request larger than the whole window. Waiting cannot make it
+            # fit, so let the gateway be the one to refuse it.
             return 0.0
+        if (until := self._reset_at(now)) is not None:
+            # The gateway named the moment its budget comes back. It knows and
+            # we are guessing, so its answer wins over any local arithmetic.
+            return until - now
         needed = amount - room
         freed = 0.0
         for stamp, size in self._entries:
             freed += size
             if freed >= needed:
-                return max(0.0, stamp + WINDOW_S - now)
+                return max(0.0, stamp + self._window_s - now)
         return 0.0
 
     def add(self, amount: float, now: float) -> list[float]:
@@ -253,33 +224,36 @@ class _Window:
             self._entries.append(entry)
         return entry
 
-    def _total(self) -> float:
-        return sum(amount for _, amount in self._entries)
+    def report(self, used: float, reset_s: float | None, now: float) -> None:
+        """Adopt what the gateway says is spent, and drop what we had counted."""
+        reset_at = now + (reset_s if reset_s is not None else self._window_s)
+        self._reported = _Reported(used=max(0.0, used), at=now, reset_at=reset_at)
+        self._entries.clear()
+
+    def _total(self, now: float) -> float:
+        self._expire(now)
+        local = sum(amount for _, amount in self._entries)
+        if self._reported is None or now >= self._reported.reset_at:
+            return local
+        return self._reported.used + local
+
+    def _reset_at(self, now: float) -> float | None:
+        if self._reported is None or now >= self._reported.reset_at:
+            return None
+        return self._reported.reset_at
 
     def _expire(self, now: float) -> None:
-        while self._entries and self._entries[0][0] + WINDOW_S <= now:
+        while self._entries and self._entries[0][0] + self._window_s <= now:
             self._entries.popleft()
 
 
-def _header(headers: Any, name: str) -> str | None:
-    getter = getattr(headers, "get", None)
-    if getter is None:
-        return None
-    value = getter(name)
-    if value is None:
-        # Not every mapping is case-insensitive the way httpx's is
-        for key, candidate in dict(headers).items():
-            if str(key).lower() == name:
-                return str(candidate)
-    return None if value is None else str(value)
+def _apply(window: _Window, allowance: Allowance, now: float) -> None:
+    """A reported remainder, turned into the window's own terms.
 
-
-def _int_header(headers: Any, name: str) -> int | None:
-    raw = _header(headers, name)
-    if raw is None:
-        return None
-    try:
-        value = int(float(raw))
-    except ValueError:
-        return None
-    return value if value > 0 else None
+    A remainder means nothing without a ceiling to subtract it from — a gateway
+    that sends one and not the other has said how much is left of a number we do
+    not have, so there is nothing to do with it.
+    """
+    if allowance.remaining is None or window.capacity <= 0:
+        return
+    window.report(window.capacity - allowance.remaining, allowance.reset_s, now)

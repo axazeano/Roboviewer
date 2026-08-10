@@ -20,7 +20,9 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from . import dialects
 
 # A key nobody reads is a setting nobody applied, and ignoring it silently — the
 # pydantic default — means a typo leaves the run on defaults while the person
@@ -88,27 +90,29 @@ class ModelConfig(BaseModel):
 class RateLimits(BaseModel):
     """What the gateway will take per minute, so a run paces itself.
 
-    Zero means "not known", not "none": the window is simply not enforced. Which
-    is usually the right starting point — serverless providers advertise their
-    effective ceilings on every response, and `adopt_advertised` picks those up,
-    so most people never fill these in.
+    An absent bucket means "not known", not "none": the window is simply not
+    enforced. Which is usually the right starting point — most gateways report
+    their effective ceilings on every response and `adopt_advertised` picks
+    those up, so most people never fill this in at all.
 
-    Counted separately because providers meter them separately. Fireworks caps
-    total prompt tokens, uncached prompt tokens and generated tokens, and the
-    uncached one is the tightest by a factor of four — which is exactly the one
-    a shared prompt prefix is designed to stay under.
+    The bucket names are the ones the chosen dialect meters, and nothing else is
+    accepted: a ceiling written under a name the gateway does not count is a
+    setting that would never have applied, and finding that out at load time is
+    the point. `roboviewer --check-provider` prints the names in force.
     """
 
     model_config = STRICT
 
-    prompt_tokens_per_minute: int = 0
-    uncached_prompt_tokens_per_minute: int = 0
-    generated_tokens_per_minute: int = 0
-    # Some gateways count requests rather than tokens.
-    requests_per_minute: int = 0
-    # Read the ceilings out of the response headers where the provider sends
-    # them. On an adaptive plan the advertised number is the true one and a
-    # figure written here months ago is not.
+    # Which gateway family this is. "auto" reads it off base_url, which is
+    # enough for the gateways whose metering differs from the compatible norm;
+    # name one explicitly when running behind a proxy that hides the host.
+    dialect: Literal["auto", "openai", "fireworks", "anthropic", "none"] = "auto"
+    # Bucket name → tokens (or requests) per minute. See `dialects` for the
+    # names each family uses.
+    per_minute: dict[str, int] = Field(default_factory=dict)
+    # Read the ceilings, and what is left of them, out of the response headers
+    # where the gateway sends them. On an adaptive plan the advertised number is
+    # the true one and a figure written here months ago is not.
     adopt_advertised: bool = True
 
 
@@ -130,6 +134,28 @@ class ProviderConfig(BaseModel):
     # How much of the provider a run may take per minute. The cooldown after a
     # 429 needs nothing set here; the ceilings are what this configures.
     rate_limits: RateLimits = Field(default_factory=RateLimits)
+
+    @model_validator(mode="after")
+    def _check_buckets(self) -> ProviderConfig:
+        """A ceiling has to name a bucket this gateway actually meters.
+
+        Checked here rather than on `RateLimits` because which names are valid
+        depends on `base_url`, and a model only sees its own fields.
+        """
+        dialect, _ = dialects.resolve(self.rate_limits.dialect, self.base_url)
+        unknown = sorted(set(self.rate_limits.per_minute) - set(dialect.names()))
+        if not unknown:
+            return self
+        known = ", ".join(dialect.names()) or "none — this gateway meters nothing per key"
+        raise ValueError(
+            f"provider.rate_limits.per_minute: {', '.join(unknown)} "
+            f"{'is' if len(unknown) == 1 else 'are'} not metered by the "
+            f"{dialect.name} gateway. Buckets it does meter: {known}"
+        )
+
+    def dialect(self) -> tuple[dialects.Dialect, str]:
+        """(what this gateway meters, how that was decided)."""
+        return dialects.resolve(self.rate_limits.dialect, self.base_url)
 
     # Defaults to the OpenAI way, Authorization: Bearer <key>; gateways often
     # want something else. See config.example.toml for the combinations.
@@ -286,6 +312,22 @@ MOVED: dict[str, str] = {
     "run.max_turns": "reviewer.max_turns",
     "run.judge_max_turns": "judge.max_turns, in a [judge] section",
     "run.min_confidence": "gone — the judge and the scope gate decide what survives",
+    # The four fixed buckets were one gateway's spelling. They are now keys in a
+    # map, under whichever names the gateway in use actually meters.
+    "provider.rate_limits.prompt_tokens_per_minute": (
+        'provider.rate_limits.per_minute, as "prompt tokens" (fireworks) or "tokens" (openai)'
+    ),
+    "provider.rate_limits.uncached_prompt_tokens_per_minute": (
+        'provider.rate_limits.per_minute, as "uncached prompt tokens" (fireworks) '
+        'or "input tokens" (anthropic)'
+    ),
+    "provider.rate_limits.generated_tokens_per_minute": (
+        'provider.rate_limits.per_minute, as "generated tokens" (fireworks) '
+        'or "output tokens" (anthropic)'
+    ),
+    "provider.rate_limits.requests_per_minute": (
+        'provider.rate_limits.per_minute, as "requests"'
+    ),
 }
 
 
