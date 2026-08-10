@@ -67,9 +67,9 @@ in a per-provider special case.
 ## What the tool does
 
 The differences above are five answers, not five algorithms. They live as data
-in [`roboviewer/dialects.py`](../roboviewer/dialects.py) — a dialect is a bucket
+in `roboviewer/dialects.py` — a dialect is a bucket
 list, a header template and two flags, and there are no subclasses. What is the
-same everywhere lives in [`roboviewer/ratelimit.py`](../roboviewer/ratelimit.py).
+same everywhere lives in `roboviewer/ratelimit.py`.
 
 **One budget for the whole run.** Every agent reserves from the same limiter,
 because the gateway counts the run as a whole and so must we.
