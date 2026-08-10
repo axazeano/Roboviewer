@@ -14,7 +14,8 @@ from pathlib import Path
 
 import pytest
 
-PACKAGE = Path(__file__).resolve().parent.parent / "roboviewer"
+ROOT = Path(__file__).resolve().parent.parent
+PACKAGE = ROOT / "roboviewer"
 
 ENFORCED = [
     *sorted((PACKAGE / "renders").rglob("*.py")),
@@ -22,7 +23,10 @@ ENFORCED = [
     PACKAGE / "console.py",
     PACKAGE / "events.py",
     PACKAGE / "judge.py",
+    PACKAGE / "ratelimit.py",
     PACKAGE / "sources.py",
+    # Written this way from the start, so the whole package is in
+    *sorted((ROOT / "corpus").glob("*.py")),
 ]
 
 
