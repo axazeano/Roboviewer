@@ -411,6 +411,29 @@ def test_nothing_can_be_configured_for_a_gateway_that_meters_nothing() -> None:
         )
 
 
+# ------------------------------------------------------ the window belongs to the gateway
+
+
+def test_the_window_length_comes_from_the_family_not_from_a_constant() -> None:
+    # Azure enforces on ten-second windows for some deployments and refuses
+    # while the minute-level figure still looks comfortably under quota. A run
+    # that waits out the wrong window is refused by arithmetic of its own making.
+    brisk = dialects.Dialect(
+        name="brisk", buckets=(dialects.Bucket(TOKENS, dialects.Meter.TOTAL),), window_s=10.0
+    )
+    fake = Fake()
+    limit = limiter(fake, {TOKENS: 1000}, dialect=brisk)
+    book(limit, prompt=800)
+
+    # Ten seconds, because that is this gateway's window — not sixty
+    assert book(limit, prompt=800).waited == pytest.approx(10.0)
+
+
+def test_the_shipped_families_all_say_what_their_window_is() -> None:
+    for dialect in dialects.KNOWN.values():
+        assert dialect.window_s > 0
+
+
 # ------------------------------------------------------------------ choosing the family
 
 
@@ -439,6 +462,51 @@ def test_naming_a_family_beats_guessing_at_it() -> None:
 
     assert dialect.name == "fireworks"
     assert why == "named in the config"
+
+
+# ------------------------------------------------- what the console says before a run
+
+
+def shown(base_url: str, limits: RateLimits, capsys: pytest.CaptureFixture[str]) -> str:
+    from roboviewer import console
+    from roboviewer.config import Config
+
+    console._provider(Config(provider=ProviderConfig(base_url=base_url, api_key="k",
+                                                     rate_limits=limits)))
+    return capsys.readouterr().out
+
+
+def test_the_family_and_the_evidence_for_it_are_printed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out = shown(
+        "https://api.fireworks.ai/inference/v1",
+        RateLimits(per_minute={GENERATED: 12000}),
+        capsys,
+    )
+
+    assert "fireworks" in out
+    assert "matched fireworks.ai in base_url" in out  # and on what evidence
+    assert "generated tokens 12000/min" in out
+    assert "keeping its own count" in out  # rather than reading a remainder
+
+
+def test_a_gateway_that_reports_what_is_left_says_so(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out = shown("https://api.openai.com/v1", RateLimits(), capsys)
+
+    assert "pacing from what the gateway reports is left" in out
+    assert "requests, tokens" in out  # the names a ceiling would be written under
+
+
+def test_a_gateway_that_meters_nothing_says_that_too(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out = shown("http://localhost:8000/v1", RateLimits(), capsys)
+
+    assert "concurrency is the only limit" in out
+    assert "hold after any 429" in out
 
 
 # ------------------------------------------------------------------ reading the request
