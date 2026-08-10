@@ -22,9 +22,9 @@ import httpx
 import pytest
 from openai import APIStatusError, RateLimitError
 
-from roboviewer import dialects
+from roboviewer import metering
 from roboviewer.config import ProviderConfig, RateLimits, RunConfig
-from roboviewer.dialects import (
+from roboviewer.metering import (
     ANTHROPIC,
     FIREWORKS,
     GENERATED,
@@ -35,7 +35,7 @@ from roboviewer.dialects import (
     PROMPT,
     TOKENS,
     UNCACHED,
-    Shape,
+    Demand,
     Spent,
     estimate_tokens,
     retry_after,
@@ -64,16 +64,16 @@ def limiter(
     fake: Fake,
     ceilings: dict[str, int] | None = None,
     *,
-    dialect: dialects.Dialect = FIREWORKS,
+    meter: metering.Meter = FIREWORKS,
     adopt: bool = True,
 ) -> RateLimiter:
     return RateLimiter(
-        dialect, ceilings or {}, adopt_advertised=adopt, clock=fake.clock, sleep=fake.sleep
+        meter, ceilings or {}, adopt_advertised=adopt, clock=fake.clock, sleep=fake.sleep
     )
 
 
 def book(limit: RateLimiter, prompt: int = 0, output: int = 0) -> object:
-    return asyncio.run(limit.reserve(Shape(prompt=prompt, output_ceiling=output)))
+    return asyncio.run(limit.reserve(Demand(prompt=prompt, output_ceiling=output)))
 
 
 # ------------------------------------------------------------------ spreading a burst out
@@ -262,7 +262,7 @@ def test_a_ceiling_that_shrinks_mid_run_shrinks_the_budget() -> None:
 
 def test_the_reported_remainder_overrules_the_local_count() -> None:
     fake = Fake()
-    limit = limiter(fake, {TOKENS: 1000}, dialect=OPENAI)
+    limit = limiter(fake, {TOKENS: 1000}, meter=OPENAI)
     book(limit, prompt=900)  # the run believes it has 100 left
 
     # The gateway says otherwise, and it is the one that also sees every other
@@ -274,7 +274,7 @@ def test_the_reported_remainder_overrules_the_local_count() -> None:
 
 def test_a_remainder_of_nothing_holds_the_run_until_the_reported_reset() -> None:
     fake = Fake()
-    limit = limiter(fake, {TOKENS: 1000}, dialect=OPENAI)
+    limit = limiter(fake, {TOKENS: 1000}, meter=OPENAI)
 
     limit.observe(
         {
@@ -291,7 +291,7 @@ def test_a_remainder_of_nothing_holds_the_run_until_the_reported_reset() -> None
 
 def test_a_remainder_without_a_ceiling_to_subtract_it_from_is_ignored() -> None:
     fake = Fake()
-    limit = limiter(fake, dialect=OPENAI)  # nothing configured, nothing advertised
+    limit = limiter(fake, meter=OPENAI)  # nothing configured, nothing advertised
 
     limit.observe({"x-ratelimit-remaining-tokens": "0"})
 
@@ -300,11 +300,11 @@ def test_a_remainder_without_a_ceiling_to_subtract_it_from_is_ignored() -> None:
 
 def test_the_openai_family_charges_input_and_output_to_one_bucket() -> None:
     fake = Fake()
-    limit = limiter(fake, {TOKENS: 1000}, dialect=OPENAI)
+    limit = limiter(fake, {TOKENS: 1000}, meter=OPENAI)
 
     # 600 prompt + 500 ceiling is over the one combined budget
     assert book(limit, prompt=600, output=500).held is False  # larger than the window: sent
-    limit_two = limiter(Fake(), {TOKENS: 5000}, dialect=OPENAI)
+    limit_two = limiter(Fake(), {TOKENS: 5000}, meter=OPENAI)
     book(limit_two, prompt=3000, output=2000)
     assert book(limit_two, prompt=100).held
 
@@ -314,10 +314,10 @@ def test_the_openai_family_charges_input_and_output_to_one_bucket() -> None:
 
 def test_the_output_ceiling_is_not_booked_where_it_is_not_charged() -> None:
     fake = Fake()
-    limit = limiter(fake, {OUTPUT: 8000}, dialect=ANTHROPIC)
+    limit = limiter(fake, {OUTPUT: 8000}, meter=ANTHROPIC)
 
     # Four turns each carrying max_tokens=8000 would have exhausted the budget
-    # on the first one under a dialect that books the ceiling
+    # on the first one under a meter that books the ceiling
     for _ in range(4):
         assert not book(limit, output=8000).held
 
@@ -327,7 +327,7 @@ def test_what_was_actually_generated_is_charged_after_the_fact() -> None:
     # bites once real generation has overspent it. Before that point the
     # remainder this gateway reports on every answer is what paces the run.
     fake = Fake()
-    limit = limiter(fake, {OUTPUT: 1000}, dialect=ANTHROPIC)
+    limit = limiter(fake, {OUTPUT: 1000}, meter=ANTHROPIC)
 
     for produced in (900, 400):
         limit.settle(book(limit, output=8000), Spent(prompt=0, uncached=0, generated=produced))
@@ -338,7 +338,7 @@ def test_what_was_actually_generated_is_charged_after_the_fact() -> None:
 
 def test_the_reported_output_remainder_is_what_actually_paces_it() -> None:
     fake = Fake()
-    limit = limiter(fake, {OUTPUT: 1000}, dialect=ANTHROPIC)
+    limit = limiter(fake, {OUTPUT: 1000}, meter=ANTHROPIC)
 
     limit.observe(
         {
@@ -353,7 +353,7 @@ def test_the_reported_output_remainder_is_what_actually_paces_it() -> None:
 
 def test_cache_reads_do_not_count_against_the_input_budget() -> None:
     fake = Fake()
-    limit = limiter(fake, {INPUT: 1000}, dialect=ANTHROPIC)
+    limit = limiter(fake, {INPUT: 1000}, meter=ANTHROPIC)
 
     first = book(limit, prompt=900)
     limit.settle(first, Spent(prompt=900, uncached=100, generated=50))
@@ -363,7 +363,7 @@ def test_cache_reads_do_not_count_against_the_input_budget() -> None:
 
 def test_an_anthropic_reset_is_a_timestamp_rather_than_a_duration() -> None:
     fake = Fake()
-    limit = limiter(fake, {INPUT: 1000}, dialect=ANTHROPIC)
+    limit = limiter(fake, {INPUT: 1000}, meter=ANTHROPIC)
 
     limit.observe(
         {
@@ -382,7 +382,7 @@ def test_an_anthropic_reset_is_a_timestamp_rather_than_a_duration() -> None:
 
 def test_a_gateway_that_meters_nothing_holds_nothing_back() -> None:
     fake = Fake()
-    limit = limiter(fake, dialect=NONE)
+    limit = limiter(fake, meter=NONE)
 
     for _ in range(100):
         assert not book(limit, prompt=10_000_000, output=8000).held
@@ -394,7 +394,7 @@ def test_a_gateway_that_meters_nothing_still_honours_a_refusal() -> None:
     # DeepSeek limits concurrency and answers 429 when it is exceeded; there is
     # no budget to pace against, but a refusal still means everyone waits
     fake = Fake()
-    limit = limiter(fake, dialect=NONE)
+    limit = limiter(fake, meter=NONE)
 
     limit.pause(30.0)
 
@@ -418,11 +418,11 @@ def test_the_window_length_comes_from_the_family_not_from_a_constant() -> None:
     # Azure enforces on ten-second windows for some deployments and refuses
     # while the minute-level figure still looks comfortably under quota. A run
     # that waits out the wrong window is refused by arithmetic of its own making.
-    brisk = dialects.Dialect(
-        name="brisk", buckets=(dialects.Bucket(TOKENS, dialects.Meter.TOTAL),), window_s=10.0
+    brisk = metering.Meter(
+        name="brisk", buckets=(metering.Bucket(TOKENS, metering.Fills.TOTAL),), window_s=10.0
     )
     fake = Fake()
-    limit = limiter(fake, {TOKENS: 1000}, dialect=brisk)
+    limit = limiter(fake, {TOKENS: 1000}, meter=brisk)
     book(limit, prompt=800)
 
     # Ten seconds, because that is this gateway's window — not sixty
@@ -430,8 +430,8 @@ def test_the_window_length_comes_from_the_family_not_from_a_constant() -> None:
 
 
 def test_the_shipped_families_all_say_what_their_window_is() -> None:
-    for dialect in dialects.KNOWN.values():
-        assert dialect.window_s > 0
+    for meter in metering.KNOWN.values():
+        assert meter.window_s > 0
 
 
 # ------------------------------------------------------------------ choosing the family
@@ -450,17 +450,17 @@ def test_the_shipped_families_all_say_what_their_window_is() -> None:
     ],
 )
 def test_the_family_is_read_off_the_base_url(base_url: str, expected: str) -> None:
-    dialect, why = dialects.resolve("auto", base_url)
+    meter, why = metering.resolve("auto", base_url)
 
-    assert dialect.name == expected
+    assert meter.name == expected
     assert why
 
 
 def test_naming_a_family_beats_guessing_at_it() -> None:
     # A proxy in front of Fireworks hides the host, so the guess would be wrong
-    dialect, why = dialects.resolve("fireworks", "https://gateway.internal/v1")
+    meter, why = metering.resolve("fireworks", "https://gateway.internal/v1")
 
-    assert dialect.name == "fireworks"
+    assert meter.name == "fireworks"
     assert why == "named in the config"
 
 
@@ -571,7 +571,7 @@ def test_the_limits_default_to_off_so_nothing_changes_unasked() -> None:
     limits = ProviderConfig().rate_limits
 
     assert limits.per_minute == {}
-    assert limits.dialect == "auto"
+    assert limits.metering == "auto"
     # Except this one: the gateway knows its own ceilings and says so
     assert limits.adopt_advertised
 
@@ -666,17 +666,17 @@ def runner_with(
     client: StubClient,
     tmp_path: Path,
     ceilings: dict[str, int] | None = None,
-    dialect: str = "fireworks",
+    metering: str = "fireworks",
 ) -> tuple[OpenAIAgentRunner, Fake]:
     """A runner talking to the stub, on a clock that only moves when it waits."""
     provider = ProviderConfig(
         api_key="k",
         max_retries=2,
-        rate_limits=RateLimits(dialect=dialect, per_minute=ceilings or {}),
+        rate_limits=RateLimits(metering=metering, per_minute=ceilings or {}),
     )
     runner = OpenAIAgentRunner(provider, RunConfig(), tmp_path, "base", "head")
     fake = Fake()
-    resolved, _ = provider.dialect()
+    resolved, _ = provider.meter()
     runner._client = client  # type: ignore[assignment]
     runner._limiter = RateLimiter(
         resolved, ceilings or {}, clock=fake.clock, sleep=fake.sleep
@@ -783,7 +783,7 @@ def test_a_gateway_that_reports_what_is_left_is_believed_over_the_estimate(
         completion(prompt=5000, generated=100),
         headers={"x-ratelimit-limit-tokens": "6000", "x-ratelimit-remaining-tokens": "5800"},
     )
-    runner, fake = runner_with(client, tmp_path, {TOKENS: 6000}, dialect="openai")
+    runner, fake = runner_with(client, tmp_path, {TOKENS: 6000}, metering="openai")
 
     send(runner)
     send(runner)
@@ -794,7 +794,7 @@ def test_a_gateway_that_reports_what_is_left_is_believed_over_the_estimate(
 
 def test_a_gateway_that_meters_nothing_never_paces_the_runner(tmp_path: Path) -> None:
     client = StubClient(completion(prompt=500_000, generated=8000))
-    runner, fake = runner_with(client, tmp_path, dialect="none")
+    runner, fake = runner_with(client, tmp_path, metering="none")
     events: list[tuple[str, str]] = []
 
     for _ in range(10):

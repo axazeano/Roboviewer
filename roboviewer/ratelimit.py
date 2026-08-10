@@ -5,7 +5,7 @@ context every turn. Hosted gateways meter that and answer 429 when a bucket is
 empty. Retrying into a full bucket does not help; the request has to be held
 back before it is sent.
 
-What is metered and what the gateway reports about it lives in `dialects`. What
+What is metered and what the gateway reports about it lives in `metering`. What
 is here is the part that is the same everywhere:
 
   * **One budget for the whole run.** Every agent reserves from the same
@@ -36,7 +36,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from .dialects import Allowance, Dialect, Shape, Spent, actual, estimate, read
+from .metering import Allowance, Demand, Meter, Spent, actual, estimate, read
 
 COOLDOWN = "the gateway's 429"
 
@@ -62,19 +62,19 @@ class RateLimiter:
 
     One of these per run, passed to every agent: budgets that are not shared are
     not budgets. What the buckets are, and whether the gateway will say how full
-    they are, comes from the dialect — this class only decides who waits.
+    they are, comes from the meter — this class only decides who waits.
     """
 
     def __init__(
         self,
-        dialect: Dialect,
+        meter: Meter,
         ceilings: dict[str, int] | None = None,
         *,
         adopt_advertised: bool = True,
         clock: Clock = time.monotonic,
         sleep: Sleeper = asyncio.sleep,
     ) -> None:
-        self._dialect = dialect
+        self._meter = meter
         self._adopt = adopt_advertised
         self._clock = clock
         self._sleep = sleep
@@ -82,18 +82,18 @@ class RateLimiter:
         self._cooldown_until = 0.0
         configured = ceilings or {}
         self._windows = {
-            bucket.name: _Window(configured.get(bucket.name, 0), dialect.window_s)
-            for bucket in dialect.buckets
+            bucket.name: _Window(configured.get(bucket.name, 0), meter.window_s)
+            for bucket in meter.buckets
         }
 
-    async def reserve(self, shape: Shape) -> Reservation:
+    async def reserve(self, demand: Demand) -> Reservation:
         """Wait until this request fits, then charge it at the estimate."""
         # Counted from what we deliberately slept, not from the clock: a request
         # that sailed through must report a wait of zero, and two readings of a
         # clock are never quite equal.
         waited = 0.0
         reason = ""
-        wanted = estimate(self._dialect, shape)
+        wanted = estimate(self._meter, demand)
         while True:
             async with self._lock:
                 now = self._clock()
@@ -108,7 +108,7 @@ class RateLimiter:
 
     def settle(self, reservation: Reservation, spent: Spent) -> None:
         """Replace the estimates with what the response actually reported."""
-        for name, amount in actual(self._dialect, spent).items():
+        for name, amount in actual(self._meter, spent).items():
             entry = reservation.entries.get(name)
             if entry is not None:
                 entry[1] = amount
@@ -140,7 +140,7 @@ class RateLimiter:
             return {}
         changed: dict[str, int] = {}
         now = self._clock()
-        for name, allowance in read(self._dialect, headers).items():
+        for name, allowance in read(self._meter, headers).items():
             window = self._windows.get(name)
             if window is None:
                 continue

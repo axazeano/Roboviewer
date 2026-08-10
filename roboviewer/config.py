@@ -22,7 +22,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from . import dialects
+from . import metering
 
 # A key nobody reads is a setting nobody applied, and ignoring it silently — the
 # pydantic default — means a typo leaves the run on defaults while the person
@@ -95,7 +95,7 @@ class RateLimits(BaseModel):
     their effective ceilings on every response and `adopt_advertised` picks
     those up, so most people never fill this in at all.
 
-    The bucket names are the ones the chosen dialect meters, and nothing else is
+    The bucket names are the ones this gateway meters, and nothing else is
     accepted: a ceiling written under a name the gateway does not count is a
     setting that would never have applied, and finding that out at load time is
     the point. `roboviewer --check-provider` prints the names in force.
@@ -106,8 +106,8 @@ class RateLimits(BaseModel):
     # Which gateway family this is. "auto" reads it off base_url, which is
     # enough for the gateways whose metering differs from the compatible norm;
     # name one explicitly when running behind a proxy that hides the host.
-    dialect: Literal["auto", "openai", "fireworks", "anthropic", "none"] = "auto"
-    # Bucket name → tokens (or requests) per minute. See `dialects` for the
+    metering: Literal["auto", "openai", "fireworks", "anthropic", "none"] = "auto"
+    # Bucket name → tokens (or requests) per minute. See `metering` for the
     # names each family uses.
     per_minute: dict[str, int] = Field(default_factory=dict)
     # Read the ceilings, and what is left of them, out of the response headers
@@ -142,20 +142,20 @@ class ProviderConfig(BaseModel):
         Checked here rather than on `RateLimits` because which names are valid
         depends on `base_url`, and a model only sees its own fields.
         """
-        dialect, _ = dialects.resolve(self.rate_limits.dialect, self.base_url)
-        unknown = sorted(set(self.rate_limits.per_minute) - set(dialect.names()))
+        meter, _ = metering.resolve(self.rate_limits.metering, self.base_url)
+        unknown = sorted(set(self.rate_limits.per_minute) - set(meter.names()))
         if not unknown:
             return self
-        known = ", ".join(dialect.names()) or "none — this gateway meters nothing per key"
+        known = ", ".join(meter.names()) or "none — this gateway meters nothing per key"
         raise ValueError(
             f"provider.rate_limits.per_minute: {', '.join(unknown)} "
             f"{'is' if len(unknown) == 1 else 'are'} not metered by the "
-            f"{dialect.name} gateway. Buckets it does meter: {known}"
+            f"{meter.name} gateway. Buckets it does meter: {known}"
         )
 
-    def dialect(self) -> tuple[dialects.Dialect, str]:
+    def meter(self) -> tuple[metering.Meter, str]:
         """(what this gateway meters, how that was decided)."""
-        return dialects.resolve(self.rate_limits.dialect, self.base_url)
+        return metering.resolve(self.rate_limits.metering, self.base_url)
 
     # Defaults to the OpenAI way, Authorization: Bearer <key>; gateways often
     # want something else. See config.example.toml for the combinations.

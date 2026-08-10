@@ -67,9 +67,9 @@ in a per-provider special case.
 ## What the tool does
 
 The differences above are five answers, not five algorithms. They live as data
-in `roboviewer/dialects.py` — a dialect is a bucket
-list, a header template and two flags, and there are no subclasses. What is the
-same everywhere lives in `roboviewer/ratelimit.py`.
+in `roboviewer/metering.py` — a meter is a bucket list, a header template and
+two flags, and there are no subclasses. What is the same everywhere lives in
+`roboviewer/ratelimit.py`, which holds the budget and decides who waits.
 
 **One budget for the whole run.** Every agent reserves from the same limiter,
 because the gateway counts the run as a whole and so must we.
@@ -148,13 +148,13 @@ flowchart TD
 Two of those branches are not obvious. **"And is there any room"** is not
 redundant: a bucket at exactly zero would otherwise admit a request that books
 nothing against it, because `0 ≤ 0` reads as "it fits" — which is a live hole
-the moment a dialect stops booking the output ceiling. And **larger than the
+the moment a meter stops booking the output ceiling. And **larger than the
 whole window means send it**, because waiting cannot make it fit and hanging
 forever is the worst of the three answers.
 
 ## The four families
 
-| Dialect | Buckets it meters | How it is paced |
+| Metering | Buckets it meters | How it is paced |
 | --- | --- | --- |
 | `openai` | `requests`, `tokens` | from the reported remainder; the estimate barely matters |
 | `fireworks` | `prompt tokens`, `uncached prompt tokens`, `generated tokens`, `requests` | local count, corrected on every answer; ceilings adopted from headers |
@@ -189,7 +189,7 @@ run rather than an hour into it.
 
 ```toml
 [provider.rate_limits]
-dialect = "auto"              # name a family when a proxy hides base_url
+metering = "auto"             # name a family when a proxy hides base_url
 adopt_advertised = true
 
 [provider.rate_limits.per_minute]
@@ -225,7 +225,7 @@ documentation and covered by tests, not by a run against a live account. See
 ## Where the parts are
 
 One axis of variation, isolated. Everything a gateway disagrees about is stated
-once, in `dialects.py`; the config resolves which family is in play before the
+once, in `metering.py`; the config resolves which family is in play before the
 first request, and both the limiter and the sending path read it from there.
 
 ```mermaid
@@ -233,7 +233,7 @@ flowchart TD
     CFG["config.py: family from base_url, ceilings checked against its buckets"]
 
     subgraph differs ["Stated per gateway"]
-        D["dialects.py: buckets, header template, two flags"]
+        D["metering.py: buckets, header template, two flags"]
     end
     subgraph same ["The same for every gateway"]
         RL["ratelimit.py: limiter, windows, cooldown"]
@@ -250,7 +250,7 @@ flowchart TD
 
 | Part | Where |
 | --- | --- |
-| What each gateway meters and reports | `roboviewer/dialects.py` |
+| What each gateway meters and reports | `roboviewer/metering.py` |
 | Windows, cooldown, reserve and settle | `roboviewer/ratelimit.py` |
 | Sending, retrying, pausing | `roboviewer/runners/openai_agent.py` |
 | Settings | `[provider.rate_limits]`, `config.example.toml` |

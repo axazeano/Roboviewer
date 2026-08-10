@@ -1,10 +1,14 @@
 """What one gateway meters, and what it will tell you about it.
 
-Everything a run has to know about a provider's idea of load, stated as data.
-Surveying ten hosted gateways in August 2026 turned up four families and no
-fifth axis worth a branch in the code, so there are no subclasses here: a
-dialect is a bucket list, a header template and two flags. `docs/rate-limits.md`
-has the survey the table was built from.
+Everything a run has to know about a gateway's idea of load, stated as data —
+which buckets it counts, what fills them, and which of the ceiling, the
+remainder and the reset it puts on a response. Surveying ten hosted gateways in
+August 2026 turned up four families and no fifth axis worth a branch in the
+code, so there are no subclasses here: a `Meter` is a bucket list, a header
+template and two flags. `docs/rate-limits.md` has the survey it was built from.
+
+Nothing here paces anything. `ratelimit` holds the budget and decides who waits;
+this module only tells it what the budget is made of.
 
 The families, and why each one is not the others:
 
@@ -42,7 +46,7 @@ from typing import Any
 
 # The quantity that feeds a bucket. Buckets are named per gateway; what fills
 # them is not, which is why this is the thing the sending path talks about.
-class Meter(Enum):
+class Fills(Enum):
     REQUESTS = "requests"
     PROMPT = "prompt"  # every input token, cached or not
     UNCACHED = "uncached"  # input tokens the prefix cache did not serve
@@ -60,15 +64,16 @@ class Bucket:
     """
 
     name: str
-    meter: Meter
-    # Substituted into the dialect's header template. Empty means this bucket is
+    fills: Fills
+    # Substituted into the meter's header template. Empty means this bucket is
     # never advertised, whatever the gateway says about the others.
     slug: str = ""
 
 
 @dataclass(frozen=True)
-class Shape:
-    """A request, as much of it as is known before it is sent."""
+class Demand:
+    """What a request will ask of the budget, as far as anyone knows before it
+    is sent. `Spent` is the same request once the answer has said."""
 
     prompt: int
     output_ceiling: int
@@ -98,7 +103,7 @@ class Allowance:
 
 
 @dataclass(frozen=True)
-class Dialect:
+class Meter:
     """One gateway family's answer to what is metered and what is reported."""
 
     name: str
@@ -149,38 +154,38 @@ GENERATED = "generated tokens"
 INPUT = "input tokens"
 OUTPUT = "output tokens"
 
-OPENAI = Dialect(
+OPENAI = Meter(
     name="openai",
     buckets=(
-        Bucket(REQUESTS, Meter.REQUESTS, "requests"),
-        Bucket(TOKENS, Meter.TOTAL, "tokens"),
+        Bucket(REQUESTS, Fills.REQUESTS, "requests"),
+        Bucket(TOKENS, Fills.TOTAL, "tokens"),
     ),
     header="x-ratelimit-{facet}-{slug}",
     facets=("limit", "remaining", "reset"),
     why="requests and one combined token bucket, with what is left reported on every answer",
 )
 
-FIREWORKS = Dialect(
+FIREWORKS = Meter(
     name="fireworks",
     buckets=(
-        Bucket(PROMPT, Meter.PROMPT, "prompt"),
-        Bucket(UNCACHED, Meter.UNCACHED, "cache-adjusted-prompt"),
-        Bucket(GENERATED, Meter.GENERATED, "generated"),
-        Bucket(REQUESTS, Meter.REQUESTS),
+        Bucket(PROMPT, Fills.PROMPT, "prompt"),
+        Bucket(UNCACHED, Fills.UNCACHED, "cache-adjusted-prompt"),
+        Bucket(GENERATED, Fills.GENERATED, "generated"),
+        Bucket(REQUESTS, Fills.REQUESTS),
     ),
     header="x-ratelimit-{facet}-tokens-{slug}",
     facets=("limit",),
     why="three token buckets; ceilings advertised but never the remainder, so the run keeps count",
 )
 
-ANTHROPIC = Dialect(
+ANTHROPIC = Meter(
     name="anthropic",
     buckets=(
-        Bucket(REQUESTS, Meter.REQUESTS, "requests"),
+        Bucket(REQUESTS, Fills.REQUESTS, "requests"),
         # Cache reads are excluded from this budget, which is the same idea as
         # Fireworks' cache-adjusted prompt under a different name.
-        Bucket(INPUT, Meter.UNCACHED, "input-tokens"),
-        Bucket(OUTPUT, Meter.GENERATED, "output-tokens"),
+        Bucket(INPUT, Fills.UNCACHED, "input-tokens"),
+        Bucket(OUTPUT, Fills.GENERATED, "output-tokens"),
     ),
     header="anthropic-ratelimit-{slug}-{facet}",
     facets=("limit", "remaining", "reset"),
@@ -190,17 +195,17 @@ ANTHROPIC = Dialect(
     why="requests, input and output; cache reads are free and max_tokens is not charged",
 )
 
-NONE = Dialect(
+NONE = Meter(
     name="none",
     why="nothing is metered per key; run.concurrency is the whole mechanism",
 )
 
-KNOWN: dict[str, Dialect] = {d.name: d for d in (OPENAI, FIREWORKS, ANTHROPIC, NONE)}
+KNOWN: dict[str, Meter] = {d.name: d for d in (OPENAI, FIREWORKS, ANTHROPIC, NONE)}
 
 # Matched against base_url, longest host fragment first. Only the gateways whose
 # metering differs from the OpenAI-compatible default need an entry: everything
 # else is better served by the default than by a guess.
-BY_HOST: tuple[tuple[str, Dialect], ...] = (
+BY_HOST: tuple[tuple[str, Meter], ...] = (
     ("fireworks.ai", FIREWORKS),
     ("api.anthropic.com", ANTHROPIC),
     ("api.claude.com", ANTHROPIC),
@@ -210,8 +215,8 @@ BY_HOST: tuple[tuple[str, Dialect], ...] = (
 )
 
 
-def resolve(choice: str, base_url: str) -> tuple[Dialect, str]:
-    """(dialect, why it was chosen). Named explicitly, or read off `base_url`.
+def resolve(choice: str, base_url: str) -> tuple[Meter, str]:
+    """(meter, why it was chosen). Named explicitly, or read off `base_url`.
 
     Resolved before the first request rather than from the first response, so
     the buckets are known while the config is still being validated — a ceiling
@@ -221,13 +226,13 @@ def resolve(choice: str, base_url: str) -> tuple[Dialect, str]:
     if choice and choice != "auto":
         return KNOWN[choice], "named in the config"
     host = base_url.lower()
-    for fragment, dialect in BY_HOST:
+    for fragment, meter in BY_HOST:
         if fragment in host:
-            return dialect, f"matched {fragment} in base_url"
+            return meter, f"matched {fragment} in base_url"
     return OPENAI, "no rule matched base_url, assuming OpenAI-compatible"
 
 
-def estimate(dialect: Dialect, shape: Shape) -> dict[str, float]:
+def estimate(meter: Meter, demand: Demand) -> dict[str, float]:
     """What to charge each bucket before the answer exists.
 
     The prompt is what it is. Output is the open question, and the two honest
@@ -239,43 +244,43 @@ def estimate(dialect: Dialect, shape: Shape) -> dict[str, float]:
     the reported remainder is what paces the run. Booking a closer guess than
     either is a change of its own — see TASK-29.
     """
-    output = float(shape.output_ceiling) if dialect.reserves_output else 0.0
+    output = float(demand.output_ceiling) if meter.reserves_output else 0.0
     amounts = {
-        Meter.REQUESTS: 1.0,
-        Meter.PROMPT: float(shape.prompt),
+        Fills.REQUESTS: 1.0,
+        Fills.PROMPT: float(demand.prompt),
         # Unknown before the fact: assume the cache serves nothing, correct after
-        Meter.UNCACHED: float(shape.prompt),
-        Meter.GENERATED: output,
-        Meter.TOTAL: float(shape.prompt) + output,
+        Fills.UNCACHED: float(demand.prompt),
+        Fills.GENERATED: output,
+        Fills.TOTAL: float(demand.prompt) + output,
     }
-    return {bucket.name: amounts[bucket.meter] for bucket in dialect.buckets}
+    return {bucket.name: amounts[bucket.fills] for bucket in meter.buckets}
 
 
-def actual(dialect: Dialect, spent: Spent) -> dict[str, float]:
+def actual(meter: Meter, spent: Spent) -> dict[str, float]:
     """What the answer says the request really cost, per bucket."""
     amounts = {
-        Meter.REQUESTS: 1.0,
-        Meter.PROMPT: float(spent.prompt),
-        Meter.UNCACHED: float(spent.uncached),
-        Meter.GENERATED: float(spent.generated),
-        Meter.TOTAL: float(spent.prompt + spent.generated),
+        Fills.REQUESTS: 1.0,
+        Fills.PROMPT: float(spent.prompt),
+        Fills.UNCACHED: float(spent.uncached),
+        Fills.GENERATED: float(spent.generated),
+        Fills.TOTAL: float(spent.prompt + spent.generated),
     }
-    return {bucket.name: amounts[bucket.meter] for bucket in dialect.buckets}
+    return {bucket.name: amounts[bucket.fills] for bucket in meter.buckets}
 
 
-def read(dialect: Dialect, headers: Any) -> dict[str, Allowance]:
+def read(meter: Meter, headers: Any) -> dict[str, Allowance]:
     """What the gateway said about its own limits on the way back.
 
     Buckets it said nothing about are absent rather than present and empty: the
     caller has to be able to tell "no news" from "none left".
     """
-    if not dialect.header or headers is None:
+    if not meter.header or headers is None:
         return {}
     found: dict[str, Allowance] = {}
-    for bucket in dialect.buckets:
+    for bucket in meter.buckets:
         if not bucket.slug:
             continue
-        allowance = _allowance(dialect, bucket, headers)
+        allowance = _allowance(meter, bucket, headers)
         if allowance is not None:
             found[bucket.name] = allowance
     return found
@@ -313,10 +318,10 @@ _DURATION = re.compile(
 )
 
 
-def _allowance(dialect: Dialect, bucket: Bucket, headers: Any) -> Allowance | None:
+def _allowance(meter: Meter, bucket: Bucket, headers: Any) -> Allowance | None:
     raw = {
-        facet: _header(headers, dialect.header.format(facet=facet, slug=bucket.slug))
-        for facet in dialect.facets
+        facet: _header(headers, meter.header.format(facet=facet, slug=bucket.slug))
+        for facet in meter.facets
     }
     if not any(value is not None for value in raw.values()):
         return None

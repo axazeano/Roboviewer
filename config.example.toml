@@ -75,7 +75,7 @@ terminal_tool_choice = "forced"
 # the tightest by a factor of four, and exactly the one a shared prompt prefix
 # is designed to stay under.
 # [provider.rate_limits]
-# dialect = "auto"
+# metering = "auto"
 # adopt_advertised = true
 #
 # [provider.rate_limits.per_minute]
