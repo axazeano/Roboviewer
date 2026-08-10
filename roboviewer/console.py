@@ -18,9 +18,9 @@ from .checklist import ChecklistItem
 from .config import Config, ModelConfig, RateLimits, home_config_path
 from .events import Event
 from .gitdiff import DiffBundle
-from .metering import Meter
 from .models import SEVERITY_LABEL, Finding, ReviewRun
 from .prompts import PromptError, language_name
+from .ratelimit import Meter
 
 
 def error(message: str, hint: str = "") -> None:

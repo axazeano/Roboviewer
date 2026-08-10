@@ -21,10 +21,9 @@ ENFORCED = [
     *sorted((PACKAGE / "renders").rglob("*.py")),
     PACKAGE / "cli.py",
     PACKAGE / "console.py",
-    PACKAGE / "metering.py",
+    *sorted((PACKAGE / "ratelimit").glob("*.py")),
     PACKAGE / "events.py",
     PACKAGE / "judge.py",
-    PACKAGE / "ratelimit.py",
     PACKAGE / "sources.py",
     # Written this way from the start, so the whole package is in
     *sorted((ROOT / "corpus").glob("*.py")),

@@ -67,9 +67,10 @@ in a per-provider special case.
 ## What the tool does
 
 The differences above are five answers, not five algorithms. They live as data
-in `roboviewer/metering.py` — a meter is a bucket list, a header template and
-two flags, and there are no subclasses. What is the same everywhere lives in
-`roboviewer/ratelimit.py`, which holds the budget and decides who waits.
+in `roboviewer/ratelimit/metering.py` — a meter is a bucket list, a header
+template and two flags, and there are no subclasses. It sits in a package with
+the two parts that do not vary by gateway: `window.py`, which knows how full one
+bucket is, and `limiter.py`, which decides who waits.
 
 **One budget for the whole run.** Every agent reserves from the same limiter,
 because the gateway counts the run as a whole and so must we.
@@ -224,34 +225,41 @@ documentation and covered by tests, not by a run against a live account. See
 
 ## Where the parts are
 
-One axis of variation, isolated. Everything a gateway disagrees about is stated
-once, in `metering.py`; the config resolves which family is in play before the
-first request, and both the limiter and the sending path read it from there.
+The whole subsystem is one package, split three ways — not for tidiness, but
+because the three parts change for three different reasons. `metering` changes
+when a gateway is added or moves its headers; `window` changes when the
+accounting does; `limiter` changes when the shape of a run does.
 
 ```mermaid
 flowchart TD
     CFG["config.py: family from base_url, ceilings checked against its buckets"]
 
-    subgraph differs ["Stated per gateway"]
-        D["metering.py: buckets, header template, two flags"]
-    end
-    subgraph same ["The same for every gateway"]
-        RL["ratelimit.py: limiter, windows, cooldown"]
-    end
-    subgraph edge ["The sending path"]
-        RUN["openai_agent.py: reserve, send, observe, settle, retry"]
+    subgraph pkg ["roboviewer/ratelimit/"]
+        direction TB
+        M["metering.py: what one gateway counts and reports"]
+        W["window.py: how full one bucket is"]
+        L["limiter.py: who waits, and for how long"]
+        M --> W
+        W --> L
     end
 
-    CFG --> D
-    D --> RL
-    RL --> RUN
-    D --> RUN
+    RUN["runners/openai_agent.py: reserve, send, observe, settle, retry"]
+
+    CFG --> M
+    L --> RUN
+    M --> RUN
 ```
+
+Everything a gateway disagrees about is stated once, in `metering`. The config
+resolves which family is in play before the first request, and both the limiter
+and the sending path read it from there.
 
 | Part | Where |
 | --- | --- |
-| What each gateway meters and reports | `roboviewer/metering.py` |
-| Windows, cooldown, reserve and settle | `roboviewer/ratelimit.py` |
+| What each gateway meters and reports | `roboviewer/ratelimit/metering.py` |
+| How full one bucket is | `roboviewer/ratelimit/window.py` |
+| Who waits, and the cooldown | `roboviewer/ratelimit/limiter.py` |
+| What a caller may use | `roboviewer/ratelimit/__init__.py` |
 | Sending, retrying, pausing | `roboviewer/runners/openai_agent.py` |
 | Settings | `[provider.rate_limits]`, `config.example.toml` |
 | Tests (no network, fake clock) | `tests/test_ratelimit.py` |

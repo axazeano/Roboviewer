@@ -22,7 +22,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from . import metering
+from . import ratelimit
 
 # A key nobody reads is a setting nobody applied, and ignoring it silently — the
 # pydantic default — means a typo leaves the run on defaults while the person
@@ -142,7 +142,7 @@ class ProviderConfig(BaseModel):
         Checked here rather than on `RateLimits` because which names are valid
         depends on `base_url`, and a model only sees its own fields.
         """
-        meter, _ = metering.resolve(self.rate_limits.metering, self.base_url)
+        meter, _ = ratelimit.resolve(self.rate_limits.metering, self.base_url)
         unknown = sorted(set(self.rate_limits.per_minute) - set(meter.names()))
         if not unknown:
             return self
@@ -153,9 +153,9 @@ class ProviderConfig(BaseModel):
             f"{meter.name} gateway. Buckets it does meter: {known}"
         )
 
-    def meter(self) -> tuple[metering.Meter, str]:
+    def meter(self) -> tuple[ratelimit.Meter, str]:
         """(what this gateway meters, how that was decided)."""
-        return metering.resolve(self.rate_limits.metering, self.base_url)
+        return ratelimit.resolve(self.rate_limits.metering, self.base_url)
 
     # Defaults to the OpenAI way, Authorization: Bearer <key>; gateways often
     # want something else. See config.example.toml for the combinations.

@@ -200,7 +200,7 @@ NONE = Meter(
     why="nothing is metered per key; run.concurrency is the whole mechanism",
 )
 
-KNOWN: dict[str, Meter] = {d.name: d for d in (OPENAI, FIREWORKS, ANTHROPIC, NONE)}
+FAMILIES: dict[str, Meter] = {d.name: d for d in (OPENAI, FIREWORKS, ANTHROPIC, NONE)}
 
 # Matched against base_url, longest host fragment first. Only the gateways whose
 # metering differs from the OpenAI-compatible default need an entry: everything
@@ -224,7 +224,7 @@ def resolve(choice: str, base_url: str) -> tuple[Meter, str]:
     time, not silently ignored an hour into a run.
     """
     if choice and choice != "auto":
-        return KNOWN[choice], "named in the config"
+        return FAMILIES[choice], "named in the config"
     host = base_url.lower()
     for fragment, meter in BY_HOST:
         if fragment in host:

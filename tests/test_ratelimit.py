@@ -22,9 +22,9 @@ import httpx
 import pytest
 from openai import APIStatusError, RateLimitError
 
-from roboviewer import metering
+from roboviewer import ratelimit
 from roboviewer.config import ProviderConfig, RateLimits, RunConfig
-from roboviewer.metering import (
+from roboviewer.ratelimit import (
     ANTHROPIC,
     FIREWORKS,
     GENERATED,
@@ -36,11 +36,11 @@ from roboviewer.metering import (
     TOKENS,
     UNCACHED,
     Demand,
+    RateLimiter,
     Spent,
     estimate_tokens,
     retry_after,
 )
-from roboviewer.ratelimit import RateLimiter
 from roboviewer.runners import openai_agent
 from roboviewer.runners.openai_agent import OpenAIAgentRunner
 
@@ -64,7 +64,7 @@ def limiter(
     fake: Fake,
     ceilings: dict[str, int] | None = None,
     *,
-    meter: metering.Meter = FIREWORKS,
+    meter: ratelimit.Meter = FIREWORKS,
     adopt: bool = True,
 ) -> RateLimiter:
     return RateLimiter(
@@ -418,8 +418,8 @@ def test_the_window_length_comes_from_the_family_not_from_a_constant() -> None:
     # Azure enforces on ten-second windows for some deployments and refuses
     # while the minute-level figure still looks comfortably under quota. A run
     # that waits out the wrong window is refused by arithmetic of its own making.
-    brisk = metering.Meter(
-        name="brisk", buckets=(metering.Bucket(TOKENS, metering.Fills.TOTAL),), window_s=10.0
+    brisk = ratelimit.Meter(
+        name="brisk", buckets=(ratelimit.Bucket(TOKENS, ratelimit.Fills.TOTAL),), window_s=10.0
     )
     fake = Fake()
     limit = limiter(fake, {TOKENS: 1000}, meter=brisk)
@@ -430,7 +430,7 @@ def test_the_window_length_comes_from_the_family_not_from_a_constant() -> None:
 
 
 def test_the_shipped_families_all_say_what_their_window_is() -> None:
-    for meter in metering.KNOWN.values():
+    for meter in ratelimit.FAMILIES.values():
         assert meter.window_s > 0
 
 
@@ -450,7 +450,7 @@ def test_the_shipped_families_all_say_what_their_window_is() -> None:
     ],
 )
 def test_the_family_is_read_off_the_base_url(base_url: str, expected: str) -> None:
-    meter, why = metering.resolve("auto", base_url)
+    meter, why = ratelimit.resolve("auto", base_url)
 
     assert meter.name == expected
     assert why
@@ -458,7 +458,7 @@ def test_the_family_is_read_off_the_base_url(base_url: str, expected: str) -> No
 
 def test_naming_a_family_beats_guessing_at_it() -> None:
     # A proxy in front of Fireworks hides the host, so the guess would be wrong
-    meter, why = metering.resolve("fireworks", "https://gateway.internal/v1")
+    meter, why = ratelimit.resolve("fireworks", "https://gateway.internal/v1")
 
     assert meter.name == "fireworks"
     assert why == "named in the config"

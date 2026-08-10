@@ -29,11 +29,10 @@ from typing import Any
 
 from openai import APIError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
 
-from .. import metering
+from .. import ratelimit
 from ..config import ProviderConfig, RunConfig
-from ..metering import Demand, Spent
 from ..models import Usage
-from ..ratelimit import RateLimiter
+from ..ratelimit import Demand, RateLimiter, Spent
 from ..tools import dispatch, parse_arguments
 from .base import AgentOutcome, AgentRequest, ProgressHook, Runner
 
@@ -231,7 +230,7 @@ class OpenAIAgentRunner(Runner):
                 # Everyone waits, not only whoever was refused: the other agents
                 # are a moment from the same answer, and asking again together
                 # is what turns a busy minute into a failed run.
-                held = self._limiter.pause(metering.retry_after(exc) or delay)
+                held = self._limiter.pause(ratelimit.retry_after(exc) or delay)
                 emit(
                     "retry",
                     f"attempt {attempt}/{self._provider.max_retries}: "
@@ -244,7 +243,7 @@ class OpenAIAgentRunner(Runner):
                     raise
                 if status == SERVICE_OVERLOADED:
                     # "Come back later" in a different number
-                    self._limiter.pause(metering.retry_after(exc) or delay)
+                    self._limiter.pause(ratelimit.retry_after(exc) or delay)
                 last_exc = exc
                 emit("retry", f"attempt {attempt}/{self._provider.max_retries}: HTTP {status}")
 
@@ -264,7 +263,7 @@ class OpenAIAgentRunner(Runner):
         """
         reservation = await self._limiter.reserve(
             Demand(
-                prompt=metering.estimate_tokens(kwargs["messages"]) + self._tools_estimate(kwargs),
+                prompt=ratelimit.estimate_tokens(kwargs["messages"]) + self._tools_estimate(kwargs),
                 # The ceiling the request carries, which is the only number that
                 # exists before the fact. Whether it is charged at all is the
                 # gateway's business, so the meter decides what to do with it.
@@ -296,7 +295,7 @@ class OpenAIAgentRunner(Runner):
 
     def _tools_estimate(self, kwargs: dict[str, Any]) -> int:
         """The schemas go out with every turn and are a real part of the prompt."""
-        return metering.estimate_tokens(kwargs.get("tools") or [])
+        return ratelimit.estimate_tokens(kwargs.get("tools") or [])
 
 
 @dataclass
