@@ -206,6 +206,17 @@ branch after you forked stay out of the review.
 the most recent run. Point `-o` somewhere outside the repository to keep it out
 of `git status`.
 
+`runs/` is the only thing under `.roboviewer/` that a run writes. `config.toml`,
+`prompts/` and `templates/` are files you write, and the pipeline below reads
+the first of them, so ignore the output and nothing else:
+
+```gitignore
+.roboviewer/runs/
+```
+
+Ignoring `.roboviewer/` wholesale takes the committed config down with it, and
+git says nothing when it does.
+
 `--format` picks what a run writes. One file per format in
 `roboviewer/renders/`:
 
