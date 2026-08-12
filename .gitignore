@@ -9,6 +9,7 @@ build/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.complexipy_cache/
 
 # Review output; the rest of .roboviewer/ is input and meant to be committed
 .roboviewer/runs/
