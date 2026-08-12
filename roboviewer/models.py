@@ -99,10 +99,6 @@ class Finding(BaseModel):
     def location(self) -> str:
         return f"{self.file}:{self.line}" if self.line else self.file
 
-    def dedupe_bucket(self) -> tuple[str, int]:
-        """Coarse grouping key: file plus a 5-line window."""
-        return (self.file.strip().lstrip("./"), (self.line - 1) // 5 if self.line else -1)
-
 
 # "truncated" is a result, not a failure: the agent submitted findings, but the
 # turn limit ended the review rather than the agent deciding it was done.
