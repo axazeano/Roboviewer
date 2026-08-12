@@ -110,6 +110,19 @@ It makes a handful of targeted requests and names what is wrong — wrong auth
 scheme, a `base_url` missing `/v1`, a gateway that cannot do tool calling —
 instead of leaving you to infer it from eight agents failing at once.
 
+**Rate limits.** A review is a burst — eight agents, each resending a large
+context every turn — and serverless providers meter that per minute. Nothing
+needs configuring for the usual case: a `429` (or a `503`, which is the same
+message with a different number) holds *every* agent back rather than only the
+one that was refused, for as long as the provider asks, and providers that
+advertise their current ceilings in the response headers have those adopted
+automatically. Set `[provider.rate_limits]` when yours does not advertise, or to
+stay deliberately under what you are entitled to; the buckets are separate
+because providers meter them separately, and the tightest one is usually
+uncached prompt tokens — which is exactly what a shared prompt prefix exists to
+keep low. A run that is being paced says so (`waited 12s on uncached prompt
+tokens`) rather than looking like a hang.
+
 ## Use
 
 ```bash
@@ -192,6 +205,17 @@ branch after you forked stay out of the review.
 `findings.json` and per-item raw results for tuning prompts. `latest` symlinks to
 the most recent run. Point `-o` somewhere outside the repository to keep it out
 of `git status`.
+
+`runs/` is the only thing under `.roboviewer/` that a run writes. `config.toml`,
+`prompts/` and `templates/` are files you write, and the pipeline below reads
+the first of them, so ignore the output and nothing else:
+
+```gitignore
+.roboviewer/runs/
+```
+
+Ignoring `.roboviewer/` wholesale takes the committed config down with it, and
+git says nothing when it does.
 
 `--format` picks what a run writes. One file per format in
 `roboviewer/renders/`:

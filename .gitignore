@@ -9,9 +9,10 @@ build/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.complexipy_cache/
 
-# Review runs and the local provider config (may hold an API key)
-.roboviewer/
+# Review output; the rest of .roboviewer/ is input and meant to be committed
+.roboviewer/runs/
 
 # Local tooling settings
 .claude/settings.local.json
