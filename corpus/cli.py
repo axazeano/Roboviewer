@@ -105,6 +105,14 @@ def _entry_line(result: Result, github: GitHub) -> None:
     mark = {"cached": "•", "built": "✔", "failed": "✗"}[result.status]
     stream = sys.stderr if result.status == "failed" else sys.stdout
     print(f"{mark} {result.entry.id:<24} {result.detail}", file=stream)
+    if result.reviewed_head:
+        print(
+            f"  The review was written against {result.reviewed_head[:12]}, not the head "
+            f"{result.entry.head[:12]} this entry names. Whatever reviewers asked for is "
+            "already fixed at this head, so the entry measures nothing — unless a later "
+            "round is what you meant.",
+            file=sys.stderr,
+        )
     if result.status == "cached" and result.resolution == UNKNOWN and github.resolution_known:
         # Built anonymously, and the token now available would fill in the gap
         print("  built without a token, so no thread resolution — --refresh adds it")
@@ -118,6 +126,13 @@ def _summary(results: list[Result], store: Store) -> None:
     print(f"{len(built)} built, {len(cached)} already there, {len(failed)} failed")
     if failed:
         print(f"Failed: {', '.join(r.entry.id for r in failed)}", file=sys.stderr)
+    misplaced = [r for r in results if r.reviewed_head]
+    if misplaced:
+        print(
+            "Head is past the review: "
+            + ", ".join(f"{r.entry.id} → {r.reviewed_head[:12]}" for r in misplaced),
+            file=sys.stderr,
+        )
     example = next((r for r in results if r.ok), None)
     if example is not None:
         print(

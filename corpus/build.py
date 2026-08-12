@@ -12,6 +12,7 @@ stops.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -35,6 +36,9 @@ class Result:
     path: Path | None = None
     # "known", "unknown", or "" when the entry was not built
     resolution: str = ""
+    # Set when the review was written against some other commit than the head
+    # this entry claims — see `reviewed_head`.
+    reviewed_head: str = ""
 
     @property
     def ok(self) -> bool:
@@ -83,7 +87,24 @@ def build(entry: Entry, store: Store, github: GitHub, *, refresh: bool = False) 
         detail=_built_detail(threads),
         path=path,
         resolution=resolution,
+        reviewed_head=reviewed_head(threads, entry.head),
     )
+
+
+def reviewed_head(threads: list[Thread], head: str) -> str:
+    """The commit most of the review was written against, when `head` is not it.
+
+    An entry positioned after the review measures nothing: the author has
+    already changed what reviewers pointed at, so every hit is impossible. The
+    trap is that the pull request API hands out the branch tip, which is exactly
+    the wrong commit whenever the author pushed fixes — and nothing else here
+    can tell the two apart. Empty when the head is among the commits reviewers
+    commented on, which includes the ordinary case of a review spanning rounds.
+    """
+    commented = [thread.commit for thread in threads if thread.commit]
+    if not commented or head in commented:
+        return ""
+    return Counter(commented).most_common(1)[0][0]
 
 
 def _built_detail(threads: list[Thread]) -> str:
