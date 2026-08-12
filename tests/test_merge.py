@@ -1,10 +1,9 @@
 """Collapsing what several reviewers said about the same line.
 
 Eight agents read the same files, so the same problem arrives up to eight times
-in different words. Merging is deliberately timid — showing one finding twice
-costs a line of the report, losing a real one costs the review — and these tests
-pin where that timidity sits: what counts as the same place, what counts as the
-same wording, and which of two versions survives.
+in different words. What separates one defect written up twice from two defects
+on one line is the code each names, not how alike they read: these tests pin
+that, the window around a line, and which of two versions survives.
 """
 
 from __future__ import annotations
@@ -67,14 +66,61 @@ def test_neighbouring_lines_merge_within_the_window() -> None:
     assert len(merged) == 1
 
 
+def test_adjacent_lines_merge_wherever_they_fall() -> None:
+    """The window used to be `(line - 1) // 5`, a grid rather than a window, so
+    lines 5 and 6 sat either side of a boundary and were never compared. Every
+    pair one line apart is now within it."""
+    merged = merge_findings(
+        [_item("correctness", _finding(line=5)), _item("tests", _finding(line=6))]
+    )
+
+    assert len(merged) == 1
+
+
+def test_the_same_symbols_merge_however_unlike_the_wording() -> None:
+    """Two agents on one defect, from redis/redis#13959: the titles share
+    almost no characters, and both name `exprPrintToken` and `EXPR_TOKEN_NULL`."""
+    merged = merge_findings(
+        [
+            _item("tests", _finding(
+                line=871,
+                title="exprPrintToken() missing case for EXPR_TOKEN_NULL",
+                rationale="The new EXPR_TOKEN_NULL token type is not handled in exprPrintToken().",
+            )),
+            _item("api-contracts", _finding(
+                line=872,
+                title="EXPR_TOKEN_NULL not handled in exprPrintToken() switch",
+                rationale="The exprPrintToken() function switches on token_type with no case "
+                          "for EXPR_TOKEN_NULL.",
+            )),
+        ]
+    )
+
+    assert len(merged) == 1
+    assert merged[0].sources == ["api-contracts", "tests"]
+
+
 # ------------------------------------------------------------------ what does not
 
 
-def test_the_window_is_arithmetic_so_a_boundary_can_split_neighbours() -> None:
-    """The bucket is (line - 1) // 5, so lines 5 and 6 land either side of it.
-    Timid on purpose: the pair survives as two findings rather than one."""
+def test_one_line_two_defects_survive_alike_wording() -> None:
+    """Also from #13959, on one line of expr.c: a missing test and a missing
+    word-boundary check. The titles read alike, the code they name does not."""
     merged = merge_findings(
-        [_item("correctness", _finding(line=5)), _item("tests", _finding(line=6))]
+        [
+            _item("tests", _finding(
+                line=263,
+                title="null literal parsing has no dedicated test",
+                rationale="The new null literal in exprParseOperatorOrLiteral() and the "
+                          "EXPR_TOKEN_NULL handling in exprTokenToBool() are never exercised.",
+            )),
+            _item("correctness", _finding(
+                line=263,
+                title="Null literal parsing doesn't verify word boundary",
+                rationale="The check matches 'null' when matchlen == 4, but the loop above "
+                          "consumes every alphabetic character, so 'nullx' matches too.",
+            )),
+        ]
     )
 
     assert len(merged) == 2
