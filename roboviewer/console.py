@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import gate, sources
 from .checklist import ChecklistItem
-from .config import Config, ModelConfig, home_config_path
+from .config import Config, ModelConfig, RateLimits, home_config_path
 from .events import Event
 from .gitdiff import DiffBundle
 from .models import SEVERITY_LABEL, Finding, ReviewRun
@@ -133,6 +133,22 @@ def _provider(cfg: Config) -> None:
     print(f"  base_url     {cfg.provider.base_url}")
     print(f"  key          {cfg.provider.masked_key()}")
     print(f"  source       {key_source}")
+    print(f"  pacing       {_pacing(cfg.provider.rate_limits)}")
+
+
+def _pacing(limits: RateLimits) -> str:
+    """Per-minute ceilings a run will hold itself to. Worth printing: a run that
+    paces itself is slower on purpose, and that should not have to be guessed."""
+    configured = {
+        "prompt": limits.prompt_tokens_per_minute,
+        "uncached": limits.uncached_prompt_tokens_per_minute,
+        "generated": limits.generated_tokens_per_minute,
+        "requests": limits.requests_per_minute,
+    }
+    named = ", ".join(f"{name} {value}/min" for name, value in configured.items() if value)
+    adopting = "adopting what the provider advertises" if limits.adopt_advertised else ""
+    # A 429 holds every agent back whether or not anything here is set
+    return " · ".join(filter(None, [named or "no ceilings set", adopting]))
 
 
 def _roles(cfg: Config) -> None:

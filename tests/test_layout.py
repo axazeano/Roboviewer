@@ -23,6 +23,7 @@ ENFORCED = [
     PACKAGE / "console.py",
     PACKAGE / "events.py",
     PACKAGE / "judge.py",
+    PACKAGE / "ratelimit.py",
     PACKAGE / "sources.py",
     # Written this way from the start, so the whole package is in
     *sorted((ROOT / "corpus").glob("*.py")),
