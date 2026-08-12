@@ -16,3 +16,9 @@ What to look at:
 
 Do not inflate severity: `blocker` is only for a real, exploitable vector, not a
 potential one under the right circumstances.
+
+The check is done when every value the change takes from outside — user input, a
+request, a file, the environment — has been followed to where it is used. If the
+change reads nothing from outside and touches no secret, credential or
+permission check, say so and submit. An aspect with nothing to find is not a
+reason to report what belongs to another one.

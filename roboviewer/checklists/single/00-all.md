@@ -21,6 +21,11 @@ check that seems "missing" is often earlier in the function and simply not
 marked as changed. If the function is called from another file, use `grep` to
 see the arguments it gets.
 
+The check is done when every condition, loop and boundary the diff introduces or
+alters has been traced once through the function that holds it. A change that
+alters no condition — a rename, moved code, a new constant — has no logic to
+check: say so and submit.
+
 ## Error handling
 
 Check how the changed code deals with errors.
@@ -35,6 +40,11 @@ What to look at:
 
 Tell a deliberately ignored error (there is a comment, the error really does not
 matter) from a forgotten one. The first is not a finding.
+
+The check is done when every call in the diff that can fail has been followed to
+whatever handles it, or shown to have nothing. If the diff performs no fallible
+operation — no I/O, no parsing, no call that reports an error — say so and
+submit.
 
 ## Concurrency and lifecycle
 
@@ -52,6 +62,14 @@ What to look at:
 Verify against the code rather than guessing: use `grep` to find where the
 changed method is called from, and in which context that happens.
 
+Start by finding out whether this program is concurrent at all: `grep` the
+changed files, and the code around them, for whatever this language uses —
+threads, queues, locks, async entry points, callbacks that run elsewhere. If
+none of it is anywhere near the change, the aspect does not apply here. Say that
+and submit; do not spend the remaining turns looking for something to say. Where
+it does apply, the check is done when every piece of state the diff touches has
+been traced to the contexts that reach it.
+
 ## Public contracts and backward compatibility
 
 Check changes to public interfaces and their effect on calling code.
@@ -66,6 +84,10 @@ What to look at:
 
 If the type is serialised or crosses an API boundary, judge separately what
 happens to old clients and to data that is already stored.
+
+The check is done when every symbol the diff adds, changes or removes that is
+visible outside its own file has had its callers grepped once. A change that
+nothing outside the file can see has no contract to break: say so and submit.
 
 ## Security and privacy
 
@@ -83,6 +105,12 @@ What to look at:
 Do not inflate severity: `blocker` is only for a real, exploitable vector, not a
 potential one under the right circumstances.
 
+The check is done when every value the change takes from outside — user input, a
+request, a file, the environment — has been followed to where it is used. If the
+change reads nothing from outside and touches no secret, credential or
+permission check, say so and submit. An aspect with nothing to find is not a
+reason to report what belongs to another one.
+
 ## Performance and resources
 
 Check the changes for obvious performance problems.
@@ -99,6 +127,11 @@ What to look at:
 Only write a finding where the scale of the problem is visible: a loop over
 three elements does not need optimising. If the data size is not obvious, use
 `grep` to see where the data comes from.
+
+The check is done when every loop, allocation and repeated call the diff
+introduces has been sized once against the data that reaches it. If the change
+adds no repeated work and no allocation on anything that can grow, say so and
+submit.
 
 ## Tests
 
@@ -118,6 +151,12 @@ First check whether tests exist somewhere else: `grep` for the name of the
 changed type or method across the test directories. A "no tests" finding
 without that check is a false positive.
 
+The check is done when each name the diff introduces or changes has been grepped
+across the test directories once. That grep is the whole check. One finding
+covers what the change leaves untested — do not report the same gap again per
+function, per branch or per file, and do not go looking for further variations
+of it once the grep has been made.
+
 ## Architecture and code structure
 
 Check whether the change fits how the project is built.
@@ -134,3 +173,8 @@ What to look at:
 Judge by how the surrounding code is built, not by abstract principles: study
 neighbouring files with `read_file` and `list_files`. Do not write findings of
 the "pattern X could have been applied here" kind.
+
+The check is done once the changed code has been compared against its immediate
+neighbours — the files beside it and the layer it belongs to. If it does what
+they do, say so and submit. Structural opinions have no natural end, so stop
+when that comparison is made rather than when you run out of remarks.

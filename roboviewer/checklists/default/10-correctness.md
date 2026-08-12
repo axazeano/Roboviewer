@@ -17,3 +17,8 @@ Before you write a finding, read the whole function in the attached file: the
 check that seems "missing" is often earlier in the function and simply not
 marked as changed. If the function is called from another file, use `grep` to
 see the arguments it gets.
+
+The check is done when every condition, loop and boundary the diff introduces or
+alters has been traced once through the function that holds it. A change that
+alters no condition — a rename, moved code, a new constant — has no logic to
+check: say so and submit.

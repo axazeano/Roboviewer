@@ -15,3 +15,8 @@ What to look at:
 
 Tell a deliberately ignored error (there is a comment, the error really does not
 matter) from a forgotten one. The first is not a finding.
+
+The check is done when every call in the diff that can fail has been followed to
+whatever handles it, or shown to have nothing. If the diff performs no fallible
+operation — no I/O, no parsing, no call that reports an error — say so and
+submit.

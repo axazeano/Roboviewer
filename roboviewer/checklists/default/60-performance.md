@@ -17,3 +17,8 @@ What to look at:
 Only write a finding where the scale of the problem is visible: a loop over
 three elements does not need optimising. If the data size is not obvious, use
 `grep` to see where the data comes from.
+
+The check is done when every loop, allocation and repeated call the diff
+introduces has been sized once against the data that reaches it. If the change
+adds no repeated work and no allocation on anything that can grow, say so and
+submit.

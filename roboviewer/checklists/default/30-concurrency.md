@@ -16,3 +16,11 @@ What to look at:
 
 Verify against the code rather than guessing: use `grep` to find where the
 changed method is called from, and in which context that happens.
+
+Start by finding out whether this program is concurrent at all: `grep` the
+changed files, and the code around them, for whatever this language uses —
+threads, queues, locks, async entry points, callbacks that run elsewhere. If
+none of it is anywhere near the change, the aspect does not apply here. Say that
+and submit; do not spend the remaining turns looking for something to say. Where
+it does apply, the check is done when every piece of state the diff touches has
+been traced to the contexts that reach it.

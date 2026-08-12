@@ -20,6 +20,12 @@ What to look at:
 Do not inflate severity: `blocker` is only for a real, exploitable vector, not a
 potential one under the right circumstances.
 
+The check is done when every value the change takes from outside — user input, a
+request, a file, the environment — has been followed to where it is used. If the
+change reads nothing from outside and touches no secret, credential or
+permission check, say so and submit. An aspect with nothing to find is not a
+reason to report what belongs to another one.
+
 ## Performance and resources
 
 Check the changes for obvious performance problems.
@@ -36,6 +42,11 @@ What to look at:
 Only write a finding where the scale of the problem is visible: a loop over
 three elements does not need optimising. If the data size is not obvious, use
 `grep` to see where the data comes from.
+
+The check is done when every loop, allocation and repeated call the diff
+introduces has been sized once against the data that reaches it. If the change
+adds no repeated work and no allocation on anything that can grow, say so and
+submit.
 
 ## Tests
 
@@ -54,3 +65,9 @@ What to look at:
 First check whether tests exist somewhere else: `grep` for the name of the
 changed type or method across the test directories. A "no tests" finding
 without that check is a false positive.
+
+The check is done when each name the diff introduces or changes has been grepped
+across the test directories once. That grep is the whole check. One finding
+covers what the change leaves untested — do not report the same gap again per
+function, per branch or per file, and do not go looking for further variations
+of it once the grep has been made.

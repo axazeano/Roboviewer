@@ -15,3 +15,7 @@ What to look at:
 
 If the type is serialised or crosses an API boundary, judge separately what
 happens to old clients and to data that is already stored.
+
+The check is done when every symbol the diff adds, changes or removes that is
+visible outside its own file has had its callers grepped once. A change that
+nothing outside the file can see has no contract to break: say so and submit.

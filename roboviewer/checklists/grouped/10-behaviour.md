@@ -21,6 +21,11 @@ check that seems "missing" is often earlier in the function and simply not
 marked as changed. If the function is called from another file, use `grep` to
 see the arguments it gets.
 
+The check is done when every condition, loop and boundary the diff introduces or
+alters has been traced once through the function that holds it. A change that
+alters no condition — a rename, moved code, a new constant — has no logic to
+check: say so and submit.
+
 ## Error handling
 
 Check how the changed code deals with errors.
@@ -35,6 +40,11 @@ What to look at:
 
 Tell a deliberately ignored error (there is a comment, the error really does not
 matter) from a forgotten one. The first is not a finding.
+
+The check is done when every call in the diff that can fail has been followed to
+whatever handles it, or shown to have nothing. If the diff performs no fallible
+operation — no I/O, no parsing, no call that reports an error — say so and
+submit.
 
 ## Concurrency and lifecycle
 
@@ -51,3 +61,11 @@ What to look at:
 
 Verify against the code rather than guessing: use `grep` to find where the
 changed method is called from, and in which context that happens.
+
+Start by finding out whether this program is concurrent at all: `grep` the
+changed files, and the code around them, for whatever this language uses —
+threads, queues, locks, async entry points, callbacks that run elsewhere. If
+none of it is anywhere near the change, the aspect does not apply here. Say that
+and submit; do not spend the remaining turns looking for something to say. Where
+it does apply, the check is done when every piece of state the diff touches has been
+traced to the contexts that reach it.

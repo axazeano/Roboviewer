@@ -18,3 +18,9 @@ What to look at:
 First check whether tests exist somewhere else: `grep` for the name of the
 changed type or method across the test directories. A "no tests" finding
 without that check is a false positive.
+
+The check is done when each name the diff introduces or changes has been grepped
+across the test directories once. That grep is the whole check. One finding
+covers what the change leaves untested — do not report the same gap again per
+function, per branch or per file, and do not go looking for further variations
+of it once the grep has been made.
