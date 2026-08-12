@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from roboviewer.checklist import ChecklistItem
+from roboviewer.models import Finding, Severity
 from roboviewer.pipeline import ReviewPipeline
 from roboviewer.prompts import DEFAULT_DIR, NAMES, PromptError, Prompts, language_name
 
@@ -65,6 +66,34 @@ def test_context_scaffolding_comes_from_code_not_from_files(tmp_path: Path) -> N
     assert "Replaced context" not in text
     assert "# Merge request context" in text
     assert "line added or changed in this MR" in text, "the markup legend must reach the model"
+
+
+def test_the_judge_is_not_shown_what_the_reviewer_rated_it(tmp_path: Path) -> None:
+    """Severity and confidence are guesses made before anything was checked, by
+    an agent that ranked against its own findings only — and a judge shown them
+    follows them. Every judging prompt has to be free of both."""
+    prompts = Prompts.load()
+    bundle = make_bundle(tmp_path)
+    finding = Finding(
+        id="F001", file="src/a.py", line=7, severity=Severity.BLOCKER, confidence=0.93,
+        category="race", title="Token refresh is re-entrant",
+        rationale="The guard is read outside the task that sets it.",
+    )
+    other = Finding(
+        id="F002", file="src/a.py", line=90, severity=Severity.NIT, confidence=0.12,
+        category="style", title="Stray debug print",
+        rationale="Left over from the previous change.",
+    )
+
+    for text in (
+        prompts.build_judge_prompt([finding, other], bundle),
+        prompts.build_judge_one_prompt(finding, [other], bundle),
+        prompts.build_judge_final_prompt([finding], {"F001": "grep showed no guard"}, bundle),
+    ):
+        assert "Token refresh is re-entrant" in text, "the claim itself must reach the judge"
+        assert "blocker" not in text.lower()
+        assert "0.93" not in text
+        assert "confidence" not in text.lower()
 
 
 def test_broken_placeholder_fails_loudly_and_names_the_file(tmp_path: Path) -> None:

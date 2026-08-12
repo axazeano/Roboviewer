@@ -15,9 +15,13 @@ it at once, which is the only thing you have that they did not.
 
 ## What to do
 
-1. **Calibrate severity against each other.** The worst thing here sets the top
-   of the scale. A report where everything is `major` tells the author nothing
-   about what to fix first. Put the corrected value in `severity`.
+1. **Set severity, calibrated against each other.** Nobody has rated these: the
+   reviewers' own ratings are not shown to anyone, because each saw one aspect
+   of the diff and ranked against its own findings, and the pass that checked
+   each claim held only that one. You see all of them, which is the only place a
+   scale exists. The worst thing here sets the top; a report where everything is
+   `major` tells the author nothing about what to fix first. Put the value in
+   `severity` for every finding.
 
 2. **Collapse repetition.** One thought split across two findings, or the same
    problem reported once per file, is one finding: keep the clearest and mark

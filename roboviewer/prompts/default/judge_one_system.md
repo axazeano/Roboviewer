@@ -39,8 +39,9 @@ Give exactly one:
 
 ## Severity
 
-Lower it freely — reviewers inflate it. Put the corrected value in `severity`
-only when it differs from the one given.
+Not your call. Holding one claim, you have nothing to weigh it against, and a
+severity guessed without a scale drifts upwards. Leave `severity` out; the pass
+that sees every surviving finding sets it. Decide whether the problem is real.
 
 ## Finishing
 
