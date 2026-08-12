@@ -17,3 +17,8 @@ What to look at:
 Judge by how the surrounding code is built, not by abstract principles: study
 neighbouring files with `read_file` and `list_files`. Do not write findings of
 the "pattern X could have been applied here" kind.
+
+The check is done once the changed code has been compared against its immediate
+neighbours — the files beside it and the layer it belongs to. If it does what
+they do, say so and submit. Structural opinions have no natural end, so stop
+when that comparison is made rather than when you run out of remarks.

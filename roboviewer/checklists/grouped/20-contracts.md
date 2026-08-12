@@ -19,6 +19,10 @@ What to look at:
 If the type is serialised or crosses an API boundary, judge separately what
 happens to old clients and to data that is already stored.
 
+The check is done when every symbol the diff adds, changes or removes that is
+visible outside its own file has had its callers grepped once. A change that
+nothing outside the file can see has no contract to break: say so and submit.
+
 ## Architecture and code structure
 
 Check whether the change fits how the project is built.
@@ -35,3 +39,8 @@ What to look at:
 Judge by how the surrounding code is built, not by abstract principles: study
 neighbouring files with `read_file` and `list_files`. Do not write findings of
 the "pattern X could have been applied here" kind.
+
+The check is done once the changed code has been compared against its immediate
+neighbours — the files beside it and the layer it belongs to. If it does what
+they do, say so and submit. Structural opinions have no natural end, so stop
+when that comparison is made rather than when you run out of remarks.

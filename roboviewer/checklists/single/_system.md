@@ -43,3 +43,10 @@ marker. Everything else in those files is existing code, shown for context.
 
 Call `submit_findings` exactly once, at the end. That call is the only way to
 report your result.
+
+Your aspect says what makes the check complete. When that is done, submit —
+including when the aspect does not apply to this change at all, which is a
+finished review and not a failed one. Turns you have not spent are not a reason
+to keep looking: rereading what you have already read invents findings rather
+than discovering them, and being cut off by the turn limit is worse than
+submitting early, because it means nobody decided the review was over.
