@@ -85,6 +85,33 @@ class ModelConfig(BaseModel):
         return body
 
 
+class RateLimits(BaseModel):
+    """What the gateway will take per minute, so a run paces itself.
+
+    Zero means "not known", not "none": the window is simply not enforced. Which
+    is usually the right starting point — serverless providers advertise their
+    effective ceilings on every response, and `adopt_advertised` picks those up,
+    so most people never fill these in.
+
+    Counted separately because providers meter them separately. Fireworks caps
+    total prompt tokens, uncached prompt tokens and generated tokens, and the
+    uncached one is the tightest by a factor of four — which is exactly the one
+    a shared prompt prefix is designed to stay under.
+    """
+
+    model_config = STRICT
+
+    prompt_tokens_per_minute: int = 0
+    uncached_prompt_tokens_per_minute: int = 0
+    generated_tokens_per_minute: int = 0
+    # Some gateways count requests rather than tokens.
+    requests_per_minute: int = 0
+    # Read the ceilings out of the response headers where the provider sends
+    # them. On an adaptive plan the advertised number is the true one and a
+    # figure written here months ago is not.
+    adopt_advertised: bool = True
+
+
 class ProviderConfig(BaseModel):
     """How to reach the gateway. What to ask of it is `ModelConfig`."""
 
@@ -100,6 +127,9 @@ class ProviderConfig(BaseModel):
     # Some gateways cannot handle several tool_calls in one response.
     parallel_tool_calls: bool = True
     extra_headers: dict[str, str] = Field(default_factory=dict)
+    # How much of the provider a run may take per minute. The cooldown after a
+    # 429 needs nothing set here; the ceilings are what this configures.
+    rate_limits: RateLimits = Field(default_factory=RateLimits)
 
     # Defaults to the OpenAI way, Authorization: Bearer <key>; gateways often
     # want something else. See config.example.toml for the combinations.

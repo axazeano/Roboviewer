@@ -40,6 +40,32 @@ terminal_tool_choice = "forced"
 # [provider.extra_headers]
 # X-Project = "roboviewer"
 
+# How much of the provider one run may take per minute.
+#
+# A review is a burst: several checklist items run at once, each resending a
+# large context every turn. Serverless providers meter that per minute and
+# answer 429, and retrying into a full bucket does not help — the request has to
+# be held back before it is sent.
+#
+# Nothing here needs setting for the common case. A 429 (or a 503, which is the
+# same message with a different number) already holds every agent back, not only
+# the one that was refused, and most providers advertise their current ceilings
+# on every response — adopt_advertised picks those up, which beats a figure
+# typed here months ago on a plan whose limits move with usage.
+#
+# Fill these in when the provider does not advertise, or to stay deliberately
+# under what you are entitled to. Zero means "not known", not "none". The
+# buckets are separate because providers meter them separately: Fireworks, for
+# example, defaults to 21.6M total prompt, 5.4M uncached prompt and 216k
+# generated tokens per minute — the uncached one being the tightest by a factor
+# of four, and exactly the one a shared prompt prefix is designed to stay under.
+# [provider.rate_limits]
+# prompt_tokens_per_minute = 21600000
+# uncached_prompt_tokens_per_minute = 5400000
+# generated_tokens_per_minute = 216000
+# requests_per_minute = 0
+# adopt_advertised = true
+
 [reviewer]
 model = "your-model-name"
 temperature = 0.1
