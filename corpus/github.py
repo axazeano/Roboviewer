@@ -50,7 +50,7 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
           line
           originalLine
           comments(first: 100) {
-            nodes { author { login } body createdAt url }
+            nodes { author { login } body createdAt url originalCommit { oid } }
           }
         }
       }
@@ -70,17 +70,22 @@ class Comment:
 
 @dataclass(frozen=True)
 class Thread:
-    """One conversation anchored at a line.
+    """One conversation anchored at a line of one commit.
 
     `line` is the line in the head reviewers saw, not in whatever the branch
     became afterwards: the clone is positioned at that head, so GitHub's
     `originalLine` is the one that lines up with the file on disk.
+
+    `commit` is that head, as GitHub recorded it — the commit this thread was
+    written against. An entry whose head is a later commit has the review
+    pointing at code the author has already changed.
     """
 
     file: str
     line: int | None
     resolved: bool | None
     comments: list[Comment] = field(default_factory=list)
+    commit: str = ""
 
 
 class GitHubError(RuntimeError):
@@ -194,6 +199,7 @@ def _threads_from_rest(comments: list[dict[str, Any]]) -> list[Thread]:
                 # REST has never carried it, and inventing False would read as
                 # "nobody resolved this" rather than "nobody asked".
                 resolved=None,
+                commit=str(raw.get("original_commit_id") or ""),
             )
             order.append(root_id)
         roots[root_id].comments.append(
@@ -208,10 +214,13 @@ def _threads_from_rest(comments: list[dict[str, Any]]) -> list[Thread]:
 
 
 def _thread_from_graphql(node: dict[str, Any]) -> Thread:
+    raw_comments = (node.get("comments") or {}).get("nodes") or []
+    first = raw_comments[0] if raw_comments else {}
     return Thread(
         file=node.get("path") or "",
         line=node.get("originalLine") or node.get("line"),
         resolved=node.get("isResolved"),
+        commit=str((first.get("originalCommit") or {}).get("oid") or ""),
         comments=[
             Comment(
                 author=(raw.get("author") or {}).get("login") or "",
@@ -219,7 +228,7 @@ def _thread_from_graphql(node: dict[str, Any]) -> Thread:
                 created_at=raw.get("createdAt") or "",
                 url=raw.get("url") or "",
             )
-            for raw in (node.get("comments") or {}).get("nodes") or []
+            for raw in raw_comments
         ],
     )
 

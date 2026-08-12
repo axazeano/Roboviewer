@@ -181,6 +181,10 @@ def _write_comments(
                         "file": thread.file,
                         "line": thread.line,
                         "resolved": thread.resolved,
+                        # The commit this thread was written against. Kept so a
+                        # later reader can check the head above is that commit
+                        # rather than a later one, where the fixes already are.
+                        "commit": thread.commit,
                         "comments": [
                             {
                                 "author": comment.author,

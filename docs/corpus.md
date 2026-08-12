@@ -90,6 +90,26 @@ hit is impossible and the baseline measures nothing. Anything the fetcher can
 check it does: a branch name or a short SHA is refused, and two entries cannot
 claim one directory.
 
+The branch tip is the same trap wearing a different hat, and it is the one the
+API leads you into: `head.sha` on a pull request is the last commit of the
+branch, which on any review the author responded to is the commit *after* the
+fixes. Each review comment records the commit it was written against, so the
+fetcher compares the two and says so when they disagree:
+
+```
+✔ redis-9954              16 review comment(s) in 8 thread(s)
+  The review was written against 6a6f58b14f6c, not the head e6d1b1dff6db this
+  entry names. Whatever reviewers asked for is already fixed at this head, so
+  the entry measures nothing — unless a later round is what you meant.
+```
+
+It is a warning rather than a refusal: comments land on several commits when a
+branch is pushed to twice, and pointing an entry at the last round is a choice.
+Nothing is said when the head is among the commits reviewers commented on. The
+commit each thread belongs to is saved in `comments.json`, so an entry built
+earlier can be checked without asking GitHub again — after one `--refresh`,
+which is what fills the field in.
+
 ## Where the corpus lives
 
 In order:

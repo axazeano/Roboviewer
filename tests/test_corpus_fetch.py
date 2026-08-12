@@ -23,7 +23,7 @@ import pytest
 from corpus import clone
 from corpus import github as github_module
 from corpus.build import build
-from corpus.cli import main
+from corpus.cli import _entry_line, main
 from corpus.entries import Entry
 from corpus.github import GitHub, RateLimited, Response
 from corpus.store import Store, default_root
@@ -235,6 +235,68 @@ def test_the_comments_are_saved_with_file_line_author_body_and_resolution(
     assert thread["resolved"] is True
     assert thread["comments"][0]["author"] == "reviewer"
     assert thread["comments"][0]["body"] == "This discards the second line."
+
+
+def rest_comment_on(commit: str) -> list[dict[str, Any]]:
+    return [{**REST_COMMENTS[0], "original_commit_id": commit}]
+
+
+def test_the_commit_a_thread_was_written_against_is_saved(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+    github = GitHub(transport=transport_for(rest_comment_on(origin.head)))
+
+    build(entry, store, github)
+
+    saved = json.loads((store.entry_dir(entry) / "comments.json").read_text(encoding="utf-8"))
+    assert saved["threads"][0]["commit"] == origin.head
+
+
+def test_a_head_the_review_was_written_against_raises_nothing(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+    github = GitHub(transport=transport_for(rest_comment_on(origin.head)))
+
+    assert build(entry, store, github).reviewed_head == ""
+
+
+def test_a_head_past_the_review_is_named_rather_than_built_quietly(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """The pull request API hands out the branch tip, which is the commit after
+    the author fixed what reviewers found. An entry there measures nothing, and
+    nothing else in the build can tell that from a correct head."""
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+    github = GitHub(transport=transport_for(rest_comment_on(MISSING_SHA)))
+
+    result = build(entry, store, github)
+
+    assert result.status == "built"
+    assert result.reviewed_head == MISSING_SHA
+    _entry_line(result, github)
+    assert MISSING_SHA[:12] in capsys.readouterr().err
+
+
+def test_a_review_spanning_rounds_keeps_a_head_from_any_of_them(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Comments land on several commits when a branch is pushed to twice. The
+    head only has to be one of them — picking the later round is a choice, not
+    a mistake."""
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+    rounds = [
+        {**REST_COMMENTS[0], "id": 1, "original_commit_id": MISSING_SHA},
+        {**REST_COMMENTS[0], "id": 2, "original_commit_id": origin.head},
+        {**REST_COMMENTS[0], "id": 3, "original_commit_id": MISSING_SHA},
+    ]
+
+    assert build(entry, store, GitHub(transport=transport_for(rounds))).reviewed_head == ""
 
 
 def test_comments_fetched_without_a_token_say_resolution_is_unknown(
