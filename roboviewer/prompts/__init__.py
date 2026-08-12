@@ -352,13 +352,19 @@ def _references_block(report: ReferenceReport | None) -> str:
 def _render_finding(finding: Finding, note: str | None = None) -> str:
     """A finding as the judge sees it — structure, not prose, so it stays in
     code rather than in a template. `note` is the verification a previous pass
-    already did, shown only to a judge that comes after one."""
+    already did, shown only to a judge that comes after one.
+
+    The reviewer's severity and confidence are deliberately absent. Both are
+    guesses made before anything was verified, by an agent that saw one aspect
+    of the diff and had only its own findings to rank against — and a judge
+    shown them follows them. The same claim about `fastjson.c:71` was rejected
+    when the reviewer hedged at 0.30 and confirmed as major when another
+    reviewer wrote it up confidently; the code had not changed.
+    """
     lines = [
         f"## {finding.id} — {finding.title}",
         f"- File: `{finding.location}`",
-        f"- Severity: {finding.severity.value}",
         f"- Category: {finding.category}",
-        f"- Reviewer confidence: {finding.confidence:.2f}",
         f"- Found by: {', '.join(finding.sources) or '—'}",
         f"- Rationale: {finding.rationale}",
     ]
@@ -371,13 +377,11 @@ def _render_finding(finding: Finding, note: str | None = None) -> str:
 
 def _render_roster(others: list[Finding]) -> str:
     """One line per other finding. Enough to spot a duplicate, cheap enough to
-    repeat in every per-finding pass."""
+    repeat in every per-finding pass — and severity is not part of that, for
+    the same reason it is missing from the finding itself."""
     if not others:
         return ""
-    lines = [
-        f"- {f.id} ({f.severity.value}) `{f.location}` — {f.title}"
-        for f in sorted(others, key=lambda f: f.id)
-    ]
+    lines = [f"- {f.id} `{f.location}` — {f.title}" for f in sorted(others, key=lambda f: f.id)]
     return ROSTER_BLOCK.format(roster="\n".join(lines))
 
 
