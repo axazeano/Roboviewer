@@ -5,7 +5,7 @@
 #     -v ~/.config/roboviewer/config.toml:/config.toml:ro \
 #     -v "$PWD/.roboviewer:/out" \
 #     -e ROBOVIEWER_API_KEY \
-#     axazeano/roboviewer:0.1.0 develop --config /config.toml --output /out
+#     axazeano/roboviewer:0.1.1 develop --config /config.toml --output /out
 
 FROM python:3.11-slim
 

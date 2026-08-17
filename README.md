@@ -89,7 +89,7 @@ docker run --rm \
   -v ~/.config/roboviewer/config.toml:/config.toml:ro \
   -v "$PWD/.roboviewer:/out" \
   -e ROBOVIEWER_API_KEY \
-  axazeano/roboviewer:0.1.0 develop --config /config.toml --output /out
+  axazeano/roboviewer:0.1.1 develop --config /config.toml --output /out
 ```
 
 Mount the repository with its history — a shallow clone has no merge base to
