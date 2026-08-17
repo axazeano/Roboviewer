@@ -78,6 +78,24 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 ln -sf "$PWD/.venv/bin/roboviewer" ~/.local/bin/roboviewer
 ```
 
+### Docker
+
+The image carries the tool and git. The repository under review, the config and
+the reports stay on your side, as mounts.
+
+```bash
+docker run --rm \
+  -v "$PWD:/repo" \
+  -v ~/.config/roboviewer/config.toml:/config.toml:ro \
+  -v "$PWD/.roboviewer:/out" \
+  -e ROBOVIEWER_API_KEY \
+  axazeano/roboviewer:0.1.0 develop --config /config.toml --output /out
+```
+
+Mount the repository with its history — a shallow clone has no merge base to
+diff against. The image runs as an unprivileged user; on Linux add
+`--user "$(id -u):$(id -g)"` so the reports it writes belong to you.
+
 ## Configure
 
 ```bash

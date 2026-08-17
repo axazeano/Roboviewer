@@ -1,0 +1,7 @@
+# Only what the build copies, so editing a test does not rebuild the install layer.
+*
+!pyproject.toml
+!README.md
+!LICENSE
+!roboviewer/
+roboviewer/**/__pycache__/
