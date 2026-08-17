@@ -1,6 +1,6 @@
 [project]
 name = "roboviewer"
-version = "0.1.0"
+version = "0.1.1"
 description = "A local, agent-driven automated reviewer for merge requests"
 readme = "README.md"
 license = "MIT"
