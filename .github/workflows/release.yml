@@ -64,6 +64,39 @@ jobs:
           name: dist
           path: dist/
 
+  # Needs the build for its tag-versus-version check. Docker Hub has no trusted
+  # publishing, so this job reads a stored credential.
+  image:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: dockerhub  # holds the credential, and can gate on a reviewer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: what the tag ships
+        id: version
+        run: echo "number=${GITHUB_REF_NAME#Release/}" >> "$GITHUB_OUTPUT"
+
+      # arm64 is emulated on the amd64 runner: slow, but runs on Apple Silicon.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/roboviewer:${{ steps.version.outputs.number }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/roboviewer:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # Split from the build so the job that holds the publishing identity runs
   # nothing but the upload: it checks out no code and installs no dependencies,
   # and the artifact it uploads is the one the build job already produced.
