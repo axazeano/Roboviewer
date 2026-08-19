@@ -1,0 +1,138 @@
+{# One agent on the trace page: what it was asked, what it did turn by turn,
+   and what it came back with. A checklist item and a judging pass are the same
+   shape, which is the point — they are both one agent with one turn budget. #}
+
+{# "1 read" and "2 reads": both forms spelled out, because English plurals are
+   not a rule this template should be guessing at. #}
+{% macro count(n, one, many) %}{{ n }} {{ one if n == 1 else many }}{% endmacro %}
+
+
+{% macro agent(a) %}
+<details class="agent {{ a.status }}">
+<summary>
+<span class="name">{{ STATUS_ICON[a.status] }} {{ a.title }}</span>
+<span class="facts">
+{{ a.turn_count }}{% if a.max_turns %}/{{ a.max_turns }}{% endif %} turns ·
+{{ count(a.reads, "read", "reads") }} · {{ count(a.searches, "search", "searches") }} ·
+{{ a.total_tokens | thousands }} tokens{% if a.duration_s %} · {{ a.duration_s | fixed }}s{% endif %}
+</span>
+</summary>
+
+<div class="body">
+{{ prompt(a) }}
+
+<ol class="turns">
+{% for turn in a.turns %}
+<li class="turn">
+<span class="n">{{ turn.n }}</span>
+<div class="did">
+{% if turn.text %}
+<details class="said">
+<summary>{{ turn.preview }}</summary>
+<pre>{{ turn.text }}</pre>
+</details>
+{% endif %}
+{% if turn.calls %}
+<ul class="calls">
+{% for call in turn.calls %}
+<li class="call{{ ' failed' if call.error else '' }}">
+<span class="tool">{{ call.tool }}</span>
+<code>{{ call.subject }}</code>
+<span class="got">{{ got(call) }}</span>
+</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if not turn.text and not turn.calls %}
+<p class="quiet">nothing recorded for this turn</p>
+{% endif %}
+</div>
+</li>
+{% endfor %}
+</ol>
+
+{{ verdict(a) }}
+</div>
+</details>
+{% endmacro %}
+
+
+{# The prompts as the agent received them. Collapsed: they are the longest text
+   on the page and the least often read. #}
+{% macro prompt(a) %}
+<div class="prompts">
+{% if a.system %}
+<details><summary>System prompt · {{ a.system_chars | size }}</summary><pre>{{ a.system }}</pre></details>
+{% elif a.system_same_as %}
+<p class="quiet">System prompt: the same one as “{{ a.system_same_as }}”.</p>
+{% endif %}
+{% if a.prompt %}
+<details><summary>Task prompt · {{ a.prompt_chars | size }}</summary><pre>{{ a.prompt }}</pre></details>
+{% elif a.prompt_same_as %}
+<p class="quiet">Task prompt: the same one as “{{ a.prompt_same_as }}”.</p>
+{% endif %}
+</div>
+{% endmacro %}
+
+
+{# What came back from a call: its size, never its content. #}
+{% macro got(call) %}
+{%- if call.error -%}
+failed
+{%- elif call.hits is not none -%}
+{{ call.hits }} {{ "hit" if call.hits == 1 else "hits" }}
+{%- elif call.lines is not none -%}
+{{ call.lines }} lines · {{ call.chars | size }}
+{%- else -%}
+{{ call.chars | size }}
+{%- endif -%}
+{% endmacro %}
+
+
+{# What the agent came back with, counted in whichever currency it deals in:
+   a reviewer submits findings, a judging pass submits verdicts. #}
+{% macro reported(a) %}
+{%- if a.findings -%}
+{{ count(a.findings | length, "finding", "findings") }}
+{%- elif a.verdicts -%}
+{{ count(a.verdicts | length, "verdict", "verdicts") }}
+{%- else -%}
+nothing to report
+{%- endif -%}
+{% endmacro %}
+
+
+{% macro verdict(a) %}
+<div class="verdict {{ a.status }}">
+{% if a.status == "ok" %}
+<p class="line">Submitted on turn {{ a.turn_count }} — {{ reported(a) }}.</p>
+{% elif a.status == "truncated" %}
+<p class="line">Submitted because the turns ran out, not because the agent was done. What it had
+by then: {{ reported(a) }}.</p>
+{% elif a.status == "running" %}
+<p class="line">No end recorded. The run stopped before this agent reported one.</p>
+{% else %}
+<p class="line">Nothing submitted{% if a.error %}: {{ a.error }}{% endif %}.</p>
+{% endif %}
+
+{% if a.summary %}
+<div class="summary">{{ a.summary | markdown }}</div>
+{% endif %}
+
+{% if a.findings %}
+<ul class="submitted">
+{% for finding in a.findings %}
+<li><span class="sev">{{ finding.severity }}</span> <code>{{ finding.location }}</code> {{ finding.title }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+{% if a.verdicts %}
+<ul class="submitted">
+{% for row in a.verdicts %}
+<li><span class="sev">{{ row.verdict }}</span> <code>{{ row.finding_id }}</code> {{ row.reason }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+</div>
+{% endmacro %}

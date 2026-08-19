@@ -17,6 +17,7 @@ from pathlib import Path
 from . import ci, console, gate, gitdiff, renders, sources
 from .checklist import ChecklistItem, load_checklist
 from .config import Config, load_config
+from .observe import SILENT, RunObserver
 from .pipeline import ReviewPipeline, output_dir_for
 from .prompts import PromptError, Prompts
 from .report import save
@@ -176,11 +177,14 @@ class RunPlan:
     templates_dir: Path | None
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, observer: RunObserver = SILENT) -> int:
+    """The command. `observer` is how something outside the tool asks to be
+    told what the agents did — see `observe`; by default nobody is watching and
+    the run keeps no account of itself."""
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        return _execute(args, parser)
+        return _execute(args, parser, observer)
     except CLIError as exc:
         console.error(exc.message, exc.hint)
         return exc.code
@@ -207,7 +211,9 @@ def _apply_overrides(cfg: Config, args: argparse.Namespace) -> Config:
     return cfg
 
 
-def _execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+def _execute(
+    args: argparse.Namespace, parser: argparse.ArgumentParser, observer: RunObserver
+) -> int:
     """The order the steps run in, and where each of them can stop the run early.
 
     Everything that fails raises `CLIError`; what stops on purpose returns a code
@@ -249,7 +255,7 @@ def _execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         console.notice(
             f"Reviewing branch {diff.branch} ({diff.head[:12]}); the working copy is untouched."
         )
-    return asyncio.run(_review(plan, args.verbose))
+    return asyncio.run(_review(plan, args.verbose, observer))
 
 
 def _target_from_ci() -> str | None:
@@ -370,7 +376,7 @@ def _plan(
     )
 
 
-async def _review(plan: RunPlan, verbose: bool) -> int:
+async def _review(plan: RunPlan, verbose: bool, observer: RunObserver = SILENT) -> int:
     console.run_header(plan.cfg)
     pipeline = ReviewPipeline(
         plan.cfg,
@@ -381,7 +387,7 @@ async def _review(plan: RunPlan, verbose: bool) -> int:
         plan.prompts,
     )
     try:
-        run = await pipeline.execute()
+        run = await pipeline.execute(observer)
     finally:
         await plan.runner.aclose()
 

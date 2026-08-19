@@ -19,6 +19,7 @@ PACKAGE = ROOT / "roboviewer"
 
 ENFORCED = [
     *sorted((PACKAGE / "renders").rglob("*.py")),
+    PACKAGE / "observe.py",
     PACKAGE / "cli.py",
     PACKAGE / "console.py",
     PACKAGE / "events.py",
@@ -27,6 +28,7 @@ ENFORCED = [
     PACKAGE / "sources.py",
     # Written this way from the start, so the whole package is in
     *sorted((ROOT / "corpus").glob("*.py")),
+    *sorted((ROOT / "research").glob("*.py")),
 ]
 
 

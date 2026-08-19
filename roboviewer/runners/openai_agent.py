@@ -22,6 +22,7 @@ import asyncio
 import inspect
 import json
 import re
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -98,11 +99,41 @@ class OpenAIAgentRunner(Runner):
     async def run(
         self, request: AgentRequest, on_progress: ProgressHook | None = None
     ) -> AgentOutcome:
+        """The agent, from its prompt to its outcome — and an account of both.
+
+        The loop is wrapped rather than sprinkled with reporting calls because
+        it returns from five places, and an outcome that escaped without being
+        reported would be missing from an observer's account for the most
+        interesting reason there is.
+        """
+        started = time.monotonic()
+        outcome = await self._loop(request, on_progress)
+        request.observer.finished(
+            payload=outcome.payload,
+            usage=outcome.usage,
+            turns=outcome.turns,
+            duration_s=time.monotonic() - started,
+            error=outcome.error,
+            truncated=outcome.truncated,
+        )
+        return outcome
+
+    # ----------------------------------------------------------------- private
+
+    async def _loop(
+        self, request: AgentRequest, on_progress: ProgressHook | None
+    ) -> AgentOutcome:
         def emit(kind: str, detail: str) -> None:
             if on_progress:
                 on_progress(kind, detail)
 
         transcript = _Transcript.open(request)
+        # The system prompt as the agent received it, budget note included
+        request.observer.started(
+            system=str(transcript.messages[0]["content"]),
+            prompt=request.prompt,
+            max_turns=request.settings.max_turns,
+        )
         usage = Usage()
         turns = 0
 
@@ -117,9 +148,11 @@ class OpenAIAgentRunner(Runner):
             except Exception as exc:  # noqa: BLE001 — surfaced upward as the item status
                 return AgentOutcome(payload=None, usage=usage, turns=turns, error=_describe(exc))
 
-            usage = usage + _extract_usage(completion)
+            turn_usage = _extract_usage(completion)
+            usage = usage + turn_usage
             message = completion.choices[0].message
             tool_calls = list(message.tool_calls or [])
+            request.observer.replied(turn, message.content, turn_usage)
 
             if not tool_calls:
                 outcome = _reply_without_tools(
@@ -141,8 +174,6 @@ class OpenAIAgentRunner(Runner):
         return AgentOutcome(
             payload=None, usage=usage, turns=turns, error="turn limit exhausted"
         )
-
-    # ----------------------------------------------------------------- private
 
     async def _answer_calls(
         self,
@@ -168,6 +199,7 @@ class OpenAIAgentRunner(Runner):
                 return args
 
             emit("tool", f"{fn_name}({_short_args(args)})")
+            asked = time.monotonic()
             output = await asyncio.to_thread(
                 dispatch,
                 self._root,
@@ -177,6 +209,7 @@ class OpenAIAgentRunner(Runner):
                 head_ref=self._head_ref,
                 max_read_lines=self._run_cfg.max_read_lines,
             )
+            request.observer.called(turn, fn_name, args, output, time.monotonic() - asked)
             transcript.add_tool_result(call.id, output)
         return None
 

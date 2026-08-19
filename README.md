@@ -150,6 +150,7 @@ would be reviewed without spending tokens. Every flag:
 | [Customise the checklist](docs/checklists.md) | Adding a concern without touching code |
 | [Output language](docs/language.md) | Findings in a language other than English |
 | [Tuning](docs/tuning.md) | Prompts, how many agents, thinking, the turn limit |
+| [Watching a run](docs/research.md) | What the agents did with the context: the log, the page, the command |
 
 [docs/](docs/) also carries the tooling baseline and how the measurement corpus
 is built.

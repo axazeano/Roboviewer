@@ -1,0 +1,59 @@
+{# What the trace page adds to the report's styles. Included after them, so the
+   shared rules — colours, code, tables — are set once in _styles.css.j2.
+
+   The page is a list of collapsed agents. Everything long is behind a
+   <details>, and everything a reader scans without opening anything is on the
+   summary lines. #}
+
+.lede { margin: 0 0 1rem; color: var(--muted); }
+.unfinished { margin: 0 0 1.5rem; padding: .625rem .875rem; border-left: 3px solid var(--major); background: var(--card); border-radius: 0 6px 6px 0; }
+
+/* Changed files, and whether anybody opened them */
+.files { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.files li { display: flex; gap: .75rem; align-items: baseline; padding: .25rem 0; border-bottom: 1px solid var(--line); font-size: .875rem; }
+.files .by { margin-left: auto; color: var(--muted); font-size: .8125rem; white-space: nowrap; }
+.files .untouched code { color: var(--muted); }
+
+/* One agent */
+.agent { margin: 0 0 .625rem; border: 1px solid var(--line); border-radius: 8px; border-left: 3px solid var(--state, var(--line)); background: var(--bg); }
+.agent.ok { --state: var(--minor); }
+.agent.truncated { --state: var(--major); }
+.agent.failed { --state: var(--blocker); }
+.agent > summary { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: baseline; padding: .625rem .875rem; color: var(--fg); }
+.agent > summary .name { font-weight: 500; }
+.agent > summary .facts { margin-left: auto; color: var(--muted); font-size: .8125rem; white-space: nowrap; }
+.agent[open] > summary { border-bottom: 1px solid var(--line); }
+.agent .body { padding: .875rem; }
+
+/* Prompts and replies: long text, folded away */
+.prompts { margin: 0 0 1rem; }
+.prompts details, .said { margin: 0 0 .375rem; }
+.prompts pre, .said pre { max-height: 26rem; overflow: auto; white-space: pre-wrap; }
+.quiet { margin: 0 0 .375rem; color: var(--muted); font-size: .8125rem; }
+
+/* The turns, as a rail down the left */
+.turns { list-style: none; margin: 0; padding: 0; }
+.turn { display: grid; grid-template-columns: 1.75rem 1fr; gap: .5rem; padding: 0 0 .75rem; }
+.turn .n { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.turn .did { min-width: 0; }
+.said > summary { color: var(--fg); font-size: .9375rem; }
+
+/* One tool call, one line: what was asked for, and how much came back */
+.calls { list-style: none; margin: .25rem 0 0; padding: 0; }
+.call { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; padding: .1875rem 0; font-size: .8125rem; }
+.call .tool { min-width: 5.5rem; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; }
+.call code { background: none; padding: 0; word-break: break-all; }
+.call .got { margin-left: auto; color: var(--muted); white-space: nowrap; }
+.call.failed .got, .call.failed code { color: var(--blocker); }
+
+/* What the agent came back with */
+.verdict { margin: .5rem 0 0; padding: .625rem .875rem; background: var(--card); border-radius: 6px; }
+.verdict .line { margin: 0; font-size: .875rem; }
+.verdict .summary { margin: .5rem 0 0; font-size: .875rem; }
+.verdict .summary > :first-child { margin-top: 0; }
+.verdict .summary > :last-child { margin-bottom: 0; }
+.verdict.truncated .line { color: var(--major); }
+.verdict.failed .line { color: var(--blocker); }
+.submitted { list-style: none; margin: .5rem 0 0; padding: 0; font-size: .8125rem; }
+.submitted li { padding: .1875rem 0; border-top: 1px solid var(--line); }
+.submitted .sev { display: inline-block; min-width: 5rem; color: var(--muted); }
