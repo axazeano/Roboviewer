@@ -1,33 +1,28 @@
 # Watching a run
 
-A report says what a review concluded. It says nothing about how it got there:
-which prompt each agent was given, what it said between turns, which files it
-opened and over what lines, what it searched for and whether the search found
-anything. All of that lives in the process and dies with it, which is why a
-prompt change that moves the findings cannot be explained from the artifacts.
+A report says what a review found. This says what it did on the way: which
+prompt each agent got, what it said between turns, which files it opened and
+what it searched for.
 
-The `research` package is the instrument for that question. It watches a run and
-writes down everything the agents did, then renders one HTML page from it.
+Not part of the wheel, like [the corpus builder](corpus.md) — run it from the
+repository root.
 
-Like [the corpus builder](corpus.md), it is a step *beside* the tool: a separate
-command, in a package that is not part of the wheel and is not on the review
-path. Roboviewer itself keeps nothing and renders nothing — it reports what its
-agents do through one neutral seam (`roboviewer/observe.py`), and nobody is
-listening unless a command here started the run.
+## Commands
 
 ```bash
-python -m research review develop            # a recorded run, then the page
-python -m research review develop feature/x --no-judge
-python -m research page .roboviewer/runs/latest
+python -m research review develop              # run a review, keep a log, render the page
+python -m research page .roboviewer/runs/latest  # render a log that already exists
 ```
 
-Run it from the repository root: the package ships with the source and is
-deliberately not installed.
+`review` takes the tool's own flags and passes them through, and exits with
+whatever the review exited with:
 
-`review` takes the tool's own flags and passes them straight through, so there
-is no second command line to keep in step; it exits with whatever the review
-exited with. `page` renders a log that already exists — the run that was killed,
-the run from last week, the run a colleague sent over.
+```bash
+python -m research review develop feature/login       # someone else's branch
+python -m research review develop --no-judge          # while iterating on a prompt
+python -m research review develop --only correctness  # one checklist item
+python -m research review develop -C ~/projects/app   # a repository elsewhere
+```
 
 Both write into the run's own directory, beside the report:
 
@@ -39,57 +34,110 @@ Both write into the run's own directory, beside the report:
 └── trace.html       the page rendered from it
 ```
 
-## What the page shows
+A run that was killed still has its log, so `page` works on it too — the agents
+that never finished are shown as still running.
 
-**The shape of the run first.** Agents, turns, reads, searches, tokens — then
-the changed files, each saying how many agents opened it, or that none did. A
-file nobody opened and nobody reported is not a file that came back clean, and
-that is the difference the report cannot express. Files opened outside the
-change are listed too: that is the agent going looking.
+## The page
 
-**Then one folded card per checklist item**, with its status, how many of its
-turns it used, what it read and searched and what it cost. Opening it gives the
-prompts it was handed, then the turns: what the model said, and under each reply
-the calls it made — `read_file src/cart.py:1-200 → 200 lines · 6.4 KB`,
-`grep Cart\( in *.py → 2 hits`, failures in red. At the bottom is the runner's
-verdict: submitted, submitted because the turns ran out, or nothing submitted
-and why, with the summary and what it handed back.
+Open `trace.html` by double click. Top to bottom:
 
-**The judge's passes are on the same page**, in their own section, in the same
-shape — they are agents with a turn budget like any other.
+- **the shape of the run** — agents, turns, reads, searches, tokens;
+- **changed files**, each saying how many agents opened it, or that none did,
+  plus what was opened outside the change;
+- **one folded card per checklist item** — status, turns used, reads, searches,
+  tokens, seconds. Open it for the prompts it was given, then the turns: what
+  the model thought (`THINKING`), what it said, and the calls it made —
+  `read_file src/cart.py:1-200 → 200 lines · 6.4 KB`, `grep Cart\( in *.py → 2 hits`.
+  At the bottom, what it handed back;
+- **the judge's passes**, in the same shape.
 
-Everything long starts collapsed. The page is for reading, not for archaeology.
+## Reading the log directly
 
-## What the log is, and what it is not
+`trace.jsonl` is one JSON object per line. Anything the page shows can be asked
+of it, and a few things the page does not.
 
-`trace.jsonl` is one JSON object per line, written and flushed as the run
-happens rather than assembled at the end: a run that dies mid-flight is exactly
-the run worth reading, and its log is already on disk. The page renders from
-whatever is there, and an agent that never reported an end is shown as still
-running.
+Which files did the run actually open, and how often:
 
-It records what each call **asked for** and **how much came back** — never what
-came back. Tool output is repository content, and a log that kept it would be a
-second copy of the repository that grows with what the agents read rather than
-with what they did. A test holds that line: five calls returning 100 characters
-and five returning 200 000 produce logs of the same size.
+```bash
+jq -r 'select(.t=="call" and .tool=="read_file" and .error==false) | .args.path' trace.jsonl | sort | uniq -c | sort -rn
+```
 
-Prompts are stored once and referred to by hash. The judge asks one system
-prompt of every finding it verifies, and thirty copies of it would be thirty
-copies for nothing; on the page the second agent to be handed a prompt says
-whose section carries it.
+```
+   2 src/cart.py
+   1 src/api.py
+```
 
-## What reaches the page's template
+Where the budget went, per agent:
 
-`research/templates/trace.html.j2` is a Jinja template like the tool's own, and
-it extends the tool's `_layout.html.j2` — one skeleton, not two that drift. The
-model it renders is assembled in `research/view.py` from the log alone.
+```bash
+jq -r 'select(.t=="outcome") | "\(.a)  \(.status)  \(.turns) turns  \(.usage.prompt_tokens + .usage.completion_tokens) tokens"' trace.jsonl
+```
+
+```
+a1  ok  3 turns  52290 tokens
+a2  truncated  15 turns  142100 tokens
+a3  failed  1 turns  9010 tokens
+```
+
+Which agent is which:
+
+```bash
+jq -r 'select(.t=="agent") | "\(.a)  \(.kind)  \(.title)"' trace.jsonl
+```
+
+```
+a1  item  Correctness and logic errors
+a2  item  Error handling
+a4  judge  judge F001
+```
+
+Searches that came back with nothing — a prompt that sends agents hunting for
+what is not there:
+
+```bash
+jq -r 'select(.t=="call" and .tool=="grep" and .hits==0) | .args.pattern' trace.jsonl | sort | uniq -c | sort -rn
+```
+
+Calls that failed:
+
+```bash
+jq -r 'select(.t=="call" and .error) | "\(.tool) \(.args.path // .args.pattern)"' trace.jsonl
+```
+
+How the prompt grew turn by turn for one agent:
+
+```bash
+jq -r 'select(.t=="turn" and .a=="a1") | "turn \(.n): \(.usage.prompt_tokens) prompt tokens"' trace.jsonl
+```
+
+## Record types
+
+One `t` per line.
+
+| `t` | Fields | One per |
+| --- | --- | --- |
+| `run` | `run_id`, `branch`, `target`, `base_sha`, `head_sha`, `model`, `started_at`, `files`, `items` | run |
+| `blob` | `h`, `text` — a prompt, stored once and referred to by hash | distinct prompt |
+| `agent` | `a`, `kind` (`item`/`judge`), `title`, `item_id`, `system`, `prompt` (blob hashes), `max_turns` | agent |
+| `turn` | `a`, `n`, `text`, `thinking`, `usage` | model reply |
+| `call` | `a`, `n`, `tool`, `args`, `chars`, `lines`, `hits`, `error`, `seconds` | tool call |
+| `outcome` | `a`, `status`, `turns`, `duration_s`, `usage`, `error`, `summary`, `findings`, `verdicts` | agent |
+
+A call records what was **asked for** and **how much came back** — never what
+came back. Tool output is repository content, and a log that kept it would grow
+with what the agents read rather than with what they did.
+
+## Changing the page
+
+`research/templates/trace.html.j2` is an ordinary Jinja template; it extends the
+tool's `_layout.html.j2`, so the styles and filters are the same ones the report
+uses. The model it renders comes from `research/view.py`:
 
 | Name | What is inside |
-|---|---|
+| --- | --- |
 | `meta` | `run_id`, `branch`, `target`, `base_sha`, `head_sha`, `model`, `started_at` |
 | `stats` | `agents`, `turns`, `calls`, `reads`, `searches`, `total_tokens`, `files_changed`, `files_opened`, `unfinished` |
-| `files` | Changed files: `file`, `status`, `added`, `removed`, `readers` — how many agents opened it, zero included |
+| `files` | Changed files: `file`, `status`, `added`, `removed`, `readers` |
 | `elsewhere` | Paths opened during the run that the merge request did not change |
 | `items` | One agent per checklist item, in checklist order |
 | `judge` | The judging passes, in the order they started |
@@ -97,23 +145,38 @@ model it renders is assembled in `research/view.py` from the log alone.
 An agent carries `title`, `status`, `error`, `summary`, `system`, `prompt`,
 `system_chars`, `prompt_chars`, `turn_count`, `max_turns`, `calls`, `reads`,
 `searches`, `total_tokens`, `duration_s`, `opened`, `findings`, `verdicts`, and
-`turns` — each turn with `n`, `text`, `preview`, `tokens` and its `calls`. A call
-is `tool`, `subject` (the arguments on one line), `chars`, `lines`, `hits`,
-`error` and `seconds`.
+`turns` — each turn with `n`, `text`, `thinking`, `preview`, `tokens`, `ended`
+and its `calls`. A call is `tool`, `subject`, `chars`, `lines`, `hits`, `error`,
+`seconds`.
 
-`system` and `prompt` are empty when another agent was given the same text;
+`system` and `prompt` are empty when another agent was handed the same text;
 `system_same_as` and `prompt_same_as` then name whose section carries it.
 
-## Writing another instrument
+## Watching a run yourself
 
-`roboviewer/observe.py` is the whole seam: `RunObserver` is told when a run
-opens (with the run and the directory its artifacts go in), hands out one
-`AgentObserver` per agent, and is told when the run closes. An agent observer
-hears the prompts it was given, every reply with its usage, every tool call with
-its whole answer, and the outcome.
+The tool itself keeps nothing. It reports through `roboviewer/observe.py`, and
+`research` is one listener; here is another, counting how often each file is
+opened:
 
-What to keep out of any of that is the observer's decision. `research` measures
-tool output and drops it; something counting cache hits per turn, or comparing
-two runs of one configuration, would keep something else. The tool has no
-opinion, which is the point: nothing here can slow a review down or leave a file
-somebody did not ask for.
+```python
+from collections import Counter
+from roboviewer.cli import main
+
+class Opens:
+    def __init__(self): self.files = Counter()
+    def opened(self, run, directory): pass
+    def closed(self): print(self.files.most_common())
+    def agent(self, kind, title, item_id=""): return self
+
+    def started(self, *, system, prompt, max_turns): pass
+    def replied(self, turn, text, usage, thinking=""): pass
+    def called(self, turn, tool, args, output, seconds):
+        if tool == "read_file":
+            self.files[args.get("path")] += 1
+    def finished(self, **kwargs): pass
+
+main(["develop"], observer=Opens())
+```
+
+`called` is handed the tool's whole answer; what to keep out of it is the
+observer's decision. `research` measures it and drops it.
