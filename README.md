@@ -10,18 +10,33 @@ roboviewer develop
 ```
 
 ```
-▸ feature/discount → develop: 12 files, 8 checklist items
-• Correctness and logic errors: 3 findings (ok) · 41200 tokens · 62s
-• Error handling: 1 findings (ok) · 38900 tokens · 55s
-...
-▸ Confirmed 4 of 11
+▸ muse-glimmer-30b @ api.fireworks.ai
+▸ nmc/albums_customisation → master: 32 files, 3 checklist items
+▸ Started: Runtime behaviour
+▸ Started: Contracts and structure
+▸ Started: Risks and coverage
+• Contracts and structure: 0 findings (ok) · 404015 tokens · 21s
+• Risks and coverage: 0 findings (ok) · 56984 tokens · 26s
+• Runtime behaviour: 5 findings (ok) · 57932 tokens · 39s
+▸ After merge and deduplication: 5 findings
+▸ Stage 1 of 2: checking 5 findings, one pass each
+▸ Stage 2 of 2: ruling on 5 verified findings
+▸ Confirmed 5 of 5
 
-  F001  [Blocker] src/cart.py:42 — race when the cart is updated concurrently
-  F002  [Major] src/api.py:118 — the change breaks older clients
+  F001  [Blocker] iOSClient/Albums/AlbumsViewController.swift:14 — @Environment used in a UIKit UIViewController
+  F002  [Major] .../Details/AlbumDetailsViewModel.swift:128 — UI state mutated from a background callback in loadAlbumPhotos
+  F004  [Major] .../Details/AlbumDetailsViewModel.swift:292 — isLoadingPopupVisible toggled per iteration in onPhotosSelected
+  F003  [Minor] .../Details/PhotosGridView.swift:69 — Database write performed inside view code when building viewer metadata
+  F005  [Minor] iOSClient/Albums/Domain/Models/Album.swift:55 — Fallback dates set to now when dateRange decoding fails
 
-Confirmed 4 of 11 · 167100 tokens · 67% from cache
-Report: .roboviewer/runs/20260730-172900/report.md
+Confirmed 5 of 5 · 1927677 tokens · 99% from cache
+Report: .roboviewer/runs/20260820-202715/report.md
 ```
+
+*A real run, not an illustration: muse-glimmer-30b over
+[nextcloud/ios#4091](https://github.com/nextcloud/ios/pull/4091). Four of those
+five findings are verified against the code, the fifth is unadjudicated — see
+[Measurements](docs/measurements.md).*
 
 *Findings come back in English. `--language ru` asks the model for another one
 without touching the prompts — see [Output language](docs/language.md).*
@@ -59,8 +74,63 @@ No app to install on your organisation, no webhooks, no permissions to request.
 and let the humans spend their attention on design instead of on the bug you
 would have caught yourself.
 
+**The change is the scope, not the file.** It reports what the diff introduces
+and what the diff breaks, and it draws that line by consequence rather than by
+authorship. If the changed code now calls into something that was already
+broken, that call is a finding: the branch is what ships, and the code having
+been wrong before this MR does not make it work now. Long-standing problems the
+change does not touch stay out.
+
 **A ranked list you can act on.** Findings carry a severity, a file and a line,
-and a final judge pass throws out the ones that do not survive a second look.
+and a final judge pass throws out the ones that do not survive a second look —
+between 6% and 54% of them, depending on how noisy the model is. What survives
+is not guaranteed right: see [Measurements](docs/measurements.md) for the rate
+that has been verified against code.
+
+## Where it stands
+
+Measured on [nextcloud/ios#4091](https://github.com/nextcloud/ios/pull/4091) —
+an Albums feature, 32 files and 3903 lines once the resource files are excluded —
+against 31 defects established by hand. This is a starting line, published so it
+can be argued with and moved; the full table, every setting and the caveats are
+in [Measurements](docs/measurements.md).
+
+**Recall.** How many of the 31 known defects a configuration surfaced across its
+runs. One block is one defect.
+
+```
+                                  ┌───────────────────────────────┐ 31
+nemotron-lightning-30b · 8 items  │██                             │  2   6%
+muse-glimmer-30b · 3 items        │████████████                   │ 12  39%
+muse-glimmer-30b · 8 items        │███████████████                │ 15  48%
+claude-opus-5 · 1 item            │██████████████████████         │ 22  71%
+                                  └───────────────────────────────┘
+```
+
+**False positives.** Of everything a configuration shipped, how much was
+verified wrong against the code. Solid is proven false; light is not yet
+adjudicated, so the real rate sits inside the bar.
+
+```
+                                  0%        10%       20%       30%
+                                  ├─────────┼─────────┼─────────┤
+nemotron-lightning-30b · 8 items  │██░░░░░░                     │   4%…15%
+muse-glimmer-30b · 3 items        │██████░░░░                   │  12%…20%
+muse-glimmer-30b · 8 items        │████░░░░░░░░░░░              │   8%…30%
+claude-opus-5 · 1 item            │█░░░░░░░░░░                  │   2%…21%
+```
+
+A low rate can still be a bad report. Of the 48 findings the nemotron
+configuration shipped, 36 are one "this file has no tests" entry per file —
+formally correct, and one thought repeated thirty-six times. Counting findings
+rewards that; counting distinct defects does not, which is why the recall chart
+above is drawn per defect rather than per finding.
+
+Three things this does not say. It is one merge request, so `n = 1` at the
+repository level. Fifteen of the 31 defects entered the truth set by verifying
+one model's output, so that model is being graded partly on ground it defined —
+`truth.toml` marks which entries are independent. And Opus ran without the judge,
+as a ceiling to aim at rather than a configuration of this tool.
 
 ## Requirements
 
@@ -150,6 +220,7 @@ would be reviewed without spending tokens. Every flag:
 | [Customise the checklist](docs/checklists.md) | Adding a concern without touching code |
 | [Output language](docs/language.md) | Findings in a language other than English |
 | [Tuning](docs/tuning.md) | Prompts, how many agents, thinking, the turn limit |
+| [Measurements](docs/measurements.md) | What it finds and gets wrong, per model and checklist size |
 | [Watching a run](docs/research.md) | What the agents did with the context: the log, the page, the command |
 
 [docs/](docs/) also carries the tooling baseline and how the measurement corpus
@@ -162,8 +233,21 @@ is built.
   publishes them, from formats the forge already understands.
 - It does not modify your code. The agents get read-only tools —
   `read_file`, `grep`, `list_files`, `git_show` — and nothing else.
-- It does not replace a human reviewer. It catches the class of problem that
-  survives a tired read; it has no idea whether the feature was worth building.
+- It does not replace a human reviewer. On the merge request it was measured
+  against it surfaced between 6% and 48% of the known defects depending on the
+  model and the checklist, and it has no idea whether the feature was worth
+  building.
+- It does not try to reproduce a human review, and nothing here measures how
+  closely it agrees with one. Overlap with reviewer comments would measure
+  similarity, not correctness — the two miss different things, and a run that
+  matched a reviewer perfectly would have added nothing. It is measured against
+  defects established in the code, not against what somebody happened to write
+  in a comment thread.
+- It keeps no state between runs. Every run starts from the diff and nothing
+  else, so in CI it reports the same findings again on every push — including
+  the ones you have already read and decided to leave. Nothing in the tool
+  suppresses a repeat, and that is the usual reason review bots get switched
+  off. Until that changes, the honest place for it is a branch you run by hand.
 
 ## License
 

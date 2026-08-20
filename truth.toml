@@ -1,0 +1,385 @@
+# Установленная вручную истина для одного merge request.
+#
+# Формат: [[expected]] — дефект, который ревью обязано найти; [[forbidden]] —
+# утверждение, которое ревью выдавало и которое проверено как ложное.
+# Обе стороны нужны: без forbidden высокий recall можно набрать шумом.
+#
+# Как ставится истина: каждый пункт проверен по коду на указанном коммите и
+# несёт в `evidence` то, чем именно проверен. Пункт без evidence не истина,
+# а мнение — такие сюда не попадают.
+
+[meta]
+repo = "next-cloude-ios"
+url = "https://github.com/nextcloud/ios/pull/4091"
+branch = "nmc/albums_customisation"
+target = "master"
+base = "3fe3a8d1432c"
+head = "826f10c7ac32"
+language = "Swift"
+domain = "iOS-клиент облачного хранилища"
+files = 32
+added = 3816
+removed = 87
+established = "2026-08-04"    # пункты 1-16, ручное ревью
+extended = "2026-08-20"       # пункты 17-31, разбор выхлопа muse-glimmer
+note = """
+Осторожно при сравнении моделей: пункты 1-16 собраны независимо от прогонов,
+пункты 17-31 — из выхлопа muse-glimmer, проверенного по коду. Модель, породившая
+половину эталона, имеет на ней преимущество; честное сравнение моделей — только
+по пунктам 1-16 (`origin = "manual"`).
+"""
+
+# ---------------------------------------------------------------------------
+# Часть 1: собрано ручным ревью 2026-08-04, независимо от прогонов инструмента.
+# 13 из 16 — компиляторного класса: их находит сборка, а не ревьюер.
+# ---------------------------------------------------------------------------
+
+[[expected]]
+id = "unresolved-searchMediaForAlbumUI"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Albums/Presentation/PhotoSelection/NCMediaViewRepresentable.swift"
+line = 44
+what = "Вызывается media.searchMediaForAlbumUI(), метод нигде не объявлен"
+evidence = "grep -rn 'searchMediaForAlbumUI' *.swift даёт единственное вхождение — сам вызов"
+
+[[expected]]
+id = "dismissSelect-lost-controller"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Media/NCMedia.swift"
+line = 552
+what = "dismissSelect потерял параметр controller:, NCSelectDelegate больше не выполняется"
+evidence = "сигнатура в протоколе против сигнатуры реализации"
+
+[[expected]]
+id = "getLayoutForView-wrong-label"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Media/NCMedia.swift"
+line = 167
+what = "getLayoutForView вызван с меткой layout:, объявлен с layoutType:"
+evidence = "объявление — NCManageDatabase+LayoutForView.swift:92, метка layoutType:"
+
+[[expected]]
+id = "unresolved-fileExistsQueue"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Media/NCMedia.swift"
+what = "fileExistsQueue не резолвится"
+evidence = "пре-пасс roboviewer: отсутствует объявление в репозитории"
+
+[[expected]]
+id = "unresolved-analytics"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Media/NCMedia.swift"
+what = "AnalyticsHelper и MoEngageAnalytics используются, в дереве отсутствуют"
+evidence = "пре-пасс roboviewer; grep по репозиторию пуст"
+
+[[expected]]
+id = "unresolved-updateRightBarButtonItems"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Main/NCMainTabBarController.swift"
+line = 179
+what = "updateRightBarButtonItems нет у NCMainNavigationController"
+evidence = "grep объявления по репозиторию пуст"
+
+[[expected]]
+id = "unresolved-viewer-album-props"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Albums/Presentation/Details/PhotosGridView.swift"
+line = 121
+what = "NCViewerMediaPage настраивается свойствами albumName / albumServerUrl / albumPhoto / metadatas, которых у него нет"
+evidence = "объявление NCViewerMediaPage не содержит этих свойств"
+
+[[expected]]
+id = "unresolved-popupFromNavigationStack"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 195
+what = "popupFromNavigationStack не объявлен, и вызван на свежесозданном UINavigationController()"
+evidence = "код: UINavigationController().popupFromNavigationStack(context:); объявления нет"
+
+[[expected]]
+id = "mediahost-not-in-pbxproj"
+origin = "manual"
+severity = "blocker"
+kind = "build"
+file = "iOSClient/Media/NCMediaHost.swift"
+line = 1
+what = "Файл добавлен, но ни один build manifest его не упоминает"
+evidence = "grep -c NCMediaHost *.xcodeproj/project.pbxproj == 0"
+
+[[expected]]
+id = "more-scene-missing-storyboard"
+origin = "manual"
+severity = "blocker"
+kind = "runtime-crash"
+file = "iOSClient/Main/NCMainTabBarController.swift"
+line = 94
+what = "Сцена More ссылается на NCMore.storyboard, которого в дереве нет"
+evidence = "пре-пасс roboviewer: storyboard named here but no such file"
+
+[[expected]]
+id = "ncmedia-outlets-not-connected"
+origin = "manual"
+severity = "blocker"
+kind = "runtime-crash"
+file = "iOSClient/Media/NCMedia.swift"
+line = 209
+what = "Добавлены @IBOutlet titleConstraint и gradientViewHeightContsraint, в NCMedia.storyboard их нет; viewDidLoad безусловно пишет titleConstraint.constant"
+evidence = "NCMedia.storyboard на ветке не менялся и обоих имён не содержит"
+
+[[expected]]
+id = "localization-keys-missing"
+origin = "manual"
+severity = "major"
+kind = "resources"
+file = "iOSClient/Albums/Presentation"
+what = "Использовано ~25 ключей локализации, ни один не добавлен в strings-файлы"
+evidence = "пре-пасс roboviewer: localization key used but defined in no strings file"
+
+[[expected]]
+id = "assets-missing"
+origin = "manual"
+severity = "major"
+kind = "resources"
+file = "iOSClient/Main/NCMainTabBarController.swift"
+line = 53
+what = "Таб-бар и пустые состояния ссылаются на имена картинок, которых нет в каталоге ассетов"
+evidence = "имена не найдены ни в одном .xcassets"
+
+[[expected]]
+id = "copy-success-on-403-404"
+origin = "manual"
+severity = "major"
+kind = "error-handling"
+file = "iOSClient/Albums/API/Albums+WebDAV.swift"
+line = 453
+what = "copyPhotoToAlbum возвращает успех на статусах 403 и 404"
+evidence = "ветка обработки статусов в теле метода"
+
+[[expected]]
+id = "dead-deletePhotosFromAlbum-notification"
+origin = "manual"
+severity = "minor"
+kind = "dead-code"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 49
+what = "Наблюдатель на нотификацию deletePhotosFromAlbum зарегистрирован, но никто её не постит"
+evidence = "grep 'deletePhotosFromAlbum' — только addObserver, ни одного post"
+
+[[expected]]
+id = "double-push-sheet-ondismiss"
+origin = "manual"
+severity = "major"
+kind = "correctness"
+file = "iOSClient/Albums/Presentation/List/AlbumsListScreen.swift"
+line = 53
+what = "Двойной push: .sheet(onDismiss:) повторно зовёт onPhotosSelected, навигация уходит до завершения копирования"
+evidence = "ручное ревью 2026-08-04"
+
+# ---------------------------------------------------------------------------
+# Часть 2: добавлено 2026-08-20 из выхлопа muse-glimmer, каждое проверено по коду.
+# Использовать для сравнения моделей с осторожностью — см. meta.note.
+# ---------------------------------------------------------------------------
+
+[[expected]]
+id = "album-date-fallback-today"
+origin = "verified-from-run"
+severity = "minor"
+kind = "correctness"
+file = "iOSClient/Albums/Domain/Models/Album.swift"
+line = 55
+what = "При неудачном декоде dateRange startDate и endDate ставятся в Date() — битые данные выглядят как «сегодня»"
+evidence = "Album.swift:50-59, ветка else с let now = Date()"
+
+[[expected]]
+id = "environment-in-uikit-controller"
+origin = "verified-from-run"
+severity = "minor"
+kind = "correctness"
+file = "iOSClient/Albums/AlbumsViewController.swift"
+line = 14
+what = "@Environment(\\.localAccount) объявлен в UIViewController — SwiftUI-обёртка вне SwiftUI не наполняется"
+evidence = "класс наследует UIViewController; viewDidLoad реально берёт session.account"
+
+[[expected]]
+id = "deletePhotos-early-return"
+origin = "verified-from-run"
+severity = "major"
+kind = "correctness"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 175
+what = "guard ... else { return } внутри for-цикла выходит из всей функции: остальные фото не удаляются"
+evidence = "AlbumDetailsViewModel.swift:171-199, return вместо continue, и такой же return на первой ошибке"
+
+[[expected]]
+id = "deletePhotos-sequential-ui-churn"
+origin = "verified-from-run"
+severity = "minor"
+kind = "performance"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 171
+what = "Удаление идёт по одному с переключением isLoadingPopupVisible на каждой итерации"
+evidence = "цикл с await deletePhotoFromAlbum и MainActor.run на каждый элемент"
+
+[[expected]]
+id = "deletePhotos-linear-search"
+origin = "verified-from-run"
+severity = "minor"
+kind = "performance"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 173
+what = "photos.first(where:) внутри цикла по metadatas — O(n*m)"
+evidence = "AlbumDetailsViewModel.swift:173"
+
+[[expected]]
+id = "multiadd-spinner-hidden-early"
+origin = "verified-from-run"
+severity = "major"
+kind = "correctness"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 292
+what = "isLoadingPopupVisible ставится true один раз, а каждое завершение копирования безусловно ставит false — спиннер снимается после первого из N"
+evidence = "AlbumDetailsViewModel.swift:292 и :306"
+
+[[expected]]
+id = "notification-observer-leak"
+origin = "verified-from-run"
+severity = "major"
+kind = "lifecycle"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 49
+what = "addObserver(forName:object:queue:using:) без сохранения токена и без deinit — блочный наблюдатель не снимается"
+evidence = "в файле нет ни deinit, ни removeObserver"
+
+[[expected]]
+id = "throwaway-navigation-controller"
+origin = "verified-from-run"
+severity = "minor"
+kind = "correctness"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 195
+what = "UINavigationController() создаётся на месте и на нём зовётся метод — к стеку экрана отношения не имеет"
+evidence = "AlbumDetailsViewModel.swift:195"
+
+[[expected]]
+id = "debug-print-file-name"
+origin = "verified-from-run"
+severity = "nit"
+kind = "logging"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 205
+what = "print(\"DEBUG: Attempting to remove: ...\") с именем пользовательского файла в проде"
+evidence = "AlbumDetailsViewModel.swift:205"
+
+[[expected]]
+id = "unused-setup-navigation"
+origin = "verified-from-run"
+severity = "nit"
+kind = "dead-code"
+file = "iOSClient/Albums/Presentation/List/AlbumsListScreen.swift"
+line = 108
+what = "Вью-билдер setupNavigation объявлен и нигде не используется"
+evidence = "единственное вхождение имени в файле"
+
+[[expected]]
+id = "unused-showmedia-state"
+origin = "verified-from-run"
+severity = "nit"
+kind = "dead-code"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsScreen.swift"
+line = 15
+what = "@State showMedia присваивается, но никогда не читается"
+evidence = "два вхождения на файл: объявление и присваивание"
+
+[[expected]]
+id = "window-polling-loop"
+origin = "verified-from-run"
+severity = "major"
+kind = "lifecycle"
+file = "iOSClient/Albums/Presentation/PhotoSelection/NCMediaViewRepresentable.swift"
+line = 39
+what = "while media.view.window == nil с шагом 50 мс; Task никуда не сохраняется, отменить его некому"
+evidence = "NCMediaViewRepresentable.swift:32-45"
+
+[[expected]]
+id = "metadata-stub-db-write-from-view"
+origin = "verified-from-run"
+severity = "major"
+kind = "architecture"
+file = "iOSClient/Albums/Presentation/Details/PhotosGridView.swift"
+line = 64
+what = "На каждый тап собирается полный список и NCManageDatabase.shared.addMetadata пишет заглушки в общий Realm прямо из вью"
+evidence = "PhotosGridView.swift:64-78"
+
+[[expected]]
+id = "repeated-sort-in-body"
+origin = "verified-from-run"
+severity = "minor"
+kind = "performance"
+file = "iOSClient/Albums/Presentation/Details/PhotosGridView.swift"
+line = 29
+what = "photos.keys сортируются в body на каждом вычислении и ещё раз в openPhotoViewer"
+evidence = "PhotosGridView.swift:29 и :56"
+
+[[expected]]
+id = "no-tests-for-albums"
+origin = "verified-from-run"
+severity = "minor"
+kind = "tests"
+file = "iOSClient/Albums"
+what = "Ни один тест не покрывает новую фичу"
+evidence = "ни один файл с test в пути не упоминает AlbumsListViewModel / AlbumsManager / AlbumMapper"
+
+# ---------------------------------------------------------------------------
+# Ложные утверждения: инструмент их выдавал, судья подтверждал, проверка опровергла.
+# Каждое такое совпадение в прогоне — минус к точности, а не плюс к полноте.
+# ---------------------------------------------------------------------------
+
+[[forbidden]]
+id = "setuppasscodeview-requires-controller"
+severity_claimed = "blocker"
+file = "iOSClient/Main/NCMainTabBarController.swift"
+line = 154
+claim = "SetupPasscodeView создан без обязательного аргумента controller — не компилируется"
+why_false = """
+SetupPasscodeView — структура без явного init. `weak var controller: T?` —
+опциональное свойство-var, синтезированный memberwise-инициализатор даёт ему
+значение по умолчанию nil. Вызов компилируется.
+"""
+evidence = "swiftc -typecheck на минимальном воспроизведении, выход 0"
+
+[[forbidden]]
+id = "mediahost-scene-identifier-wrong"
+severity_claimed = "blocker"
+file = "iOSClient/Media/NCMediaHost.swift"
+line = 44
+claim = "sceneIdentifier по умолчанию равен имени сториборда, instantiateViewController упадёт в fatalError"
+why_false = "В iOSClient/Media/NCMedia.storyboard есть storyboardIdentifier=\"NCMedia.storyboard\". Идентификатор странно назван, но существует."
+evidence = "grep -o 'storyboardIdentifier=\"[^\"]*\"' iOSClient/Media/NCMedia.storyboard"
+
+[[forbidden]]
+id = "album-name-path-traversal"
+severity_claimed = "major"
+file = "iOSClient/Albums/API/Albums+WebDAV.swift"
+line = 163
+claim = "Имя альбома подставляется в WebDAV-путь, возможен обход через .. или закодированные разделители"
+why_false = """
+Валидация режет / и \\, поэтому .. не поднимается по дереву; urlPath.encodedToUrl
+процентно кодирует остальное, так что %2F станет литералом.
+"""
+evidence = "validateAlbumName в AlbumsListViewModel.swift:77-88 и сборка пути в Albums+WebDAV.swift:163"
