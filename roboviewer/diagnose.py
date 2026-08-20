@@ -341,8 +341,6 @@ def check_provider(provider: ProviderConfig, model: str, source: str | None = No
 
     if key is None:
         print("✗ No key found — there is nothing to make a request with.")
-        print(f"  Set api_key in {provider_config_path()}, or the "
-              f"{provider.api_key_env} variable.")
         return 2
     if key != key.strip():
         print("⚠ The key has spaces or a newline at its edges — a common cause of 401.")
