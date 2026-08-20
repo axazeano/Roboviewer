@@ -35,9 +35,15 @@ from .records import (
     submitted,
 )
 
-# git grep says this when nothing matched, and the log should say 0 hits rather
-# than "one line came back".
+# A search now counts itself in its first line — "12 matches in 3 files (…)" —
+# so the log takes the number the tool already arrived at rather than counting
+# lines behind its back.
+_MATCHES_HEADER = re.compile(r"^(\d+) match(?:es)? in ")
+# The two ways a search comes back with nothing: the pattern was not there, or
+# the glob covered no file at all. Both are zero hits; which of the two it was
+# is in the answer the agent read.
 _NO_MATCHES = "No matches for:"
+_NOTHING_SEARCHED = "No file on this branch matches the glob"
 _MORE_MATCHES = re.compile(r"^\[\.\.\. (\d+) more matches \.\.\.\]$", re.MULTILINE)
 _EMPTY_LISTING = "(empty)"
 # How the tool hands an agent a failed call. It is text to the model, so the log
@@ -223,14 +229,21 @@ def _shape(tool: str, output: str) -> tuple[int | None, int | None]:
     if output.startswith(_ERROR):
         return None, None
     if tool == "grep":
-        if output.startswith(_NO_MATCHES):
-            return None, 0
-        shown = len([ln for ln in output.splitlines() if ln.strip()])
-        capped = _MORE_MATCHES.search(output)
-        if capped:
-            return None, shown - 1 + int(capped.group(1))
-        return None, shown
+        return None, _hits(output)
     if tool == "list_files":
         return (0 if output.strip() == _EMPTY_LISTING else len(output.splitlines())), None
     # read_file and git_show: a header line, then the numbered content
     return max(0, len(output.splitlines()) - 1), None
+
+
+def _hits(output: str) -> int:
+    """What a search came back with, by its own count where it has one."""
+    if output.startswith((_NO_MATCHES, _NOTHING_SEARCHED)):
+        return 0
+    counted = _MATCHES_HEADER.match(output)
+    if counted:
+        return int(counted.group(1))
+    # A log from a tool that did not count for itself: fall back to the lines
+    shown = len([ln for ln in output.splitlines() if ln.strip()])
+    capped = _MORE_MATCHES.search(output)
+    return shown - 1 + int(capped.group(1)) if capped else shown

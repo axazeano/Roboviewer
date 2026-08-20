@@ -150,7 +150,9 @@ def test_a_read_is_recorded_by_its_file_and_line_range(tmp_path: Path, run: Revi
 
 def test_a_search_is_recorded_by_its_hit_count(tmp_path: Path, repo: Path, run: ReviewRun) -> None:
     """Measured off what `git grep` actually returned, so a change to the tool's
-    output cannot quietly turn hits into lines."""
+    output cannot quietly turn hits into lines. The tool counts its own matches
+    now; a search that covered no file at all is zero hits like any other empty
+    search, and which of the two it was stays in the answer the agent read."""
     recorder = _recording(tmp_path, run)
     agent = recorder.agent("item", "Correctness", "correctness")
     agent.started(system="s", prompt="p", max_turns=15)
@@ -167,6 +169,24 @@ def test_a_search_is_recorded_by_its_hit_count(tmp_path: Path, repo: Path, run: 
     found, missed = viewed(tmp_path).items[0].turns[0].calls
     assert found.hits == 1
     assert missed.hits == 0
+
+
+def test_a_search_that_covered_no_file_is_recorded_as_no_hits(
+    tmp_path: Path, repo: Path, run: ReviewRun
+) -> None:
+    recorder = _recording(tmp_path, run)
+    agent = recorder.agent("item", "Correctness", "correctness")
+    agent.started(system="s", prompt="p", max_turns=15)
+    agent.called(
+        1,
+        "grep",
+        {"pattern": "discount", "glob": "Tests/**/*.swift"},
+        dispatch(repo, "grep", {"pattern": "discount", "glob": "Tests/**/*.swift"},
+                 base_ref="HEAD", head_ref="HEAD", max_read_lines=800),
+    )
+    recorder.closed()
+
+    assert viewed(tmp_path).items[0].turns[0].calls[0].hits == 0
 
 
 def test_a_failed_call_is_recorded_as_one(tmp_path: Path, repo: Path, run: ReviewRun) -> None:
