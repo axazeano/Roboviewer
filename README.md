@@ -62,6 +62,51 @@ would have caught yourself.
 **A ranked list you can act on.** Findings carry a severity, a file and a line,
 and a final judge pass throws out the ones that do not survive a second look.
 
+## Where it stands
+
+Measured on [nextcloud/ios#4091](https://github.com/nextcloud/ios/pull/4091) —
+an Albums feature, 32 files and 3903 lines once the resource files are excluded —
+against 31 defects established by hand. This is a starting line, published so it
+can be argued with and moved; the full table, every setting and the caveats are
+in [Measurements](docs/measurements.md).
+
+**Recall.** How many of the 31 known defects a configuration surfaced across its
+runs. One block is one defect.
+
+```
+                                  ┌───────────────────────────────┐ 31
+nemotron-lightning-30b · 8 items  │██                             │  2   6%
+muse-glimmer-30b · 3 items        │████████████                   │ 12  39%
+muse-glimmer-30b · 8 items        │███████████████                │ 15  48%
+claude-opus-5 · 1 item            │██████████████████████         │ 22  71%
+                                  └───────────────────────────────┘
+```
+
+**False positives.** Of everything a configuration shipped, how much was
+verified wrong against the code. Solid is proven false; light is not yet
+adjudicated, so the real rate sits inside the bar.
+
+```
+                                  0%        10%       20%       30%
+                                  ├─────────┼─────────┼─────────┤
+nemotron-lightning-30b · 8 items  │██░░░░░░                     │   4%…15%
+muse-glimmer-30b · 3 items        │██████░░░░                   │  12%…20%
+muse-glimmer-30b · 8 items        │████░░░░░░░░░░░              │   8%…30%
+claude-opus-5 · 1 item            │█░░░░░░░░░░                  │   2%…21%
+```
+
+A low rate can still be a bad report. Of the 48 findings the nemotron
+configuration shipped, 36 are one "this file has no tests" entry per file —
+formally correct, and one thought repeated thirty-six times. Counting findings
+rewards that; counting distinct defects does not, which is why the recall chart
+above is drawn per defect rather than per finding.
+
+Three things this does not say. It is one merge request, so `n = 1` at the
+repository level. Fifteen of the 31 defects entered the truth set by verifying
+one model's output, so that model is being graded partly on ground it defined —
+`truth.toml` marks which entries are independent. And Opus ran without the judge,
+as a ceiling to aim at rather than a configuration of this tool.
+
 ## Requirements
 
 - Python 3.11+
@@ -146,6 +191,7 @@ would be reviewed without spending tokens. Every flag:
 | [Customise the checklist](docs/checklists.md) | Adding a concern without touching code |
 | [Output language](docs/language.md) | Findings in a language other than English |
 | [Tuning](docs/tuning.md) | Prompts, how many agents, thinking, the turn limit |
+| [Measurements](docs/measurements.md) | What it finds and gets wrong, per model and checklist size |
 
 [docs/](docs/) also carries the tooling baseline and how the measurement corpus
 is built.

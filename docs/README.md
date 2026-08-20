@@ -25,5 +25,6 @@ that is here.
 
 | Page | What is in it |
 | --- | --- |
+| [Measurements](measurements.md) | Recall and false positives per model, checklist size and sampling, with the settings behind each run |
 | [Baseline](baseline.md) | Tool counts before and after the simplification work |
 | [Building the corpus](corpus.md) | Fetching real merge requests to measure the review against |
