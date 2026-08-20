@@ -104,14 +104,35 @@ def read_file(root: Path, path: str, start_line: Any = None, end_line: Any = Non
 
 def grep(root: Path, pattern: str, glob: str | None = None, ref: str = "HEAD",
          max_results: int = 60) -> str:
+    """Search the reviewed branch's tree, and say where the search went.
+
+    An answer that only says "no matches" cannot be acted on: the agent has no
+    way to tell a pattern that is absent from a glob that covered nothing, so it
+    rewrites the search and tries again, at a full turn each time. Measured on
+    one traced review: an agent spent fourteen turns and 867 837 tokens
+    establishing a negative it could not trust. Every answer here therefore
+    names how much was searched.
+    """
     # git grep, not ripgrep: we search the reviewed branch's tree, not the disk
+    spec = _pathspec(glob) if glob else None
     args = ["git", "grep", "-n", "-I", "-E", "--no-color", "-e", pattern, ref]
-    if glob:
-        args += ["--", glob]
+    if spec:
+        args += ["--", spec]
 
     proc = subprocess.run(args, cwd=root, capture_output=True, text=True, timeout=60)
     if proc.returncode not in (0, 1):
         raise ToolError(f"git grep failed: {proc.stderr.strip()[:500]}")
+
+    if spec is not None:
+        searched = _files_under(root, ref, spec)
+        if not searched:
+            return (
+                f"No file on this branch matches the glob `{glob}`, so nothing was searched. "
+                f"Check the path with `list_files`, or search without a glob."
+            )
+        scope = f"searched {_count(searched, 'file', 'files')} matching `{glob}`"
+    else:
+        scope = "searched the whole tree"
 
     prefix = f"{ref}:"
     lines = [
@@ -120,11 +141,59 @@ def grep(root: Path, pattern: str, glob: str | None = None, ref: str = "HEAD",
         if ln.strip()
     ]
     if not lines:
-        return f"No matches for: {pattern}"
+        return f"No matches for: {pattern} ({scope})"
+
+    files = len({ln.split(":", 1)[0] for ln in lines})
+    header = (
+        f"{_count(len(lines), 'match', 'matches')} "
+        f"in {_count(files, 'file', 'files')} ({scope})"
+    )
     shown = lines[:max_results]
     hidden = len(lines) - len(shown)
     suffix = f"\n[... {hidden} more matches ...]" if hidden else ""
-    return _truncate("\n".join(shown) + suffix)
+    return _truncate(header + "\n" + "\n".join(shown) + suffix)
+
+
+def _pathspec(glob: str) -> str:
+    """A file mask as the one who wrote it meant it.
+
+    git's default pathspec is not a glob: `*` matches `/` too, so `tests/**/*.py`
+    demands a directory level and silently walks past `tests/x.py`. Models write
+    `**` out of habit — every other search tool takes it — so a mask that says
+    `**` is handed to git as a real glob.
+
+    Everything else keeps the permissive default on purpose. Under `:(glob)` a
+    plain `*.swift` stops matching anything below the root, and on this
+    repository that turned 5 matching files into 0.
+    """
+    return f":(glob){glob}" if "**" in glob else glob
+
+
+def _files_under(root: Path, ref: str, spec: str) -> int:
+    """How many files the search covered — the difference between "the pattern
+    is not there" and "you searched nothing".
+
+    Counted with `git grep` over a pattern every line matches, rather than with
+    `ls-tree` or `ls-files`. `ls-tree` does not apply pathspec magic at all, and
+    `ls-files --with-tree` unions the tree with the index, so it reports files
+    the reviewed branch does not have — which is the lie this exists to prevent,
+    and it happens exactly when the branch under review is not checked out.
+    Asking grep keeps the count on the same footing as the search: same ref,
+    same pathspec, same skipping of binaries.
+    """
+    proc = subprocess.run(
+        ["git", "grep", "-I", "-l", "-e", ".", ref, "--", spec],
+        cwd=root, capture_output=True, text=True, timeout=60,
+    )
+    if proc.returncode not in (0, 1):
+        return 0
+    return sum(1 for line in proc.stdout.splitlines() if line.strip())
+
+
+def _count(number: int, one: str, many: str) -> str:
+    """"1 file", "12 files" — both forms spelled out, since this goes to a model
+    that reads the sentence rather than parses it."""
+    return f"{number} {one if number == 1 else many}"
 
 
 def list_files(root: Path, directory: str = ".", ref: str = "HEAD", max_entries: int = 200) -> str:
@@ -205,7 +274,12 @@ def tool_schemas(base_ref: str) -> list[dict[str, Any]]:
                         "pattern": {"type": "string", "description": "Extended regular expression"},
                         "glob": {
                             "type": "string",
-                            "description": "Restrict to a file mask, e.g. *.py or src/**",
+                            "description": (
+                                "Restrict to a file mask: *.py matches at any depth, "
+                                "src/**/*.c matches the directory and everything under it. "
+                                "The answer says how many files the mask covered, so a mask "
+                                "that matched nothing is not the same answer as no matches."
+                            ),
                         },
                     },
                     "required": ["pattern"],
