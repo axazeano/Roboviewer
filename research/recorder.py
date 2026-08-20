@@ -75,9 +75,17 @@ class AgentRecorder:
             )
         )
 
-    def replied(self, turn: int, text: str | None, usage: Usage) -> None:
+    def replied(
+        self, turn: int, text: str | None, usage: Usage, thinking: str = ""
+    ) -> None:
         self._recorder.write(
-            TurnRecord(a=self._id, n=turn, text=(text or "").strip(), usage=usage)
+            TurnRecord(
+                a=self._id,
+                n=turn,
+                text=(text or "").strip(),
+                thinking=thinking.strip(),
+                usage=usage,
+            )
         )
 
     def called(

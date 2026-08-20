@@ -39,7 +39,13 @@ class AgentObserver(Protocol):
         """The prompts as the agent received them, assembly included."""
         ...
 
-    def replied(self, turn: int, text: str | None, usage: Usage) -> None: ...
+    def replied(
+        self, turn: int, text: str | None, usage: Usage, thinking: str = ""
+    ) -> None:
+        """One reply. `text` is what the model said out loud and `thinking` what
+        it reasoned in the field some models answer in beside it — both, because
+        a reasoning model says nothing at all in `text` on most turns."""
+        ...
 
     def called(
         self, turn: int, tool: str, args: dict[str, Any], output: str, seconds: float
@@ -93,7 +99,9 @@ class Silence:
 
     def started(self, *, system: str, prompt: str, max_turns: int) -> None: ...
 
-    def replied(self, turn: int, text: str | None, usage: Usage) -> None: ...
+    def replied(
+        self, turn: int, text: str | None, usage: Usage, thinking: str = ""
+    ) -> None: ...
 
     def called(
         self, turn: int, tool: str, args: dict[str, Any], output: str, seconds: float

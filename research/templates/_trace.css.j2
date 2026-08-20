@@ -27,8 +27,12 @@
 
 /* Prompts and replies: long text, folded away */
 .prompts { margin: 0 0 1rem; }
-.prompts details, .said { margin: 0 0 .375rem; }
-.prompts pre, .said pre { max-height: 26rem; overflow: auto; white-space: pre-wrap; }
+.prompts details, .said, .thought { margin: 0 0 .375rem; }
+.prompts pre, .said pre, .thought pre { max-height: 26rem; overflow: auto; white-space: pre-wrap; }
+/* What the model worked out before answering: its voice, but not out loud */
+.thought > summary { color: var(--muted); font-size: .875rem; }
+.thought .tag { margin-right: .5rem; padding: 0 .375rem; border: 1px solid var(--line); border-radius: 3px; font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em; }
+.thought pre { color: var(--muted); }
 .quiet { margin: 0 0 .375rem; color: var(--muted); font-size: .8125rem; }
 
 /* The turns, as a rail down the left */

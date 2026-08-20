@@ -26,6 +26,12 @@
 <li class="turn">
 <span class="n">{{ turn.n }}</span>
 <div class="did">
+{% if turn.thinking %}
+<details class="thought">
+<summary><span class="tag">thinking</span>{{ turn.thinking_preview }}</summary>
+<pre>{{ turn.thinking }}</pre>
+</details>
+{% endif %}
 {% if turn.text %}
 <details class="said">
 <summary>{{ turn.preview }}</summary>
@@ -43,8 +49,10 @@
 {% endfor %}
 </ul>
 {% endif %}
-{% if not turn.text and not turn.calls %}
-<p class="quiet">nothing recorded for this turn</p>
+{% if turn.ended %}
+<p class="quiet">the agent stopped here — what it handed back is below</p>
+{% elif not turn.text and not turn.thinking and not turn.calls %}
+<p class="quiet">the model replied with no text and called nothing</p>
 {% endif %}
 </div>
 </li>

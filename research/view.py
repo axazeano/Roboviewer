@@ -60,10 +60,16 @@ class CallView(BaseModel):
 class TurnView(BaseModel):
     n: int
     text: str = ""
-    # The first line of the reply, for the collapsed row
+    # What the model reasoned before answering, where the provider hands it back
+    thinking: str = ""
+    # The first line of whichever of the two there is, for the collapsed row
     preview: str = ""
+    thinking_preview: str = ""
     tokens: int = 0
     calls: list[CallView] = Field(default_factory=list)
+    # The turn the agent stopped on: it submitted here, or died here. Without it
+    # a turn whose only call was the submission reads as a turn that did nothing.
+    ended: bool = False
 
 
 class AgentView(BaseModel):
@@ -207,7 +213,9 @@ class _Reader:
         elif isinstance(record, TurnRecord):
             turn = self._turn(record.a, record.n)
             turn.text = record.text
+            turn.thinking = record.thinking
             turn.preview = _preview(record.text)
+            turn.thinking_preview = _preview(record.thinking)
             turn.tokens = record.usage.total_tokens
             self._count_turn(record)
         elif isinstance(record, CallRecord):
@@ -295,6 +303,7 @@ class _Reader:
         agent.verdicts = record.verdicts
         agent.duration_s = record.duration_s
         agent.turn_count = max(agent.turn_count, record.turns)
+        self._turn(record.a, record.turns).ended = True
         # The runner's own total wins over the turns added up: a turn whose
         # reply never arrived still cost the prompt it was sent with.
         if record.usage.total_tokens:

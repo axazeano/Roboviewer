@@ -152,7 +152,7 @@ class OpenAIAgentRunner(Runner):
             usage = usage + turn_usage
             message = completion.choices[0].message
             tool_calls = list(message.tool_calls or [])
-            request.observer.replied(turn, message.content, turn_usage)
+            request.observer.replied(turn, message.content, turn_usage, _reasoning(message))
 
             if not tool_calls:
                 outcome = _reply_without_tools(
@@ -483,6 +483,26 @@ def _cached_tokens(raw: Any) -> tuple[int, bool]:
         if _present(raw, alias):
             return _field(raw, alias), True
     return 0, False
+
+
+def _reasoning(message: Any) -> str:
+    """What the model thought, for the providers that hand it back separately.
+
+    A reasoning model routinely answers with tool calls and an empty `content`,
+    putting everything it actually worked out in a field of its own —
+    `reasoning_content` for Qwen and DeepSeek, `reasoning` elsewhere. Nothing in
+    the review reads it: the loop only needs the tool calls. An observer does,
+    because without it the account of a thinking model is a list of greps with
+    no reason attached to any of them.
+    """
+    for name in ("reasoning_content", "reasoning"):
+        value = getattr(message, name, None)
+        if value is None:
+            extra = getattr(message, "model_extra", None)
+            value = extra.get(name) if isinstance(extra, dict) else None
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
 
 
 def _extract_usage(completion: Any) -> Usage:

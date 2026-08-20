@@ -91,12 +91,18 @@ class AgentRecord(BaseModel):
 
 
 class TurnRecord(BaseModel):
-    """What the model said on this turn, and what the turn cost."""
+    """What the model said on this turn, and what the turn cost.
+
+    Two texts, because a reasoning model uses two: `text` is what it said out
+    loud, `thinking` what it worked out in the field beside it. On most turns of
+    such a model the first is empty and the second is the whole reply.
+    """
 
     t: Literal["turn"] = "turn"
     a: str
     n: int
     text: str = ""
+    thinking: str = ""
     usage: Usage = Field(default_factory=Usage)
 
 

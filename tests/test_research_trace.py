@@ -95,6 +95,42 @@ def viewed(directory: Path) -> research.TraceView:
 # ------------------------------------------------------------- what is recorded
 
 
+def test_a_reasoning_model_that_says_nothing_out_loud_is_not_a_blank_turn(
+    tmp_path: Path, run: ReviewRun
+) -> None:
+    """Qwen and DeepSeek answer with tool calls and an empty `content`, putting
+    what they worked out in a field of their own. Without it the account of a
+    thinking model is a list of greps with no reason attached to any of them."""
+    recorder = _recording(tmp_path, run)
+    agent = recorder.agent("item", "Correctness", "correctness")
+    agent.started(system="s", prompt="p", max_turns=15)
+    agent.replied(1, "", Usage(), "The discount is applied before the total is recomputed.")
+    recorder.closed()
+
+    turn = viewed(tmp_path).items[0].turns[0]
+    assert turn.text == ""
+    assert turn.thinking.startswith("The discount")
+    assert turn.thinking_preview.startswith("The discount")
+
+
+def test_the_turn_the_agent_stopped_on_says_so(tmp_path: Path, run: ReviewRun) -> None:
+    """The submission is not a tool call in the log — it is the outcome. The turn
+    it happened on would otherwise read as a turn on which nothing happened."""
+    recorder = _recording(tmp_path, run)
+    agent = recorder.agent("item", "Correctness", "correctness")
+    agent.started(system="s", prompt="p", max_turns=15)
+    agent.replied(1, "", Usage())
+    agent.called(1, "grep", {"pattern": "x"}, "No matches for: x")
+    agent.replied(2, "", Usage())
+    agent.finished(payload={"summary": "done", "findings": []}, usage=Usage(), turns=2,
+                   duration_s=1.0)
+    recorder.closed()
+
+    first, last = viewed(tmp_path).items[0].turns
+    assert not first.ended
+    assert last.ended
+
+
 def test_a_read_is_recorded_by_its_file_and_line_range(tmp_path: Path, run: ReviewRun) -> None:
     recorder = _recording(tmp_path, run)
     agent = recorder.agent("item", "Correctness", "correctness")
@@ -307,11 +343,11 @@ def test_the_page_says_which_changed_files_were_opened(tmp_path: Path, run: Revi
 # ------------------------------------------------------------------- the runner
 
 
-def _completion(*calls: Any, content: str = "") -> SimpleNamespace:
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=content, tool_calls=list(calls)))],
-        usage=None,
+def _completion(*calls: Any, content: str = "", reasoning: str = "") -> SimpleNamespace:
+    message = SimpleNamespace(
+        content=content, tool_calls=list(calls), reasoning_content=reasoning
     )
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=None)
 
 
 def _call(name: str, args: dict[str, Any]) -> SimpleNamespace:
@@ -344,6 +380,25 @@ def _drive(repo: Path, script: list[Any], handle: research.AgentRecorder) -> Non
     )
 
 
+def test_the_runner_picks_up_what_the_model_thought(
+    tmp_path: Path, repo: Path, run: ReviewRun
+) -> None:
+    """Through the real loop, because the field is the provider's and the loop
+    is the only place that ever sees a completion."""
+    log = tmp_path / "log"
+    log.mkdir()
+    recorder = _recording(log, run)
+    _drive(
+        repo,
+        [_completion(_call("submit_findings", {"summary": "", "findings": []}),
+                     reasoning="Nothing here touches the cart.")],
+        recorder.agent("item", "Correctness", "correctness"),
+    )
+    recorder.closed()
+
+    assert viewed(log).items[0].turns[0].thinking == "Nothing here touches the cart."
+
+
 def test_the_runner_records_the_turns_it_took(tmp_path: Path, repo: Path, run: ReviewRun) -> None:
     """Through the loop itself rather than through the recorder: what is worth
     asserting is that a real turn leaves a real line."""
@@ -366,6 +421,7 @@ def test_the_runner_records_the_turns_it_took(tmp_path: Path, repo: Path, run: R
     # The prompt as the agent received it, budget note and all
     assert "You have 3 turns" in agent.system
     assert agent.turns[0].text == "Reading the cart."
+    assert agent.turns[-1].ended, "the turn it submitted on is marked as the last one"
     assert agent.turns[0].calls[0].subject == "cart.py"
     assert agent.turns[0].calls[0].lines == 32
     assert agent.status == "ok"
