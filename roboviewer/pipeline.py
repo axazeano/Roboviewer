@@ -20,6 +20,7 @@ from .events import Event, EventSink, noop
 from .gitdiff import DiffBundle, in_scope
 from .judge import JudgeSettings, Passes, judge_for
 from .models import SEVERITY_ORDER, Finding, ItemResult, ReviewRun, Verdict
+from .observe import SILENT, RunObserver
 from .prompts import Prompts
 from .runners import AgentRequest, Runner
 from .tools import SUBMIT_FINDINGS_TOOL, tool_schemas
@@ -190,9 +191,18 @@ class ReviewPipeline:
         self._emit = on_event or noop
         self._prompts = prompts or Prompts.load()
         self._tools = tool_schemas(diff.base_sha)
+        # Whoever asked to watch this run, once it is running — see `execute`.
+        self._observer: RunObserver = SILENT
 
-    async def execute(self) -> ReviewRun:
-        """The steps, in the order they run and with what each hands on."""
+    async def execute(self, observer: RunObserver = SILENT) -> ReviewRun:
+        """The steps, in the order they run and with what each hands on.
+
+        `observer` is how something outside the tool asks for an account of what
+        the agents do — see `observe`. It arrives here rather than in the
+        constructor because it belongs to the run, not to the assembly: a
+        pipeline is built from what is reviewed and executed by whoever cares.
+        """
+        self._observer = observer
         run = self._start_run()
         if not self._diff.files:
             return self._finish_run(run, "No changes relative to the target branch")
@@ -220,6 +230,9 @@ class ReviewPipeline:
             files=self._diff.files,
             items=[ItemResult(item_id=i.id, item_title=i.title) for i in self._items],
         )
+        # The directory as well as the run: an observer that keeps something has
+        # to know where the run's artifacts go without reading the config.
+        self._observer.opened(run, output_dir_for(self._cfg, self._diff.root, run.run_id))
         self._emit(
             Event(
                 "run_start",
@@ -311,6 +324,7 @@ class ReviewPipeline:
             runner=self._runner,
             tools=self._tools,
             emit=self._emit,
+            observer=self._observer,
         )
         await judge_for(passes).rule(run)
 
@@ -331,6 +345,7 @@ class ReviewPipeline:
 
     def _finish_run(self, run: ReviewRun, message: str = "Review finished") -> ReviewRun:
         run.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
+        self._observer.closed()
         self._emit(Event("run_done", message, data={"run": run}))
         return run
 
@@ -357,6 +372,7 @@ class ReviewPipeline:
             terminal_tool=SUBMIT_FINDINGS_TOOL,
             settings=self._cfg.reviewer,
             metadata={"item_id": item.id},
+            observer=self._observer.agent("item", item.title, item.id),
         )
 
         def progress(kind: str, detail: str) -> None:

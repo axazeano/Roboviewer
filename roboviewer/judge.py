@@ -32,6 +32,7 @@ from .config import ModelConfig
 from .events import Event, EventSink
 from .gitdiff import DiffBundle
 from .models import Finding, ReviewRun, Severity, Usage, Verdict
+from .observe import SILENT, RunObserver
 from .prompts import Prompts
 from .runners import AgentOutcome, AgentRequest, Runner
 from .tools import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
@@ -78,6 +79,9 @@ class Passes:
     runner: Runner
     tools: list[dict[str, Any]]
     emit: EventSink
+    # Judging passes are agents like any other and report like any other; what
+    # tells them apart to an observer is that they say which they are.
+    observer: RunObserver = SILENT
 
     async def ask(
         self,
@@ -95,6 +99,7 @@ class Passes:
             terminal_tool=terminal_tool,
             settings=self.settings.model,
             metadata=metadata,
+            observer=self.observer.agent("judge", label, str(metadata.get("finding_id", ""))),
         )
         return await self.runner.run(request, self._progress(label))
 

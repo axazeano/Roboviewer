@@ -13,6 +13,7 @@ from typing import Any
 
 from ..config import ModelConfig
 from ..models import Usage
+from ..observe import SILENT, AgentObserver
 
 # (event, detail) — forwarded to the console: tool calls, retries, errors
 ProgressHook = Callable[[str, str], None]
@@ -29,6 +30,9 @@ class AgentRequest:
     # to temperature and the request body.
     settings: ModelConfig
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Whoever is keeping an account of what this agent does. Silence by default:
+    # the tool keeps none of it, and a runner reports the same way regardless.
+    observer: AgentObserver = SILENT
 
     @property
     def terminal_name(self) -> str:
