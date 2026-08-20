@@ -11,6 +11,34 @@ disagree, and then puts the wheel on [PyPI][pypi] and the image on
 [docker]: https://hub.docker.com/r/axazeano/roboviewer
 [semver]: https://semver.org
 
+## 0.2.0 — 2026-08-20
+
+The provider moves into a file of its own, so the file you copy cannot carry a
+key. Breaking for one path: a provider passed through `--config`.
+
+- **`[provider]` now lives in `~/.config/roboviewer/provider.toml`** and is read
+  from there on every run. A `--config` file carrying a `[provider]` section is
+  refused, with an error naming where the provider belongs. The two halves of
+  the old file had opposite lifetimes: the gateway is set once per machine,
+  while the reviewer and run settings get copied constantly — into experiments,
+  into write-ups that record how a run was configured — and every copy took the
+  key along. The file people pass around can no longer hold a secret, not by
+  convention but because such a file will not start a run.
+- **Nobody's setup breaks on upgrade.** A `config.toml` that still holds a
+  `[provider]` section keeps working, and every run says how to split it. Where
+  both files carry a provider, `provider.toml` wins and the leftover section is
+  called out rather than silently ignored.
+- **`ROBOVIEWER_PROVIDER_CONFIG` names the provider file** where there is no
+  `~/.config/roboviewer/` — a CI runner, a container. Without it the split would
+  have locked pipelines out: the jobs in the documentation passed everything
+  through `--config`.
+- **The key is no longer printed in any form.** `--check-provider` and
+  `--show-config` used to show the first four and last four characters. That is
+  eight characters of live key material in terminal scrollback, in screenshots
+  and in whatever CI keeps of a job's log. What is printed now is which file or
+  variable the key came from, which is what a 401 needs.
+- **`config.example.toml` is split** into it and `provider.example.toml`.
+
 ## 0.1.2 — 2026-08-17
 
 Distribution only: the Python package is what 0.1.1 shipped, with a new number

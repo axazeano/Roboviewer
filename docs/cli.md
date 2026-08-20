@@ -27,10 +27,12 @@ roboviewer -C ~/projects/app develop  # a repository living elsewhere
 | `--format md,html` | Which reports to write; HTML is one self-contained file |
 | `--language ru` | Language the model writes findings in |
 | `--fail-on major` | Exit 1 on a confirmed finding this bad or worse, so CI goes red |
-| `--config PATH` | Read this file instead of the one in `~/.config/roboviewer/` |
+| `--config PATH` | Read these settings instead of `~/.config/roboviewer/config.toml`; the provider still comes from `provider.toml`, and a `[provider]` section here is refused |
 | `--check-provider` | Diagnose the gateway and stop |
 
-`ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` cover `-C`/`-o` if you set them once.
+`ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` cover `-C`/`-o` if you set them once,
+and `ROBOVIEWER_PROVIDER_CONFIG` names the provider file where there is no
+`~/.config/roboviewer/` — a runner, a container.
 `--help` has the rest.
 
 Most of what fits a tool to a model is a config setting rather than a flag, and

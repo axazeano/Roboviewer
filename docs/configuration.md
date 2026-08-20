@@ -1,30 +1,43 @@
 # Configuration
 
-Where the config file lives, what its sections mean, and how to find out whether
-the gateway on the other end can actually run a review.
+Where the two config files live, what their sections mean, and how to find out
+whether the gateway on the other end can actually run a review.
 
-## The file
+## Two files
 
 ```bash
 mkdir -p ~/.config/roboviewer
-cp config.example.toml ~/.config/roboviewer/config.toml
-export ROBOVIEWER_API_KEY=...
+cp provider.example.toml ~/.config/roboviewer/provider.toml
+cp config.example.toml   ~/.config/roboviewer/config.toml
 ```
 
-Set `provider.base_url` and `reviewer.model`. Everything else has working
-defaults and is documented inline in
-[config.example.toml](../config.example.toml).
+`provider.toml` is how to reach the gateway — address, key, auth. It is set once
+per machine and then left alone.
 
-The file has two kinds of section. `[provider]` is how to reach the gateway —
-address, key, auth — and is usually set once by whoever runs it. `[reviewer]`
-and `[judge]` are what to ask of a model, and are what you turn while fitting
-the tool to one. Leave `[judge]` out entirely and the judge runs on the
-reviewer's settings; that absence is the only way to say "the same", so no
-value in the file secretly means "inherit".
+`config.toml` is what to ask of a model: `[reviewer]`, `[judge]` and `[run]`.
+This is the half you turn while fitting the tool to a model, and the half that
+gets copied — into an experiment, into a write-up that records how a run was
+configured. Leave `[judge]` out entirely and the judge runs on the reviewer's
+settings; that absence is the only way to say "the same", so no value in the
+file secretly means "inherit".
 
-That path is the only file a run reads on its own. `--config PATH` reads a
-different one **instead of** it, not on top of it, so the file you name carries
-everything the run needs. `--show-config` prints which file is in use.
+The split is not tidiness. While the two lived in one file, every copy of the
+settings carried the key along with them. Now the file people pass around cannot
+hold one: **a `--config` file containing a `[provider]` section is refused**, and
+the error says where the provider belongs.
+
+`--config PATH` reads a different settings file **instead of** the one in
+`~/.config/roboviewer/`, not on top of it — but it never changes where the
+provider comes from. `--show-config` prints both files and which half came from
+which.
+
+### Coming from a single file
+
+A `config.toml` that still has a `[provider]` section keeps working, and every
+run says how to split it. Move the section into `provider.toml`, delete it from
+`config.toml`, and the notice stops. If both files carry a provider, the one in
+`provider.toml` wins and the leftover section is called out rather than silently
+ignored.
 
 Prompts and templates follow the opposite rule, even though `.roboviewer/` holds
 all three — see [Tuning](tuning.md).

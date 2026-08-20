@@ -49,6 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Environment variables:\n"
             "  ROBOVIEWER_REPO    default repository (when -C is not given)\n"
             "  ROBOVIEWER_OUTPUT  where reports go (when --output is not given)\n"
+            "  ROBOVIEWER_PROVIDER_CONFIG  the provider file, for a runner or a\n"
+            "                     container with no ~/.config/roboviewer/\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -87,8 +89,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help=(
             "Read this file instead of ~/.config/roboviewer/config.toml. It "
-            "replaces that file rather than adding to it, so it carries every "
-            "setting the run needs"
+            "replaces that file rather than adding to it, and carries "
+            "[reviewer], [judge] and [run] — the provider is read from "
+            "~/.config/roboviewer/provider.toml either way, so a file passed "
+            "here can be shared without carrying a key"
         ),
     )
     parser.add_argument("--checklist", help="Directory holding the checklist items")
@@ -230,7 +234,7 @@ def _execute(
     if args.check_provider:
         from .diagnose import check_provider
 
-        return check_provider(cfg.provider, cfg.reviewer.model)
+        return check_provider(cfg.provider, cfg.reviewer.model, cfg.provider_source)
 
     items = _checklist(cfg, root, args.only)
     if args.list_items:

@@ -1,11 +1,14 @@
 """Which file a run's settings came from.
 
-One file, so the useful questions are narrow: that the default location is read
-when nothing names another, that `--config` replaces it instead of stacking on
-top of it, and that a file sitting in the reviewed repository is not picked up
-behind anyone's back. The last one used to be a feature, and a run that quietly
-reads settings out of the repository under review is exactly the surprise this
-is here to prevent coming back.
+Two files now, split so the half that gets copied around cannot carry the key:
+the provider has a file of its own, and a `--config` file holding a `[provider]`
+section is refused rather than honoured. The rest of the questions are the old
+ones: that the default location is read when nothing names another, that
+`--config` replaces it instead of stacking on top of it, and that a file sitting
+in the reviewed repository is not picked up behind anyone's back. The last one
+used to be a feature, and a run that quietly reads settings out of the
+repository under review is exactly the surprise this is here to prevent coming
+back.
 """
 
 from __future__ import annotations
@@ -16,7 +19,12 @@ from pathlib import Path
 import pytest
 
 from roboviewer.cli import main
-from roboviewer.config import Config, home_config_path, load_config
+from roboviewer.config import (
+    Config,
+    home_config_path,
+    load_config,
+    provider_config_path,
+)
 
 HOME_CONFIG = """\
 [provider]
@@ -39,11 +47,105 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
 
 
+PROVIDER_CONFIG = """\
+base_url = "https://provider.internal/v1"
+"""
+
+
 def write_home_config(text: str = HOME_CONFIG) -> Path:
     path = home_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return path
+
+
+def write_provider_config(text: str = PROVIDER_CONFIG) -> Path:
+    path = provider_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+# ------------------------------------------------------- the provider is a file of its own
+
+
+def test_the_provider_comes_from_its_own_file() -> None:
+    provider = write_provider_config()
+    write_home_config(OTHER_CONFIG)
+
+    cfg = load_config()
+
+    assert cfg.provider.base_url == "https://provider.internal/v1"
+    assert cfg.provider_source == str(provider)
+    assert cfg.reviewer.model == "named-model"
+
+
+def test_a_named_file_carrying_a_provider_is_refused(tmp_path: Path) -> None:
+    """The whole point of the split: the file people copy into an experiment or
+    a write-up must not be able to hold a key, and saying so late — after the
+    copy exists — is saying it too late."""
+    write_provider_config()
+    named = tmp_path / "experiment.toml"
+    named.write_text(HOME_CONFIG, encoding="utf-8")
+
+    with pytest.raises(ValueError) as exc:
+        load_config(named)
+
+    assert "[provider]" in str(exc.value)
+    assert str(provider_config_path()) in str(exc.value)
+
+
+def test_a_named_file_without_a_provider_runs_on_the_provider_file(
+    tmp_path: Path,
+) -> None:
+    write_provider_config()
+    named = tmp_path / "experiment.toml"
+    named.write_text(OTHER_CONFIG, encoding="utf-8")
+
+    cfg = load_config(named)
+
+    assert cfg.reviewer.model == "named-model"
+    assert cfg.provider.base_url == "https://provider.internal/v1"
+
+
+def test_the_combined_file_still_works_and_says_how_to_split_it() -> None:
+    """Upgrading must not break a machine that is already set up. It may say
+    something, and it does — silence would leave the key where it is."""
+    path = write_home_config()
+
+    cfg = load_config()
+
+    assert cfg.provider.base_url == "https://gateway.internal/v1"
+    assert cfg.provider_source == str(path)
+    assert cfg.provider_notice is not None
+    assert str(provider_config_path()) in cfg.provider_notice
+
+
+def test_a_runner_names_the_provider_file_through_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CI has no home config, and the provider is the one thing it cannot do
+    without. Without this the split would simply lock a pipeline out."""
+    named = tmp_path / "ci-provider.toml"
+    named.write_text('base_url = "https://runner.internal/v1"\n', encoding="utf-8")
+    monkeypatch.setenv("ROBOVIEWER_PROVIDER_CONFIG", str(named))
+    write_home_config(OTHER_CONFIG)
+
+    cfg = load_config()
+
+    assert cfg.provider.base_url == "https://runner.internal/v1"
+    assert cfg.provider_source == str(named)
+
+
+def test_the_provider_file_wins_over_a_section_left_behind() -> None:
+    write_provider_config()
+    write_home_config()
+
+    cfg = load_config()
+
+    assert cfg.provider.base_url == "https://provider.internal/v1"
+    assert cfg.provider_notice is not None
+    assert "ignored" in cfg.provider_notice
 
 
 # ------------------------------------------------------------------ which file is read
@@ -137,7 +239,11 @@ def test_show_config_says_so_when_there_is_no_file(
 ) -> None:
     assert main(["--show-config"]) == 0
 
-    assert "everything on defaults" in capsys.readouterr().out
+    # Two files now, so the line says which half is on defaults rather than
+    # claiming the whole configuration is.
+    out = capsys.readouterr().out
+    assert "settings on defaults" in out
+    assert "provider on defaults" in out
 
 
 # ------------------------------------------------------------------ keys nobody reads

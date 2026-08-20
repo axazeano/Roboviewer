@@ -156,9 +156,10 @@ the reports stay on your side, as mounts.
 ```bash
 docker run --rm \
   -v "$PWD:/repo" \
+  -v ~/.config/roboviewer/provider.toml:/provider.toml:ro \
   -v ~/.config/roboviewer/config.toml:/config.toml:ro \
   -v "$PWD/.roboviewer:/out" \
-  -e ROBOVIEWER_API_KEY \
+  -e ROBOVIEWER_API_KEY -e ROBOVIEWER_PROVIDER_CONFIG=/provider.toml \
   axazeano/roboviewer:latest develop --config /config.toml --output /out
 ```
 
@@ -174,13 +175,19 @@ the version it was reviewed with.
 
 ```bash
 mkdir -p ~/.config/roboviewer
-cp config.example.toml ~/.config/roboviewer/config.toml
+cp provider.example.toml ~/.config/roboviewer/provider.toml
+cp config.example.toml   ~/.config/roboviewer/config.toml
 export ROBOVIEWER_API_KEY=...
 roboviewer --check-provider
 ```
 
 Set `provider.base_url` and `reviewer.model`. Everything else has working
-defaults and is documented inline in [config.example.toml](config.example.toml).
+defaults and is documented inline in
+[provider.example.toml](provider.example.toml) and
+[config.example.toml](config.example.toml).
+
+The provider lives in its own file so the settings file stays safe to copy: a
+`--config` file carrying a `[provider]` section is refused.
 `--check-provider` makes a handful of targeted requests and names what is wrong
 — wrong auth scheme, a `base_url` missing `/v1`, a gateway that cannot do tool
 calling — instead of leaving you to infer it from eight agents failing at once.

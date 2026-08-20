@@ -2,9 +2,10 @@
 #
 #   docker run --rm \
 #     -v "$PWD:/repo" \
+#     -v ~/.config/roboviewer/provider.toml:/provider.toml:ro \
 #     -v ~/.config/roboviewer/config.toml:/config.toml:ro \
 #     -v "$PWD/.roboviewer:/out" \
-#     -e ROBOVIEWER_API_KEY \
+#     -e ROBOVIEWER_API_KEY -e ROBOVIEWER_PROVIDER_CONFIG=/provider.toml \
 #     axazeano/roboviewer:latest develop --config /config.toml --output /out
 
 # Alpine rather than slim: on Debian the git package pulls in perl, and perl is

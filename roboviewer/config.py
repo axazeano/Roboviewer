@@ -1,16 +1,26 @@
 """Configuration loading.
 
-One file, and the file you can point at:
+Two files, split by how long a setting lives:
+
+    provider.toml   the gateway and its key — set once per machine
+    config.toml     reviewer, judge and run — turned constantly, and copied
+                    into experiments and write-ups along the way
 
     built-in defaults
-    → ~/.config/roboviewer/config.toml, or the file --config names instead
+    → ~/.config/roboviewer/provider.toml          (the provider, always)
+    → ~/.config/roboviewer/config.toml, or --config (everything else)
     → CLI flags
 
-`--config` replaces rather than adds. Settings used to arrive from three files
-merged key by key, which meant the value in effect was written down nowhere: to
-answer "which endpoint is this run using" you had to read three files and
-reproduce the merge. Flags over a file stay, because a flag is visible in the
-command that produced the run.
+The split is not tidiness. The settings half gets copied wherever a run has to
+be written down; while the credentials shared a file with it, every copy
+carried the key. A `[provider]` section in a `--config` file is refused, so the
+file people pass around cannot hold a secret in the first place.
+
+`--config` still replaces rather than adds, for the half it covers. Settings
+used to arrive from three files merged key by key, which meant the value in
+effect was written down nowhere: to answer "which endpoint is this run using"
+you had to read three files and reproduce the merge. Flags over a file stay,
+because a flag is visible in the command that produced the run.
 """
 
 from __future__ import annotations
@@ -142,7 +152,14 @@ class ProviderConfig(BaseModel):
     terminal_tool_choice: Literal["forced", "required", "auto"] = "forced"
 
     def api_key_source(self) -> tuple[str | None, str]:
-        """(key, where it came from) — the source is what matters when debugging 401."""
+        """(key, where it came from).
+
+        The source is the whole of what gets printed. Nothing derived from the
+        key itself is — not the ends of it, not a digest, not its length: a
+        terminal keeps scrollback, a screenshot outlives the terminal, and a CI
+        job keeps its log. "Which file or variable did this come from" is the
+        question a 401 actually needs answered.
+        """
         if self.api_key:
             return self.api_key, "provider.api_key from the config"
         from_env = os.environ.get(self.api_key_env)
@@ -175,15 +192,6 @@ class ProviderConfig(BaseModel):
         if self.auth_header.lower() != "authorization" and _OMIT is not None:
             headers["Authorization"] = _OMIT
         return headers
-
-    def masked_key(self) -> str:
-        key, _ = self.api_key_source()
-        if not key:
-            return "—"
-        # Show the tail so two similar keys can be told apart without revealing either.
-        if len(key) <= 12:
-            return f"(short, {len(key)} chars)"
-        return f"{key[:4]}…{key[-4:]} ({len(key)} chars)"
 
     def terminal_tool_choice_value(self, tool_name: str) -> Any:
         if self.terminal_tool_choice == "forced":
@@ -265,8 +273,16 @@ class Config(BaseModel):
     # fields with three different spellings of "unset" is what this replaced.
     judge: ModelConfig | None = None
     run: RunConfig = Field(default_factory=RunConfig)
-    # The file this came from; None means nothing but the defaults below.
+    # The file the settings came from; None means nothing but the defaults below.
     source: str | None = None
+    # The file the provider came from, which is a different file and may be
+    # absent independently. Excluded from the model's own validation: both are
+    # set after parsing, by the loader that knows which file it read.
+    provider_source: str | None = None
+    # Set when the provider was found in the legacy combined file. Carried on
+    # the config rather than printed at load time so the CLI decides where a
+    # notice belongs, and nothing prints from inside a parser.
+    provider_notice: str | None = None
 
     def for_judge(self) -> ModelConfig:
         return self.judge or self.reviewer
@@ -293,6 +309,23 @@ def home_config_path() -> Path:
     return Path.home() / ".config" / "roboviewer" / "config.toml"
 
 
+PROVIDER_CONFIG_ENV = "ROBOVIEWER_PROVIDER_CONFIG"
+
+
+def provider_config_path() -> Path:
+    """Where the provider is read from.
+
+    A CI runner and a container have no home config to speak of, and the
+    provider is the one thing they cannot do without. The variable is how they
+    say where it is — the same shape as ROBOVIEWER_REPO and ROBOVIEWER_OUTPUT,
+    rather than a second `--config`-looking flag to confuse with the first.
+    """
+    named = os.environ.get(PROVIDER_CONFIG_ENV)
+    if named:
+        return Path(named).expanduser()
+    return Path.home() / ".config" / "roboviewer" / "provider.toml"
+
+
 def _moved_hint(exc: ValidationError) -> str:
     """Names the new home of every moved key the file still uses."""
     hits = [
@@ -306,27 +339,84 @@ def _moved_hint(exc: ValidationError) -> str:
 
 
 def load_config(explicit: Path | None = None) -> Config:
-    """The one file a run reads, or the defaults when there is none.
+    """The settings file, the provider file, or the defaults when there is neither.
 
     An absent home file is normal — the defaults are a working configuration
     apart from the provider. An absent `--config` is a typo: somebody named a
     file, and quietly running on something else is the wrong kindness.
     """
-    if explicit is None:
-        path = home_config_path()
-        if not path.is_file():
-            return Config()
-    else:
-        path = explicit.expanduser().resolve()
-        if not path.is_file():
-            raise FileNotFoundError(f"Config not found: {path}")
+    path = _settings_path(explicit)
+    raw = _read(path) if path is not None else {}
 
-    with path.open("rb") as fh:
-        raw = tomllib.load(fh)
+    provider_raw = raw.pop("provider", None)
+    if provider_raw is not None and explicit is not None:
+        # A file in the old shape also has a [provider] section, and there the
+        # useful answer is where every key went — not that one section sits in
+        # the wrong file. Validate the whole thing first: if it is merely old,
+        # that raises with the full list, and the reader gets all of it at once.
+        _validate({**raw, "provider": provider_raw}, path)
+        raise ValueError(
+            f"{path} carries a [provider] section.\n"
+            f"  The provider lives in {provider_config_path()} and is read from there "
+            f"on every run.\n"
+            f"  A file passed with --config holds [reviewer], [judge] and [run] only, "
+            f"so it can be copied into an experiment or a write-up without carrying "
+            f"a key with it."
+        )
 
-    try:
-        cfg = Config.model_validate(raw)
-    except ValidationError as exc:
-        raise ValueError(f"{exc}{_moved_hint(exc)}") from exc
-    cfg.source = str(path)
+    cfg = _validate(raw, path)
+    cfg.source = str(path) if path is not None else None
+    _attach_provider(cfg, provider_raw, path)
     return cfg
+
+
+def _settings_path(explicit: Path | None) -> Path | None:
+    if explicit is None:
+        home = home_config_path()
+        return home if home.is_file() else None
+    path = explicit.expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Config not found: {path}")
+    return path
+
+
+def _read(path: Path) -> dict[str, Any]:
+    with path.open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def _validate(raw: dict[str, Any], path: Path | None) -> Config:
+    try:
+        return Config.model_validate(raw)
+    except ValidationError as exc:
+        where = f"{path}: " if path is not None else ""
+        raise ValueError(f"{where}{exc}{_moved_hint(exc)}") from exc
+
+
+def _attach_provider(cfg: Config, legacy: dict[str, Any] | None, path: Path | None) -> None:
+    """The provider comes from its own file; the combined file is the fallback.
+
+    Both present is not an error but it is worth saying out loud: the section
+    left behind in the old file is doing nothing, and silence there is how a run
+    ends up on an endpoint nobody expected.
+    """
+    own = provider_config_path()
+    if own.is_file():
+        cfg.provider = _validate({"provider": _read(own)}, own).provider
+        cfg.provider_source = str(own)
+        if legacy is not None:
+            cfg.provider_notice = (
+                f"[provider] in {path} is ignored — the provider comes from {own}. "
+                f"Delete the section to stop the two from disagreeing."
+            )
+        return
+
+    if legacy is not None:
+        cfg.provider = _validate({"provider": legacy}, path).provider
+        cfg.provider_source = str(path)
+        cfg.provider_notice = (
+            f"The provider still lives in {path}, together with settings that get "
+            f"copied around. Move the [provider] section to {own} — a file with "
+            f"nothing else in it has no reason to be copied, and cannot take a key "
+            f"along when it is."
+        )

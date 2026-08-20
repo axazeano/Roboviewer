@@ -15,7 +15,13 @@ from pathlib import Path
 
 from . import gate, sources
 from .checklist import ChecklistItem
-from .config import Config, ModelConfig, RateLimits, home_config_path
+from .config import (
+    Config,
+    ModelConfig,
+    RateLimits,
+    home_config_path,
+    provider_config_path,
+)
 from .events import Event
 from .gitdiff import DiffBundle
 from .models import SEVERITY_LABEL, Finding, ReviewRun
@@ -37,6 +43,10 @@ def run_header(cfg: Config) -> None:
     # The file, not a count: when a run goes to an endpoint nobody expected,
     # this is the line that says which file sent it there.
     print(f"▸ {cfg.reviewer.model} @ {origin} · config: {cfg.source or 'built-in defaults'}")
+    # A provider still sharing a file with the settings is worth one line before
+    # the run rather than a page in the docs nobody opens twice.
+    if cfg.provider_notice:
+        print(f"⚠ {cfg.provider_notice}")
 
 
 def event(entry: Event, verbose: bool = False) -> None:
@@ -119,20 +129,35 @@ def config(cfg: Config, root: Path) -> None:
 
 
 def _config_source(cfg: Config) -> None:
+    """Two files, named separately.
+
+    Which file a setting came from is the question this section exists to
+    answer, and "the config" stopped being a single answer.
+    """
     print("Config:")
     if cfg.source is None:
-        print(f"  · {home_config_path()}   [no file — everything on defaults]")
-        return
-    origin = "default location" if cfg.source == str(home_config_path()) else "--config"
-    print(f"  ✓ {cfg.source}   [{origin}]")
+        print(f"  · {home_config_path()}   [no file — settings on defaults]")
+    else:
+        origin = "default location" if cfg.source == str(home_config_path()) else "--config"
+        print(f"  ✓ {cfg.source}   [{origin}, settings]")
+
+    own = provider_config_path()
+    if cfg.provider_source is None:
+        print(f"  · {own}   [no file — provider on defaults]")
+    elif cfg.provider_source == str(own):
+        print(f"  ✓ {cfg.provider_source}   [default location, provider]")
+    else:
+        print(f"  ✓ {cfg.provider_source}   [provider, from the combined file]")
+
+    if cfg.provider_notice:
+        print(f"  ⚠ {cfg.provider_notice}")
 
 
 def _provider(cfg: Config) -> None:
     _, key_source = cfg.provider.api_key_source()
     print("Provider:")
     print(f"  base_url     {cfg.provider.base_url}")
-    print(f"  key          {cfg.provider.masked_key()}")
-    print(f"  source       {key_source}")
+    print(f"  key          {key_source}")
     print(f"  pacing       {_pacing(cfg.provider.rate_limits)}")
 
 
