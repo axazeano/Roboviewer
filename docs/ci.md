@@ -23,13 +23,20 @@ Both runners clone shallow by default, and the branch point is usually missing
 from such a clone: give the job full history, or the run stops on code `2`
 saying so.
 
-A runner has no `~/.config/roboviewer/config.toml`, so the pipeline has to say
-where its settings are. Commit a config into the repository — `.roboviewer/`
-next to the run output is the obvious place — and name it with `--config`, and
-then the pipeline and everyone's laptop read the same file. Nothing is picked
-up implicitly: a file inside the repository under review is read when the
-command line names it and not otherwise. The key stays out of it and arrives as
-`ROBOVIEWER_API_KEY`.
+A runner has no `~/.config/roboviewer/`, so the pipeline has to say where both
+files are.
+
+Commit the settings into the repository — `.roboviewer/config.toml`, next to the
+run output, is the obvious place — and name it with `--config`. Then the
+pipeline and everyone's laptop read the same file. Nothing is picked up
+implicitly: a file inside the repository under review is read when the command
+line names it and not otherwise.
+
+The provider does not go in that file, and a `[provider]` section there is
+refused — which is the point, since that file is committed. Commit a
+`provider.toml` holding the address and `api_key_env` only, point
+`ROBOVIEWER_PROVIDER_CONFIG` at it, and let the key arrive as
+`ROBOVIEWER_API_KEY` from the masked variable.
 
 ## GitLab
 
@@ -41,6 +48,7 @@ review:
   variables:
     GIT_DEPTH: 0                       # the branch point has to exist locally
     ROBOVIEWER_API_KEY: $LLM_API_KEY
+    ROBOVIEWER_PROVIDER_CONFIG: .roboviewer/provider.toml
   script:
     - pip install -q git+https://github.com/axazeano/Roboviewer.git
     - roboviewer --config .roboviewer/config.toml --format md,codequality --fail-on blocker
@@ -72,6 +80,8 @@ jobs:
         with: { fetch-depth: 0 }
       - run: pip install -q git+https://github.com/axazeano/Roboviewer.git
       - run: roboviewer --config .roboviewer/config.toml --format md,sarif --fail-on blocker
+        env:
+          ROBOVIEWER_PROVIDER_CONFIG: .roboviewer/provider.toml
         env:
           ROBOVIEWER_API_KEY: ${{ secrets.LLM_API_KEY }}
       - if: always()

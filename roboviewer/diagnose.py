@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 from openai import APIError, APIStatusError, AsyncOpenAI
 
-from .config import ProviderConfig
+from .config import ProviderConfig, provider_config_path
 
 _SECRET_HEADERS = ("authorization", "api-key", "x-api-key", "token", "cookie", "secret")
 
@@ -321,13 +321,14 @@ def _recommend_terminal_choice(working: list[str]) -> None:
         print("  Raising max_turns helps.")
 
 
-def check_provider(provider: ProviderConfig, model: str) -> int:
+def check_provider(provider: ProviderConfig, model: str, source: str | None = None) -> int:
     """The model is passed in rather than read off the provider: reaching the
     gateway and choosing what to ask it are two settings now, and the probe
     needs one name out of the second."""
     key, source = provider.api_key_source()
 
     print("Provider")
+    print(f"  from           {source or provider_config_path()} [no file — on defaults]")
     print(f"  base_url       {provider.base_url}")
     print(f"  model          {model}")
     print(f"  key            {provider.masked_key()}")
@@ -341,7 +342,8 @@ def check_provider(provider: ProviderConfig, model: str) -> int:
 
     if key is None:
         print("✗ No key found — there is nothing to make a request with.")
-        print(f"  Set provider.api_key in the config or the {provider.api_key_env} variable.")
+        print(f"  Set api_key in {provider_config_path()}, or the "
+              f"{provider.api_key_env} variable.")
         return 2
     if key != key.strip():
         print("⚠ The key has spaces or a newline at its edges — a common cause of 401.")

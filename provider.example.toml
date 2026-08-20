@@ -1,0 +1,68 @@
+# Copy to ~/.config/roboviewer/provider.toml — how to reach the gateway, and
+# nothing else. Set once per machine and then left alone.
+#
+# It lives apart from config.toml on purpose. The settings file gets copied —
+# into an experiment, into a write-up recording how a run was configured — and
+# while the key shared a file with them, every copy carried it. This file has no
+# reason to be copied anywhere, and --config refuses a [provider] section
+# outright, so the file people pass around cannot hold a key.
+
+# OpenAI-compatible endpoint of the custom provider
+base_url = "https://your-gateway.example.com/v1"
+# By default the key comes from an environment variable
+api_key_env = "ROBOVIEWER_API_KEY"
+# ...or is set right here, which takes precedence over the variable.
+# Handy while debugging; make sure a file holding the key never reaches git.
+# api_key = "sk-..."
+timeout_s = 300
+max_retries = 3
+# Set to false if the gateway cannot handle several tool_calls in one response
+parallel_tool_calls = true
+
+# How to pass the key. Defaults to the OpenAI way: Authorization: Bearer <key>.
+# Valid key + valid address but still 401 — almost always this.
+#   auth_header = "api-key"    + auth_scheme = ""      → api-key: <key>
+#   auth_header = "X-Api-Key"  + auth_scheme = ""      → X-Api-Key: <key>
+#   auth_scheme = "Token"                              → Authorization: Token <key>
+# When auth_header is not Authorization, the built-in Bearer header is not sent at all.
+auth_header = "Authorization"
+auth_scheme = "Bearer"
+
+# How the agent is pushed to submit its result on the final turn.
+#   "forced"   — tool_choice = {"type": "function", ...}, names the exact tool
+#   "required" — tool_choice = "required", any tool but at least one
+#   "auto"     — no pressure; relies on the plain-text JSON fallback
+# Lower it only if `roboviewer --check-provider` reports the gateway rejects the
+# stronger mode — it prints the recommended value.
+terminal_tool_choice = "forced"
+
+# Extra headers, if the gateway requires them
+# [extra_headers]
+# X-Project = "roboviewer"
+
+# How much of the provider one run may take per minute.
+#
+# A review is a burst: several checklist items run at once, each resending a
+# large context every turn. Serverless providers meter that per minute and
+# answer 429, and retrying into a full bucket does not help — the request has to
+# be held back before it is sent.
+#
+# Nothing here needs setting for the common case. A 429 (or a 503, which is the
+# same message with a different number) already holds every agent back, not only
+# the one that was refused, and most providers advertise their current ceilings
+# on every response — adopt_advertised picks those up, which beats a figure
+# typed here months ago on a plan whose limits move with usage.
+#
+# Fill these in when the provider does not advertise, or to stay deliberately
+# under what you are entitled to. Zero means "not known", not "none". The
+# buckets are separate because providers meter them separately: Fireworks, for
+# example, defaults to 21.6M total prompt, 5.4M uncached prompt and 216k
+# generated tokens per minute — the uncached one being the tightest by a factor
+# of four, and exactly the one a shared prompt prefix is designed to stay under.
+# [rate_limits]
+# prompt_tokens_per_minute = 21600000
+# uncached_prompt_tokens_per_minute = 5400000
+# generated_tokens_per_minute = 216000
+# requests_per_minute = 0
+# adopt_advertised = true
+
