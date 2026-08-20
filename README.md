@@ -159,12 +159,16 @@ docker run --rm \
   -v ~/.config/roboviewer/config.toml:/config.toml:ro \
   -v "$PWD/.roboviewer:/out" \
   -e ROBOVIEWER_API_KEY \
-  axazeano/roboviewer:0.1.2 develop --config /config.toml --output /out
+  axazeano/roboviewer:latest develop --config /config.toml --output /out
 ```
 
 Mount the repository with its history — a shallow clone has no merge base to
 diff against. The image runs as an unprivileged user; on Linux add
 `--user "$(id -u):$(id -g)"` so the reports it writes belong to you.
+
+`latest` is what you want at a keyboard. A pipeline should name a release —
+`axazeano/roboviewer:0.1.2` — so that a rerun of an old commit reviews it with
+the version it was reviewed with.
 
 ## Configure
 
@@ -217,6 +221,7 @@ would be reviewed without spending tokens. Every flag:
 | [Output language](docs/language.md) | Findings in a language other than English |
 | [Tuning](docs/tuning.md) | Prompts, how many agents, thinking, the turn limit |
 | [Measurements](docs/measurements.md) | What it finds and gets wrong, per model and checklist size |
+| [Watching a run](docs/research.md) | What the agents did with the context: the log, the page, the command |
 
 [docs/](docs/) also carries the tooling baseline and how the measurement corpus
 is built.

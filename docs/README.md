@@ -28,3 +28,4 @@ that is here.
 | [Measurements](measurements.md) | Recall and false positives per model, checklist size and sampling, with the settings behind each run |
 | [Baseline](baseline.md) | Tool counts before and after the simplification work |
 | [Building the corpus](corpus.md) | Fetching real merge requests to measure the review against |
+| [Watching a run](research.md) | What the agents did with the context: the log, the page, the command that keeps both |

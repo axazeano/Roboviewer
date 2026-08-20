@@ -38,6 +38,26 @@ token bill — at the cost of each agent holding more objectives at once. Smalle
 models tend to lose the later aspects when asked to hold many. Compare the
 `report.md` tables to see how the trade lands on your model.
 
+## Reading what the agents actually did
+
+When a prompt change moves the findings, the report will not say why. Run the
+review through the research package instead and it keeps an account of itself:
+
+```bash
+python -m research review develop
+```
+
+`trace.html` lands beside the report: per checklist item, the prompt the agent
+was given, then turn by turn what it said and which files it opened, searched or
+listed, and the verdict it came back with. That is where the reason usually is —
+an agent that greps instead of opening the file it was handed, one that spends
+six of its turns in one place, one that starts concluding before it has read
+anything.
+
+It also answers the question the report cannot: which changed files were opened
+at all. A file nobody opened and nobody reported is not a file that came back
+clean. See [Watching a run](research.md).
+
 ## Speed
 
 A slow run is rarely slow for the reason it looks like. Resending the same

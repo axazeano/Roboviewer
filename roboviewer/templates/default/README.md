@@ -8,7 +8,9 @@ so in HTML it must not become markup.
 A custom set is pointed at by `templates_dir` in the config, or picked up from
 `.roboviewer/templates/` inside the reviewed repository. Lookup is per file:
 what you do not provide comes from the bundle, so an overridden `report.md.j2`
-can still import the bundled `_finding.md.j2`.
+can still import the bundled `_finding.md.j2`. A document outside the tool works
+the same way — `research/templates/` carries its own page and takes
+`_layout.html.j2` and `_styles.css.j2` from here.
 
 Which reports a run writes is `report_formats` in the config, or `--format
 md,html`. A format is a module in `roboviewer/renders/`, one file per format —
@@ -86,6 +88,7 @@ Filters:
 | `thousands` | `167100` → `167 100` |
 | `percent` | `0.67` → `67%` |
 | `fixed` | `74.4` → `74`, `fixed(1)` → `74.4` |
+| `size` | `6543` → `6.4 KB`, `812` → `812 B` |
 | `blockquote` | multi-line text → every line prefixed with `> ` |
 | `markdown` | markdown → HTML, HTML templates only |
 

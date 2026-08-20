@@ -20,6 +20,11 @@ else:
 Ignoring `.roboviewer/` wholesale takes the committed config down with it, and
 git says nothing when it does.
 
+What a run *did* — the prompt each agent was given, what it opened, where its
+turns went — is not written here and is not written by a review at all. It is a
+question for tuning rather than for reading a report, and the instrument that
+answers it lives beside the tool: [Watching a run](research.md).
+
 ## Formats
 
 `--format` picks what a run writes. One file per format in
