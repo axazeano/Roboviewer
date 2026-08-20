@@ -74,6 +74,13 @@ No app to install on your organisation, no webhooks, no permissions to request.
 and let the humans spend their attention on design instead of on the bug you
 would have caught yourself.
 
+**The change is the scope, not the file.** It reports what the diff introduces
+and what the diff breaks, and it draws that line by consequence rather than by
+authorship. If the changed code now calls into something that was already
+broken, that call is a finding: the branch is what ships, and the code having
+been wrong before this MR does not make it work now. Long-standing problems the
+change does not touch stay out.
+
 **A ranked list you can act on.** Findings carry a severity, a file and a line,
 and a final judge pass throws out the ones that do not survive a second look —
 between 6% and 54% of them, depending on how noisy the model is. What survives
@@ -225,6 +232,12 @@ is built.
   against it surfaced between 6% and 48% of the known defects depending on the
   model and the checklist, and it has no idea whether the feature was worth
   building.
+- It does not try to reproduce a human review, and nothing here measures how
+  closely it agrees with one. Overlap with reviewer comments would measure
+  similarity, not correctness — the two miss different things, and a run that
+  matched a reviewer perfectly would have added nothing. It is measured against
+  defects established in the code, not against what somebody happened to write
+  in a comment thread.
 - It keeps no state between runs. Every run starts from the diff and nothing
   else, so in CI it reports the same findings again on every push — including
   the ones you have already read and decided to leave. Nothing in the tool

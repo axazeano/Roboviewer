@@ -202,6 +202,12 @@ and printed into the prompt; the models do not act on it.
   than pretending the lower bound is the answer.
 - **Opus ran without a judge.** Its output is raw finder output. It is here as
   a ceiling to measure against, not as a configuration of this tool.
+- **The yardstick is defects, not reviewer comments.** Every entry in the truth
+  set was established against the code and carries the evidence for it. None of
+  it comes from what a human reviewer happened to write on the merge request,
+  and no number here is an overlap-with-humans score — that would measure
+  similarity to a reviewer rather than correctness, and the two miss different
+  things.
 - **Severity is not stable.** The same defect comes back as `blocker` in one run
   and `minor` in the next — 1 of 7 repeated findings kept its severity on
   muse-glimmer, against 15 of 17 on Opus. Do not gate a pipeline on it yet.
