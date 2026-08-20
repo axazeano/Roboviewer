@@ -157,8 +157,7 @@ def _provider(cfg: Config) -> None:
     _, key_source = cfg.provider.api_key_source()
     print("Provider:")
     print(f"  base_url     {cfg.provider.base_url}")
-    print(f"  key          {cfg.provider.masked_key()}")
-    print(f"  source       {key_source}")
+    print(f"  key          {key_source}")
     print(f"  pacing       {_pacing(cfg.provider.rate_limits)}")
 
 

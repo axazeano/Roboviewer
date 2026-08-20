@@ -152,7 +152,14 @@ class ProviderConfig(BaseModel):
     terminal_tool_choice: Literal["forced", "required", "auto"] = "forced"
 
     def api_key_source(self) -> tuple[str | None, str]:
-        """(key, where it came from) — the source is what matters when debugging 401."""
+        """(key, where it came from).
+
+        The source is the whole of what gets printed. Nothing derived from the
+        key itself is — not the ends of it, not a digest, not its length: a
+        terminal keeps scrollback, a screenshot outlives the terminal, and a CI
+        job keeps its log. "Which file or variable did this come from" is the
+        question a 401 actually needs answered.
+        """
         if self.api_key:
             return self.api_key, "provider.api_key from the config"
         from_env = os.environ.get(self.api_key_env)
@@ -185,15 +192,6 @@ class ProviderConfig(BaseModel):
         if self.auth_header.lower() != "authorization" and _OMIT is not None:
             headers["Authorization"] = _OMIT
         return headers
-
-    def masked_key(self) -> str:
-        key, _ = self.api_key_source()
-        if not key:
-            return "—"
-        # Show the tail so two similar keys can be told apart without revealing either.
-        if len(key) <= 12:
-            return f"(short, {len(key)} chars)"
-        return f"{key[:4]}…{key[-4:]} ({len(key)} chars)"
 
     def terminal_tool_choice_value(self, tool_name: str) -> Any:
         if self.terminal_tool_choice == "forced":

@@ -331,8 +331,7 @@ def check_provider(provider: ProviderConfig, model: str, source: str | None = No
     print(f"  from           {source or provider_config_path()} [no file — on defaults]")
     print(f"  base_url       {provider.base_url}")
     print(f"  model          {model}")
-    print(f"  key            {provider.masked_key()}")
-    print(f"  key source     {source}")
+    print(f"  key            {source}")
     print(f"  auth           {provider.auth_header}: "
           f"{(provider.auth_scheme + ' ') if provider.auth_scheme else ''}<key>")
     print(f"  submission     terminal_tool_choice = \"{provider.terminal_tool_choice}\"")
