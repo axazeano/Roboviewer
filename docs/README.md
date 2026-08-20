@@ -27,3 +27,4 @@ that is here.
 | --- | --- |
 | [Baseline](baseline.md) | Tool counts before and after the simplification work |
 | [Building the corpus](corpus.md) | Fetching real merge requests to measure the review against |
+| [Watching a run](research.md) | What the agents did with the context: the log, the page, the command that keeps both |

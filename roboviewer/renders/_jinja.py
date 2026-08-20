@@ -81,6 +81,7 @@ def environment(directory: Path | None = None) -> Environment:
     env.filters["thousands"] = _thousands
     env.filters["percent"] = _percent
     env.filters["fixed"] = _fixed
+    env.filters["size"] = _size
     env.filters["blockquote"] = _blockquote
     env.filters["markdown"] = _markdown
     env.globals["SEVERITY_LABEL"] = SEVERITY_LABEL
@@ -149,6 +150,17 @@ def _percent(value: float) -> str:
 
 def _fixed(value: float, digits: int = 0) -> str:
     return f"{value:.{digits}f}"
+
+
+def _size(chars: int) -> str:
+    """A length of text as something a reader can weigh: "812 B", "6.4 KB".
+
+    Characters rather than bytes on disk: what is being weighed is text a model
+    was handed or handed back, and outside ASCII the two are not the same.
+    """
+    if chars < 1024:
+        return f"{chars} B"
+    return f"{chars / 1024:.1f} KB"
 
 
 def _blockquote(text: str, marker: str = "> ") -> str:
