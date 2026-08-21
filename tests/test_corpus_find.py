@@ -309,8 +309,10 @@ def test_the_stanza_parses_as_the_entry_the_fetcher_already_loads() -> None:
 
 
 def test_find_needs_a_token_and_says_so_instead_of_failing_at_the_wire(monkeypatch) -> None:
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.delenv("GH_TOKEN", raising=False)
+    """The resolver is patched rather than the environment: a token also comes
+    from whatever `gh` is logged in as, and clearing the environment alone left
+    this test making real requests."""
+    monkeypatch.setattr("corpus.cli.resolve_token", lambda: None)
 
     assert main(["find", "is:pr"]) == 2
 

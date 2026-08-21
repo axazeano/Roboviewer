@@ -179,7 +179,8 @@ not. Source-available terms are the ones that actually bite here, because they
 restrict use rather than distribution.
 
 A token is required here, unlike the rest of the command: the search API is
-GraphQL, and GraphQL refuses anonymous requests.
+GraphQL, and GraphQL refuses anonymous requests. It comes from the same three
+places as everywhere else — see [the token](#the-token).
 
 ## Where the corpus lives
 
@@ -217,10 +218,14 @@ the entry is built again.
 ## The token
 
 ```bash
-export GITHUB_TOKEN=ghp_...
+gh auth login          # or: export GITHUB_TOKEN=ghp_...
 ```
 
-Read from `GITHUB_TOKEN` or `GH_TOKEN`, and worth setting for two reasons.
+Read from `GITHUB_TOKEN`, then `GH_TOKEN`, then from whatever `gh auth login` is
+holding — a machine already set up for the GitHub CLI needs nothing further, and
+its token stays in the keyring rather than being copied into a shell profile. An
+explicit variable wins where both exist, because setting one is a deliberate
+choice: a CI job, or a second account. Worth having for two reasons.
 Anonymous requests are capped at sixty an hour, which a corpus of a dozen
 entries can reach. And thread resolution exists only in GitHub's GraphQL API,
 which never answers without a token: fetched anonymously, every thread is saved

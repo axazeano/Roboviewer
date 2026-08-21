@@ -9,6 +9,7 @@ is the rate limit rather than the entry that stopped it.
 from __future__ import annotations
 
 import json
+import subprocess
 from typing import Any
 
 import pytest
@@ -19,7 +20,9 @@ from corpus.github import (
     GitHubError,
     RateLimited,
     Response,
+    resolve_token,
     token_from_env,
+    token_from_gh,
 )
 
 PULL = parse_pull_url("https://github.com/psf/requests/pull/6800")
@@ -226,3 +229,43 @@ def test_a_403_that_is_not_the_rate_limit_is_not_reported_as_one() -> None:
 def test_a_refused_token_says_which_variable_to_look_at() -> None:
     with pytest.raises(GitHubError, match="GITHUB_TOKEN"):
         GitHub(token="stale", transport=refusing(401, {})).review_threads(PULL)
+
+
+# --------------------------------------------------------------- where a token comes from
+
+
+def gh_answering(stdout: str = "", returncode: int = 0):
+    def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        assert command == ["gh", "auth", "token"]
+        return subprocess.CompletedProcess(command, returncode, stdout=stdout, stderr="")
+
+    return runner
+
+
+def test_the_login_gh_already_holds_is_used_when_the_environment_is_empty() -> None:
+    """`gh` keeps its token in a keyring, not in the environment. Without this,
+    the answer to "you need a token" is to copy one out of `gh` into a shell
+    profile — a worse place for it than where it already is."""
+    assert resolve_token({}, gh_answering("gho_fromkeyring\n")) == "gho_fromkeyring"
+
+
+def test_an_explicit_variable_beats_whoever_is_logged_in() -> None:
+    """A variable is a deliberate choice: a CI job, or a second account."""
+    assert resolve_token({"GITHUB_TOKEN": "explicit"}, gh_answering("gho_other")) == "explicit"
+
+
+def test_every_way_gh_can_fail_is_the_same_answer() -> None:
+    """Missing, not logged in, or hanging: the caller has a good next step for
+    all three, and none of them is worth an error."""
+    assert token_from_gh(gh_answering(returncode=1)) is None
+    assert token_from_gh(gh_answering(stdout="  \n")) is None
+
+    def missing(command: list[str]) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(command[0])
+
+    def hanging(command: list[str]) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(command, 5.0)
+
+    assert token_from_gh(missing) is None
+    assert token_from_gh(hanging) is None
+    assert resolve_token({}, missing) is None

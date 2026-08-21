@@ -32,7 +32,7 @@ from .find import (
     propose_head,
     search,
 )
-from .github import GitHub, RateLimited, token_from_env
+from .github import GitHub, RateLimited, resolve_token
 from .store import UNKNOWN, Store, default_root
 
 OK = 0
@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         return SETUP
 
     store = Store(Path(args.corpus).expanduser() if args.corpus else default_root())
-    github = GitHub(token=token_from_env())
+    github = GitHub(token=resolve_token())
     _header(entries, store, github)
 
     results: list[Result] = []
@@ -119,10 +119,11 @@ def find_main(argv: list[str]) -> int:
     are printed so it can be made without opening the pull request.
     """
     args = find_parser().parse_args(argv)
-    github = GitHub(token=token_from_env())
+    github = GitHub(token=resolve_token())
     if github.token is None:
         print(
-            "  No token: search needs one. Set GITHUB_TOKEN or GH_TOKEN.",
+            "  No token: search is GraphQL and GraphQL needs one. Run `gh auth login`, "
+            "or set GITHUB_TOKEN.",
             file=sys.stderr,
         )
         return SETUP
@@ -233,7 +234,7 @@ def _header(entries: list[Entry], store: Store, github: GitHub) -> None:
     if not github.resolution_known:
         print(
             "  No token: 60 requests an hour, and thread resolution cannot be "
-            "read. Set GITHUB_TOKEN for both."
+            "read. Run `gh auth login`, or set GITHUB_TOKEN, for both."
         )
 
 
