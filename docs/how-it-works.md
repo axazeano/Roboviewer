@@ -15,6 +15,18 @@ mentions. It reads the resource files excluded from the review context — the
 right thing to search, the wrong thing to show a model — and the result goes
 into the shared prompt prefix, so it costs one lookup for the whole run.
 
+**What a build decides is not reviewed.** A reviewer is forbidden to check
+whether the code compiles, and told to break off the moment it starts: no
+grepping a declaration to see whether a call matches it, no chasing a symbol
+that looks undefined. The compiler reports all of that first and is never wrong
+about it, while a reviewer making the same claim is wrong often enough to have
+shipped false blockers. So the two halves of the reference check are used
+differently — the symbol census is context, keeping an unfamiliar name from
+sending an agent down the wrong path, while the resource misses are findings:
+a storyboard scene, a build manifest, a localization key and an asset name are
+checked by no compiler at all, and the code holding them builds cleanly and
+fails when the screen opens.
+
 **One agent per concern.** Eight specialised reviewers run in parallel — one for
 correctness, one for concurrency, one for tests — rather than one generalist
 holding everything at once. Each gets read-only tools to dig through the rest of

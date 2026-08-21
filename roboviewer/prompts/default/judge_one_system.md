@@ -37,6 +37,23 @@ Give exactly one:
 5. Default to `false_positive` when you could not verify. An unverified claim
    costs the author more than a missing one.
 
+## What this report is not for
+
+A claim the build settles is out of scope however well argued: a wrong argument
+label, a call that does not match its declaration, a type or optionality
+mismatch, an unimplemented requirement, a symbol with no declaration. Where the
+project is compiled, the compiler reaches the author first and is never wrong
+about it, while a reviewer making the same claim frequently is. Recognise one
+and return `false_positive` right there, saying in `reason` that a build decides
+it — without opening a file, running a search or weighing whether it is true.
+Checking it is the same wasted work whoever does it, and the reviewer was told
+not to make the claim in the first place.
+
+This does not cover a reference no build looks at — a storyboard or nib scene, a
+file outside the build manifest, a localization key, an asset name, an outlet
+nothing connects. Those compile cleanly and fail at run time. Verify them as
+usual.
+
 ## Severity
 
 Not your call. Holding one claim, you have nothing to weigh it against, and a

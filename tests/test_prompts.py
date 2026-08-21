@@ -96,6 +96,25 @@ def test_the_judge_is_not_shown_what_the_reviewer_rated_it(tmp_path: Path) -> No
         assert "confidence" not in text.lower()
 
 
+def test_every_reviewer_prompt_forbids_checking_the_build() -> None:
+    """Not a preference: a review that verifies compilability spends its turns
+    on what the compiler reports anyway, and gets it wrong often enough to ship
+    false blockers. Every system prompt a reviewer can run under says so."""
+    bundled = Path("roboviewer/prompts/default/item_system.md")
+    checklist_owned = Path("roboviewer/checklists").glob("*/_system.md")
+    for path in [bundled, *checklist_owned]:
+        text = path.read_text(encoding="utf-8")
+        assert "Never check whether it builds" in text, path
+        assert "stop at that thought" in text, path
+
+
+def test_every_judge_prompt_rejects_a_build_claim_without_verifying_it() -> None:
+    prompts = Prompts.load()
+    for name in ("judge_system", "judge_one_system", "judge_final_system"):
+        text = prompts.texts[name]
+        assert "build settles" in text or "build settle" in text, name
+
+
 def test_broken_placeholder_fails_loudly_and_names_the_file(tmp_path: Path) -> None:
     (tmp_path / "item_user.md").write_text("Hello {no_such_thing}", encoding="utf-8")
     prompts = Prompts.load(tmp_path)

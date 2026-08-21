@@ -69,14 +69,21 @@ REFERENCES_BLOCK = """
 # Reference check
 
 Run over the whole tree before this review, including files not attached above
-(storyboards, build manifests, strings). Findings here are worth reporting, but
-report them in your own words and only after you have looked at the code.
+(storyboards, build manifests, strings). What the two sections below are for
+differs, and the rule about the build decides which is which: a reference that
+fails only at run time is a finding, one a failed build would already show is
+not. Report in your own words, and only after you have looked at the code.
 {sections}"""
 
 RESOURCE_SECTION = """
 ## References that resolve to nothing ({count})
 
 Searched and absent. These are search results, not guesses.
+
+No compiler looks at any of them: the code below builds, ships, and fails when
+the screen opens. That makes them findings, and the search behind each one is
+already done — confirm the reference is really introduced by this change, then
+report it.
 
 {rows}"""
 
@@ -86,10 +93,13 @@ SYMBOL_SECTION = """
 Introduced by this diff, used in a position that has to resolve, and found
 nowhere outside the files the diff touches, with no declaration anywhere.
 
-This list cannot see your dependencies, so symbols from frameworks and the SDK
-legitimately appear in it and are NOT problems. Decide which is which; when a
-name looks like it should belong to this repository, `grep` it yourself before
-reporting anything.
+Context, not a list of findings. This list cannot see your dependencies, so
+framework and SDK symbols land in it legitimately and are NOT problems. It is
+here so that an unfamiliar name does not send you down the wrong path: where
+the project is compiled, a name resolving nowhere is the build's to report and
+not yours, and no turn of yours should go to it. Report an entry only where
+nothing gets built — a name resolved at run time, spelled in a string, reached
+by reflection or by a selector.
 
 {rows}"""
 

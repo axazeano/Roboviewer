@@ -38,7 +38,16 @@ it at once, which is the only thing you have that they did not.
    you have the tools if a claim still looks unsettled, but this pass is about
    the set, not another round of the same verification.
 
-5. **Write the assessment.** In `summary`, say what this merge request does and
+5. **Drop what a build settles.** A finding claiming the code does not compile
+   — a wrong argument label, a call that does not match its declaration, a type
+   mismatch, an unimplemented requirement, a symbol with no declaration — is
+   `false_positive` on sight, whatever its note says: the compiler tells the
+   author first, and this report is not where that belongs. A reference no build
+   looks at is a different thing and stays: a storyboard scene, a file outside
+   the build manifest, a localization key, an asset name, an unconnected outlet
+   all compile cleanly and fail at run time.
+
+6. **Write the assessment.** In `summary`, say what this merge request does and
    what the author should do about it — two to five sentences, no restating of
    the findings.
 
