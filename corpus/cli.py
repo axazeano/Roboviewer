@@ -22,21 +22,10 @@ from pathlib import Path
 
 from .build import Result, build
 from .entries import Entry, load_list, select
-from .find import (
-    LICENCE,
-    NO_REVIEW,
-    SAFE_LICENCES,
-    TOO_OBSCURE,
-    TOO_SMALL,
-    Candidate,
-    Filters,
-    GitHubError,
-    Search,
-    as_toml,
-    propose_head,
-    search,
-)
-from .github import GitHub, RateLimited, resolve_token
+from .find.criteria import SAFE_LICENCES, Candidate, Filters
+from .find.proposal import as_toml, propose_head
+from .find.search import Search, search
+from .github import GitHub, GitHubError, RateLimited, resolve_token
 from .store import UNKNOWN, Store, default_root
 
 OK = 0
@@ -298,29 +287,17 @@ def _search_header(result: Search) -> None:
     elif result.stopped_early:
         print(f"  Read {result.scanned} of them; --pages reads further.")
     for reason, count in sorted(result.rejected.items(), key=lambda pair: -pair[1]):
-        print(f"  {count:>4} dropped — {reason}")
+        print(f"  {count:>4} dropped — {reason.why}")
     _why_nothing_passed(result)
 
 def _why_nothing_passed(result: Search) -> None:
     """A run that found nothing usually died on one filter, and the fix depends
-    on which. Said here rather than left for the caller to script."""
+    on which. The fix is the reason's own — see `find.criteria` — so the two
+    cannot drift apart."""
     if result.candidates or not result.worst:
         return
     reason, _ = result.worst
-    advice = {
-        NO_REVIEW: (
-            "Most merged pull requests are bots and solo merges. Add "
-            "review:changes_requested to the query — on a broad search it takes "
-            "the reviewed share from about 2% to about 80%."
-        ),
-        TOO_SMALL: "Lower --min-files, or search a repository whose changes run larger.",
-        TOO_OBSCURE: "Lower --min-stars.",
-        LICENCE: (
-            "Read the repository and use --any-license if one of them is worth it."
-        ),
-    }.get(reason)
-    if advice:
-        print(f"  {advice}")
+    print(f"  {reason.fix}")
 
 
 def _candidate_line(candidate: Candidate) -> None:

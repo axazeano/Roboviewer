@@ -14,16 +14,9 @@ import json
 from typing import Any
 
 from corpus.cli import main
-from corpus.find import (
-    LICENCE,
-    NO_REVIEW,
-    TOO_SMALL,
-    Candidate,
-    Filters,
-    as_toml,
-    propose_head,
-    search,
-)
+from corpus.find.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Candidate, Filters
+from corpus.find.proposal import as_toml, propose_head
+from corpus.find.search import search
 from corpus.github import GitHub, Response
 
 

@@ -26,9 +26,11 @@ ENFORCED = [
     PACKAGE / "judge.py",
     PACKAGE / "ratelimit.py",
     PACKAGE / "sources.py",
-    # Written this way from the start, so the whole package is in
-    *sorted((ROOT / "corpus").glob("*.py")),
-    *sorted((ROOT / "research").glob("*.py")),
+    # Written this way from the start, so the whole package is in — every
+    # module of it, subpackages included, or the rule stops applying the day
+    # one is added.
+    *sorted((ROOT / "corpus").rglob("*.py")),
+    *sorted((ROOT / "research").rglob("*.py")),
 ]
 
 
@@ -43,7 +45,7 @@ def definitions(path: Path) -> list[tuple[int, str]]:
     ]
 
 
-@pytest.mark.parametrize("path", ENFORCED, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", ENFORCED, ids=lambda p: str(p.relative_to(ROOT)))
 def test_public_definitions_come_first(path: Path) -> None:
     defs = definitions(path)
     first_private = next((i for i, (_, name) in enumerate(defs) if name.startswith("_")), None)
