@@ -50,28 +50,30 @@ page was looking at.
 
 ## The list
 
-One committed TOML file describes the corpus. It is the whole input: delete the
-clones, run the command again, and the same corpus comes back. Nobody has to
-remember which commit was the right head.
+One committed TOML file describes the corpus — [`corpus.toml`](../corpus.toml)
+in the repository root. It is the whole input: delete the clones, run the command
+again, and the same corpus comes back. Nobody has to remember which commit was
+the right head.
 
 ```toml
 [[entry]]
-id = "requests-6800"
-url = "https://github.com/psf/requests/pull/6800"
-base = "1111111111111111111111111111111111111111"
-head = "2222222222222222222222222222222222222222"
+id = "prometheus-19339"
+url = "https://github.com/prometheus/prometheus/pull/19339"
+base = "e75af386be14c1229b3976d4b7adfff853a4022e"
+head = "bfbc9d9295f7a9f1e32f14428f1f36e49319a5d9"
 
-language = "Python"
-domain = "HTTP client library"
-found = "Retries reused a consumed request body, so the second attempt sent nothing."
+language = "Go"
+domain = "time-series database"
+found = "A reviewer found the added lock guard cannot fix the hang it is for."
 license = "Apache-2.0"
-files = 3
-added = 74
-removed = 12
+files = 1
+added = 17
+removed = 11
 ```
 
-`corpus.example.toml` in the repository root is this file with the fields
-explained.
+Which pull requests belong in it, and what disqualifies one, is
+[corpus-selection.md](corpus-selection.md). `corpus.example.toml` is the same
+format with every field explained and deliberately unbuildable SHAs.
 
 | Field | Read by | Meaning |
 | --- | --- | --- |

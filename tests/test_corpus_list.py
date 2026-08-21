@@ -8,11 +8,12 @@ short SHA, two entries fighting over one directory.
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
-from corpus.entries import load_list, parse_pull_url, select
+from corpus.entries import Entry, load_list, parse_pull_url, select
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -149,3 +150,61 @@ def test_the_example_list_parses() -> None:
     entries = load_list(REPO_ROOT / "corpus.example.toml")
 
     assert [entry.pull.slug for entry in entries] == ["psf/requests", "owner/repo"]
+
+
+# ------------------------------------------------------------------ the committed corpus
+
+# The frame from docs/corpus-selection.md. Per-entry criteria are judgement and
+# stay in that document; these are the properties of the list as a whole, and
+# they are the ones an added entry quietly breaks — which is why they are a test
+# rather than a paragraph.
+
+
+@pytest.fixture(scope="module")
+def corpus() -> list[Entry]:
+    return load_list(REPO_ROOT / "corpus.toml")
+
+
+def test_the_corpus_has_enough_entries_to_measure_anything(corpus: list[Entry]) -> None:
+    assert len(corpus) >= 10
+
+
+def test_every_entry_says_what_the_review_found(corpus: list[Entry]) -> None:
+    # Without it nobody can judge whether an entry earns its place, and the
+    # baseline becomes a number with no story behind it
+    silent = [entry.id for entry in corpus if len(entry.found) < 40]
+    assert not silent
+
+
+def test_every_entry_records_language_domain_and_licence(corpus: list[Entry]) -> None:
+    incomplete = [
+        entry.id for entry in corpus if not (entry.language and entry.domain and entry.license)
+    ]
+    assert not incomplete
+
+
+def test_the_corpus_is_not_one_stack(corpus: list[Entry]) -> None:
+    assert len({entry.language for entry in corpus}) >= 3
+    assert len({entry.domain for entry in corpus}) > 1
+
+
+def test_no_single_repository_sets_the_tone(corpus: list[Entry]) -> None:
+    per_repo = Counter(entry.pull.slug for entry in corpus)
+
+    assert per_repo.most_common(1)[0][1] <= 3
+
+
+def test_the_sizes_span_small_and_large_changes(corpus: list[Entry]) -> None:
+    sizes = sorted(entry.added + entry.removed for entry in corpus)
+
+    # A tool that does well on a one-file diff and drowns in a fifteen-file one
+    # is a different tool from one that does the reverse
+    assert sum(1 for size in sizes if size < 100) >= 3
+    assert sum(1 for size in sizes if size > 400) >= 3
+
+
+def test_every_entry_records_its_diff_size(corpus: list[Entry]) -> None:
+    unmeasured = [
+        entry.id for entry in corpus if entry.files == 0 or entry.added + entry.removed == 0
+    ]
+    assert not unmeasured
