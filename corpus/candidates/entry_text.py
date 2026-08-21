@@ -1,11 +1,13 @@
-"""The `[[entry]]` a candidate becomes, half-written, for somebody to finish.
+"""The text of an `[[entry]]`, half-written, for a person to finish.
 
-A draft rather than an entry: the two fields carrying judgement are left
-blank, and a person fills them in or throws the whole thing away.
+Text rather than an `Entry`, and there is no draft type here, because a draft
+is precisely what the model refuses to be: the head is empty whenever no review
+thread named the commit it was written against, and `Entry` wants a 40-character
+SHA. A type for that would be a type for a state the corpus does not accept.
 
-The one part of this package that survives moving the search to another
-forge, and the one that changes when the entry format does: `entries.py`
-reads this shape, and this writes it.
+So this writes the shape `entries.py` reads, and the round-trip test is what
+keeps the two from drifting. It changes when the entry format does, and not when
+the search moves to another forge.
 """
 
 from __future__ import annotations

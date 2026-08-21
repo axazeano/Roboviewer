@@ -15,7 +15,7 @@ from typing import Any
 
 from corpus.candidates import on_github
 from corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Candidate, Filters
-from corpus.candidates.draft import as_toml
+from corpus.candidates.entry_text import as_toml
 from corpus.cli import main
 from corpus.github import GitHub, Response
 

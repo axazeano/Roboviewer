@@ -15,7 +15,7 @@ reasons:
 - `on_github` — the two questions only GitHub can answer: which pull requests
   match, and which commit their reviewers were looking at. Named for the forge
   because a different forge is what replaces it, and both questions go at once.
-- `draft` — the half-written `[[entry]]` to paste, which outlives both.
+- `entry_text` — the half-written `[[entry]]` to paste, which outlives both.
 
 What is deliberately absent is the judgement `docs/corpus-selection.md` asks
 for: whether a thread found a defect or a naming preference. That decides
