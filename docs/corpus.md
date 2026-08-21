@@ -274,7 +274,7 @@ neither has it, the entry needs a different head — or a different pull request
 ## Tests
 
 `tests/test_corpus_list.py`, `tests/test_corpus_fetch.py`,
-`tests/test_corpus_github.py` and `tests/test_corpus_find.py` run under `pytest`
+`tests/test_corpus_github.py` and `tests/test_corpus_candidates.py` run under `pytest`
 with the rest of the suite and
 never touch the network: the origins are local repositories, and every HTTP
 request goes through an injected transport.

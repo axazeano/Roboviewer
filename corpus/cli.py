@@ -21,10 +21,10 @@ import sys
 from pathlib import Path
 
 from .build import Result, build
+from .candidates.criteria import SAFE_LICENCES, Candidate, Filters
+from .candidates.proposal import as_toml, propose_head
+from .candidates.search import Search, search
 from .entries import Entry, load_list, select
-from .find.criteria import SAFE_LICENCES, Candidate, Filters
-from .find.proposal import as_toml, propose_head
-from .find.search import Search, search
 from .github import GitHub, GitHubError, RateLimited, resolve_token
 from .store import UNKNOWN, Store, default_root
 
@@ -292,7 +292,7 @@ def _search_header(result: Search) -> None:
 
 def _why_nothing_passed(result: Search) -> None:
     """A run that found nothing usually died on one filter, and the fix depends
-    on which. The fix is the reason's own — see `find.criteria` — so the two
+    on which. The fix is the reason's own — see `candidates.criteria` — so the two
     cannot drift apart."""
     if result.candidates or not result.worst:
         return
