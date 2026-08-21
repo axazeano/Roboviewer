@@ -23,7 +23,11 @@ from pathlib import Path
 from .build import Result, build
 from .entries import Entry, load_list, select
 from .find import (
+    LICENCE,
+    NO_REVIEW,
     SAFE_LICENCES,
+    TOO_OBSCURE,
+    TOO_SMALL,
     Candidate,
     Filters,
     GitHubError,
@@ -293,13 +297,31 @@ def _search_header(result: Search) -> None:
         )
     elif result.stopped_early:
         print(f"  Read {result.scanned} of them; --pages reads further.")
-    if result.unapproved:
-        print(
-            f"  {result.unapproved} dropped: licence not on the allowed list "
-            "(MIT, Apache-2.0, BSD, ISC, GPL, MPL and friends), or none GitHub "
-            "could name. Read the repository and use --any-license if one of "
-            "them is worth it."
-        )
+    for reason, count in sorted(result.rejected.items(), key=lambda pair: -pair[1]):
+        print(f"  {count:>4} dropped — {reason}")
+    _why_nothing_passed(result)
+
+def _why_nothing_passed(result: Search) -> None:
+    """A run that found nothing usually died on one filter, and the fix depends
+    on which. Said here rather than left for the caller to script."""
+    if result.candidates or not result.worst:
+        return
+    reason, _ = result.worst
+    advice = {
+        NO_REVIEW: (
+            "Most merged pull requests are bots and solo merges. Add "
+            "review:changes_requested to the query — on a broad search it takes "
+            "the reviewed share from about 2% to about 80%."
+        ),
+        TOO_SMALL: "Lower --min-files, or search a repository whose changes run larger.",
+        TOO_OBSCURE: "Lower --min-stars.",
+        LICENCE: (
+            "Read the repository and use --any-license if one of them is worth it."
+        ),
+    }.get(reason)
+    if advice:
+        print(f"  {advice}")
+
 
 def _candidate_line(candidate: Candidate) -> None:
     print(

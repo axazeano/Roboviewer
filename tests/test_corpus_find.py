@@ -14,7 +14,16 @@ import json
 from typing import Any
 
 from corpus.cli import main
-from corpus.find import Candidate, Filters, as_toml, propose_head, search
+from corpus.find import (
+    LICENCE,
+    NO_REVIEW,
+    TOO_SMALL,
+    Candidate,
+    Filters,
+    as_toml,
+    propose_head,
+    search,
+)
 from corpus.github import GitHub, Response
 
 
@@ -168,7 +177,7 @@ def test_only_a_licence_on_the_allowed_list_survives() -> None:
     result = search(github, "q")
 
     assert [c.number for c in result.candidates] == [5]
-    assert result.unapproved == 4
+    assert result.rejected[LICENCE] == 4
 
 
 def test_copyleft_is_allowed_and_the_boost_lookalike_is_not_confused_for_it() -> None:
@@ -193,7 +202,7 @@ def test_the_allowed_list_can_be_stood_down_on_purpose() -> None:
     result = search(github, "q", Filters(licences=None))
 
     assert [c.number for c in result.candidates] == [1]
-    assert result.unapproved == 0
+    assert result.rejected == {}
 
 
 def test_a_candidate_rejected_on_size_is_not_counted_against_its_licence() -> None:
@@ -204,7 +213,7 @@ def test_a_candidate_rejected_on_size_is_not_counted_against_its_licence() -> No
     result = search(github, "q", Filters(min_files=30))
 
     assert result.candidates == []
-    assert result.unapproved == 0
+    assert result.rejected == {TOO_SMALL: 1}, "one reason each, so the counts add up"
 
 
 # -------------------------------------------------------------------- the head
@@ -323,3 +332,26 @@ def test_the_build_command_is_untouched_by_the_new_one(tmp_path, capsys) -> None
 
     assert main([str(missing)]) == 2
     assert "Corpus list error" in capsys.readouterr().err
+
+
+def test_a_run_that_finds_nothing_says_which_filter_took_everything() -> None:
+    """On a broad query nearly every merged pull request is a bot or a solo
+    merge, and a bare count of zero looks like the corpus has run out of GitHub.
+    The dominant reason is what names the fix."""
+    github, _ = client(page(*[node(n, threads=0) for n in range(5)]))
+
+    result = search(github, "q", Filters(min_files=30))
+
+    assert result.candidates == []
+    assert result.worst == (NO_REVIEW, 5)
+
+
+def test_the_reasons_are_counted_in_the_order_the_filters_ask() -> None:
+    """A candidate failing several filters is counted once, under the first, so
+    the counts sum to what was dropped rather than double-counting it."""
+    github, _ = client(page(node(1, files=2, threads=0, stars=0, license=None)))
+
+    result = search(github, "q", Filters(min_files=30, min_stars=500))
+
+    assert sum(result.rejected.values()) == 1
+    assert result.worst == (NO_REVIEW, 1)

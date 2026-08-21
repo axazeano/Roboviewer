@@ -119,14 +119,32 @@ GraphQL, so the filter runs on this side — one request per fifty candidates
 instead of one per candidate.
 
 ```bash
-python -m corpus find "is:pr is:merged language:Go" --min-files 30 --min-stars 500
+python -m corpus find "is:pr is:merged language:Go review:changes_requested" \
+  --min-files 30 --min-stars 500
 ```
 
 ```
-▸ 105373 match the query, 150 read, 4 pass the filters
-    64 files    4471+/125   -   1 threads     7015 ★  Apache-2.0   .../kubevirt/pull/15039
-    37 files    2449+/7     -  40 threads    26228 ★  Apache-2.0   .../typescript-go/pull/1326
+▸ 41742 match the query, 250 read, 12 pass the filters
+   171 dropped — too few files
+    42 dropped — nobody reviewed a line
+    25 dropped — too few stars
+   410 files    3892+/1974  -  18 threads     2636 ★  MIT          .../compozy/pull/440
+   103 files    6523+/243   -  31 threads     7858 ★  Apache-2.0   .../filebrowser/pull/2806
 ```
+
+**`review:changes_requested` is doing most of the work there, and without it the
+command returns nothing.** On a bare `is:pr is:merged` search about 98 per cent
+of what comes back has no review thread at all — merged bot updates and solo
+merges — so every other filter is applied to pull requests that were never going
+to qualify. With the qualifier the reviewed share goes to roughly 80 per cent.
+`comments:>5` works too and less well; sorting is not an option, since GitHub
+times out sorting a result set this large.
+
+Every rejection is counted by reason, one reason per candidate in the order the
+filters ask, so the numbers add up to what was dropped and read as a funnel. When
+nothing passes, the dominant reason is named along with the fix — a bare count of
+zero looks like the corpus has run out of GitHub, when it usually means the query
+asked for the wrong thing.
 
 `--heads` adds the commit reviewers were looking at, and what they said at it:
 

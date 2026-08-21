@@ -23,7 +23,7 @@ come back with the head so a person can read them and decide.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .entries import parse_pull_url
@@ -52,6 +52,14 @@ MAX_PAGES = 20
 # Note BSL-1.0 is the Boost Software Licence, permissive, and has nothing to do
 # with BUSL-1.1, the Business Source Licence, which is source-available. The
 # names collide; only one of them is here.
+# Why a candidate was dropped, in the order the filters ask. The order is the
+# useful part: a query that returns nothing usually dies on the first of these,
+# and knowing which one names the fix.
+NO_REVIEW = "nobody reviewed a line"
+TOO_SMALL = "too few files"
+TOO_OBSCURE = "too few stars"
+LICENCE = "licence not on the allowed list"
+
 SAFE_LICENCES = frozenset(
     {
         # permissive
@@ -146,12 +154,21 @@ class Filters:
     # licence of by hand.
     licences: frozenset[str] | None = SAFE_LICENCES
 
-    def rejects(self, candidate: Candidate) -> bool:
-        return (
-            candidate.files < self.min_files
-            or candidate.threads < self.min_threads
-            or candidate.stars < self.min_stars
-        )
+    def rejects(self, candidate: Candidate) -> str:
+        """Why this candidate is out, or "" when it is in.
+
+        One reason rather than all of them, in a fixed order, so the counts add
+        up to the number rejected and can be read as a funnel.
+        """
+        if candidate.threads < self.min_threads:
+            return NO_REVIEW
+        if candidate.files < self.min_files:
+            return TOO_SMALL
+        if candidate.stars < self.min_stars:
+            return TOO_OBSCURE
+        if self.licences is not None and candidate.license not in self.licences:
+            return LICENCE
+        return ""
 
 
 @dataclass(frozen=True)
@@ -161,11 +178,17 @@ class Search:
     candidates: list[Candidate]
     matched: int
     scanned: int
-    # Passed every other filter, and carried a licence not on the allowed list —
-    # unknown to GitHub, or known and not one of these. Counted rather than
-    # silently dropped: a sieve that hides what it removed is a sieve nobody can
-    # check.
-    unapproved: int = 0
+    # Why the rest were dropped, one reason each. A sieve that hides what it
+    # removed is a sieve nobody can check — and on a broad query the answer is
+    # nearly always the same one, which is worth being told rather than guessed.
+    rejected: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def worst(self) -> tuple[str, int] | None:
+        """The reason that took the most, for a run that found nothing."""
+        if not self.rejected:
+            return None
+        return max(self.rejected.items(), key=lambda pair: pair[1])
 
     @property
     def truncated(self) -> bool:
@@ -191,29 +214,26 @@ def search(
     """Pull requests the query yields that pass the filters search cannot express."""
     filters = filters or Filters()
     found: list[Candidate] = []
+    rejected: dict[str, int] = {}
     cursor: str | None = None
     matched = 0
     scanned = 0
-    unapproved = 0
     for _ in range(min(pages, MAX_PAGES)):
         page = _page(github, query, cursor)
         matched = page.get("issueCount", 0)
         nodes = [node for node in page.get("nodes") or [] if node]
         scanned += len(nodes)
         for candidate in (_candidate(node) for node in nodes):
-            if filters.rejects(candidate):
-                continue
-            if filters.licences is not None and candidate.license not in filters.licences:
-                unapproved += 1
+            reason = filters.rejects(candidate)
+            if reason:
+                rejected[reason] = rejected.get(reason, 0) + 1
                 continue
             found.append(candidate)
         info = page.get("pageInfo") or {}
         if not info.get("hasNextPage"):
             break
         cursor = info.get("endCursor")
-    return Search(
-        candidates=found, matched=matched, scanned=scanned, unapproved=unapproved
-    )
+    return Search(candidates=found, matched=matched, scanned=scanned, rejected=rejected)
 
 
 def propose_head(github: GitHub, candidate: Candidate) -> tuple[str, list[Thread]]:
