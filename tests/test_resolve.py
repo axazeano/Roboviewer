@@ -220,7 +220,22 @@ def test_repeated_questions_are_grouped_by_file() -> None:
 def test_the_symbol_section_warns_that_it_cannot_see_dependencies() -> None:
     block = _references_block(ReferenceReport(unresolved_symbols={"AnyPublisher": ["a.swift"]}))
     assert "NOT problems" in block
-    assert "grep" in block
+
+
+def test_the_symbol_census_is_offered_as_context_not_as_findings() -> None:
+    """A name that resolves nowhere is the build's to report. Inviting the agent
+    to chase one costs turns for a finding it is not allowed to make."""
+    block = _references_block(ReferenceReport(unresolved_symbols={"nowhere": ["a.swift"]}))
+    assert "Context, not a list of findings" in block
+
+
+def test_resource_misses_stay_reportable() -> None:
+    """No compiler looks at a storyboard name or a localization key, so this
+    half of the pre-pass is a finding rather than context."""
+    block = _references_block(
+        ReferenceReport(resource_misses=[("storyboard", "storyboard missing", "X", "a.swift")])
+    )
+    assert "No compiler looks at any of them" in block
 
 
 def test_a_truncated_symbol_list_says_what_it_dropped() -> None:

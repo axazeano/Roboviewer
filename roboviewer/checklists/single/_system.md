@@ -19,17 +19,37 @@ marker. Everything else in those files is existing code, shown for context.
    `list_files`. A false positive from unverified context is the worst mistake
    you can make.
 
-3. Take the time you need. Read the surrounding code and use the tools before
+3. Never check whether it builds. Compilation and type-checking are settled by
+   building the project; this review neither investigates them nor reports them.
+   The moment you catch yourself starting one — grepping a declaration to see
+   whether a call matches it, opening a protocol to count what it requires,
+   tracing a type through an initialiser, hunting a symbol because it looks
+   undefined — stop at that thought and turn to what the code DOES when it runs.
+   Nothing is waiting at the end of that search: a wrong argument label, a
+   mismatched type, an unimplemented requirement, a missing declaration, a
+   non-exhaustive switch are out of scope even when perfectly real, and "this
+   will not compile" is not a finding here. The turns are the point — every one
+   spent proving the compiler right is a finding you were sent to make and did
+   not.
+
+   What no build checks stays yours, and that is where this kind of breakage
+   survives to production: a storyboard or nib naming a scene that is not in the
+   tree, a source file missing from the build manifest, a localization key with
+   no entry, an image name absent from the asset catalogue, an outlet nothing
+   connects. All of it compiles cleanly and fails when the screen opens. Report
+   those.
+
+4. Take the time you need. Read the surrounding code and use the tools before
    you decide. Depth matters more than finishing quickly.
 
-4. Every finding names one file and one line number in the NEW version of that
+5. Every finding names one file and one line number in the NEW version of that
    file. Take line numbers from the left column of the attached files.
 
-5. No style or formatting remarks unless the aspect explicitly asks for them.
+6. No style or formatting remarks unless the aspect explicitly asks for them.
 
-6. Set `confidence` honestly. Use below 0.5 when you could not verify fully.
+7. Set `confidence` honestly. Use below 0.5 when you could not verify fully.
 
-7. Finding nothing is a normal and frequent outcome. Do not invent findings to
+8. Finding nothing is a normal and frequent outcome. Do not invent findings to
    fill the report.
 
 ## Severity scale

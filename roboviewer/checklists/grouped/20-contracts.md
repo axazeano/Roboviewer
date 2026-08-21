@@ -6,22 +6,26 @@ order: 20
 
 ## Public contracts and backward compatibility
 
-Check changes to public interfaces and their effect on calling code.
+Check changes to public interfaces and their effect on calling code — the half
+of it a build cannot see. Do not grep callers to confirm they still match a
+changed signature: that disagreement belongs to the compiler, and walking to it
+spends turns on a finding you are not allowed to make.
 
 What to look at:
-- A changed signature, return type or optionality on a public method: `grep` for every caller and check they still agree.
-- A new required parameter with no default value.
-- The meaning of an existing parameter changing while the signature stays the same — the most dangerous kind, the compiler does not catch it.
+- The meaning of an existing parameter changing while the signature stays the same — the most dangerous kind, and invisible to a build.
+- A default value or an overload that changes which implementation an unchanged call site now picks.
 - Changes to structures serialised to the network or to disk: renamed and removed fields, incompatibility with data already stored.
-- A public symbol removed or renamed while uses of it remain.
-- An enum gaining a case, so existing switches stop being exhaustive.
+- A name that is spelled rather than referenced — a selector, a key path, a string looked up at run time — pointing at something this change renamed or removed.
+- Callers no build here compiles: another module that is not rebuilt with this one, a plugin, an API somebody else builds against.
 
 If the type is serialised or crosses an API boundary, judge separately what
 happens to old clients and to data that is already stored.
 
-The check is done when every symbol the diff adds, changes or removes that is
-visible outside its own file has had its callers grepped once. A change that
-nothing outside the file can see has no contract to break: say so and submit.
+The check is done once every changed contract that outlives a build — data on
+disk or on the wire, a name resolved at run time, a caller outside this
+repository — has been looked at once. A change whose only callers are compiled
+right here has no contract to break in this report: the build speaks for them.
+Say so and submit.
 
 ## Architecture and code structure
 
