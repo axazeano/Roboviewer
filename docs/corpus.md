@@ -154,6 +154,30 @@ this shape and refuses a hundred with a 502. And search never returns more than
 and the fix is a narrower query — usually a shorter `created:` window — rather
 than more pages.
 
+**Licences are allowed, not refused.** Only the ones on a listed set survive —
+MIT, Apache-2.0, the BSD family, ISC, and the copyleft licences, which are fine
+here because every entry is read locally and nothing is redistributed. Everything
+else is dropped, and the count is printed rather than swallowed.
+
+The list is written this way round because the two directions are not
+symmetric. What is safe is a closed set that changes about once a decade; what is
+unsafe is open and keeps growing, and a refused list is out of date the day after
+it is written. It also disposes of GitHub's two ways of saying it does not know —
+no `licenseInfo` when it found no file, `NOASSERTION` when it found one it could
+not map — without having to guess what a file called `Лицензия.md` or
+`old_license.md` contains.
+
+Being dropped is not a claim that a repository is unlicensed. `juju/juju` spells
+the file `LICENCE`, carries AGPL-3.0 in full, and comes back as `NOASSERTION`.
+It is a claim that nobody has read it — and an entry records a licence, so a
+recorded value nobody read is a claim nobody checked. `--any-license` stands the
+list down for a candidate somebody has decided to read the repository for.
+
+One name is worth knowing: `BSL-1.0` is the Boost Software Licence, permissive
+and on the list; `BUSL-1.1` is the Business Source Licence, source-available and
+not. Source-available terms are the ones that actually bite here, because they
+restrict use rather than distribution.
+
 A token is required here, unlike the rest of the command: the search API is
 GraphQL, and GraphQL refuses anonymous requests.
 

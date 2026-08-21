@@ -14,7 +14,7 @@ import json
 from typing import Any
 
 from corpus.cli import main
-from corpus.find import Candidate, as_toml, propose_head, search
+from corpus.find import Candidate, Filters, as_toml, propose_head, search
 from corpus.github import GitHub, Response
 
 
@@ -26,6 +26,7 @@ def node(
     stars: int = 100,
     added: int = 1,
     removed: int = 1,
+    license: str | None = "MIT",
 ) -> dict[str, Any]:
     return {
         "url": f"https://github.com/acme/widget/pull/{number}",
@@ -39,7 +40,7 @@ def node(
             "nameWithOwner": "acme/widget",
             "stargazerCount": stars,
             "primaryLanguage": {"name": "Go"},
-            "licenseInfo": {"spdxId": "MIT"},
+            "licenseInfo": {"spdxId": license} if license else None,
         },
     }
 
@@ -82,7 +83,7 @@ def client(*answers: Any) -> tuple[GitHub, Answers]:
 def test_the_size_filter_is_the_whole_point_and_it_keeps_the_boundary() -> None:
     github, _ = client(page(node(1, files=29), node(2, files=30), node(3, files=31)))
 
-    result = search(github, "q", min_files=30)
+    result = search(github, "q", Filters(min_files=30))
 
     assert [c.number for c in result.candidates] == [2, 3]
 
@@ -99,7 +100,8 @@ def test_a_pull_request_nobody_reviewed_a_line_of_is_never_a_candidate() -> None
 
 def test_stars_filter_and_defaults_leave_a_bare_query_unfiltered() -> None:
     github, _ = client(page(node(1, stars=10), node(2, stars=1000)))
-    assert [c.number for c in search(github, "q", min_stars=500).candidates] == [2]
+    kept = search(github, "q", Filters(min_stars=500)).candidates
+    assert [c.number for c in kept] == [2]
 
     github, _ = client(page(node(1, stars=10), node(2, stars=1000)))
     assert len(search(github, "q").candidates) == 2
@@ -143,10 +145,66 @@ def test_the_thousand_result_ceiling_is_told_apart_from_a_short_page_budget() ->
 def test_everything_read_is_reported_even_when_nothing_passes() -> None:
     github, _ = client(page(node(1, files=2), matched=7))
 
-    result = search(github, "q", min_files=30)
+    result = search(github, "q", Filters(min_files=30))
 
     assert result.candidates == []
     assert (result.matched, result.scanned) == (7, 1)
+
+
+def test_only_a_licence_on_the_allowed_list_survives() -> None:
+    """An allowed list rather than a refused one: what is safe is closed and
+    short, what is unsafe keeps being invented. A candidate carrying a licence
+    nobody listed is dropped whether it is unknown or merely new."""
+    github, _ = client(
+        page(
+            node(1, license=None),  # GitHub found no file
+            node(2, license="NOASSERTION"),  # found one it could not map
+            node(3, license="BUSL-1.1"),  # named, and restricts use
+            node(4, license="Peculiar-1.0"),  # named, and nobody has read it
+            node(5, license="MIT"),
+        )
+    )
+
+    result = search(github, "q")
+
+    assert [c.number for c in result.candidates] == [5]
+    assert result.unapproved == 4
+
+
+def test_copyleft_is_allowed_and_the_boost_lookalike_is_not_confused_for_it() -> None:
+    """GPL is fine here — it constrains distribution and there is none. BSL-1.0
+    is the Boost licence, permissive; BUSL-1.1 is Business Source and is not on
+    the list. The names collide and the difference is total."""
+    github, _ = client(
+        page(node(1, license="AGPL-3.0"), node(2, license="BSL-1.0"), node(3, license="BUSL-1.1"))
+    )
+
+    result = search(github, "q")
+
+    assert [c.number for c in result.candidates] == [1, 2]
+
+
+def test_the_allowed_list_can_be_stood_down_on_purpose() -> None:
+    """juju/juju spells the file LICENCE, carries AGPL-3.0 in full, and comes
+    back as NOASSERTION. Dropping it by default is right; making it unreachable
+    once somebody has read the repository is not."""
+    github, _ = client(page(node(1, license="NOASSERTION")))
+
+    result = search(github, "q", Filters(licences=None))
+
+    assert [c.number for c in result.candidates] == [1]
+    assert result.unapproved == 0
+
+
+def test_a_candidate_rejected_on_size_is_not_counted_against_its_licence() -> None:
+    """The two reasons are reported separately, so neither number explains the
+    other away."""
+    github, _ = client(page(node(1, files=2, license=None)))
+
+    result = search(github, "q", Filters(min_files=30))
+
+    assert result.candidates == []
+    assert result.unapproved == 0
 
 
 # -------------------------------------------------------------------- the head

@@ -22,7 +22,16 @@ from pathlib import Path
 
 from .build import Result, build
 from .entries import Entry, load_list, select
-from .find import Candidate, GitHubError, Search, as_toml, propose_head, search
+from .find import (
+    SAFE_LICENCES,
+    Candidate,
+    Filters,
+    GitHubError,
+    Search,
+    as_toml,
+    propose_head,
+    search,
+)
 from .github import GitHub, RateLimited, token_from_env
 from .store import UNKNOWN, Store, default_root
 
@@ -121,9 +130,12 @@ def find_main(argv: list[str]) -> int:
         result = search(
             github,
             args.query,
-            min_files=args.min_files,
-            min_threads=args.min_threads,
-            min_stars=args.min_stars,
+            Filters(
+                min_files=args.min_files,
+                min_threads=args.min_threads,
+                min_stars=args.min_stars,
+                licences=None if args.any_license else SAFE_LICENCES,
+            ),
             pages=args.pages,
         )
     except (GitHubError, RateLimited) as exc:
@@ -193,6 +205,15 @@ def find_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--limit", type=int, default=20, metavar="N", help="Show at most this many (default 20)"
+    )
+    parser.add_argument(
+        "--any-license",
+        action="store_true",
+        help=(
+            "Keep every licence, including ones GitHub could not name. Dropped by "
+            "default: an entry records a licence, and only a licence somebody "
+            "listed as safe can be recorded without reading the repository"
+        ),
     )
     parser.add_argument(
         "--heads",
@@ -271,6 +292,13 @@ def _search_header(result: Search) -> None:
         )
     elif result.stopped_early:
         print(f"  Read {result.scanned} of them; --pages reads further.")
+    if result.unapproved:
+        print(
+            f"  {result.unapproved} dropped: licence not on the allowed list "
+            "(MIT, Apache-2.0, BSD, ISC, GPL, MPL and friends), or none GitHub "
+            "could name. Read the repository and use --any-license if one of "
+            "them is worth it."
+        )
 
 def _candidate_line(candidate: Candidate) -> None:
     print(

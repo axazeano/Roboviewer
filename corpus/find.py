@@ -37,6 +37,36 @@ PAGE_SIZE = 50
 # it means the query was too wide, not that the corpus ran out of candidates.
 SEARCH_CEILING = 1000
 MAX_PAGES = 20
+# Licences an entry may be recorded under. An allowed list rather than a
+# refused one, because the two are not symmetric: what is safe here is a closed
+# set that changes about once a decade, while what is unsafe is open and keeps
+# growing — BUSL, SSPL, Elastic, FSL, Commons Clause, whatever is written next.
+# A refused list is wrong the day after it is written; this one fails towards
+# dropping a candidate nobody looked at, which costs nothing.
+#
+# Copyleft belongs here: every entry is cloned, read locally and never
+# redistributed, and copyleft constrains distribution. What does not belong is
+# source-available terms, which restrict use itself — the one thing that bites
+# without distributing anything.
+#
+# Note BSL-1.0 is the Boost Software Licence, permissive, and has nothing to do
+# with BUSL-1.1, the Business Source Licence, which is source-available. The
+# names collide; only one of them is here.
+SAFE_LICENCES = frozenset(
+    {
+        # permissive
+        "0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "BSL-1.0", "ISC",
+        "MIT", "MIT-0", "PostgreSQL", "Python-2.0", "Unlicense", "Zlib",
+        # copyleft: constrains distribution, and there is none
+        "AGPL-3.0", "AGPL-3.0-only", "AGPL-3.0-or-later",
+        "CDDL-1.0", "EPL-2.0",
+        "GPL-2.0", "GPL-2.0-only", "GPL-2.0-or-later",
+        "GPL-3.0", "GPL-3.0-only", "GPL-3.0-or-later",
+        "LGPL-2.1", "LGPL-2.1-only", "LGPL-2.1-or-later",
+        "LGPL-3.0", "LGPL-3.0-only", "LGPL-3.0-or-later",
+        "MPL-2.0",
+    }
+)
 
 SEARCH_QUERY = """
 query($q: String!, $size: Int!, $cursor: String) {
@@ -93,12 +123,49 @@ class Candidate:
 
 
 @dataclass(frozen=True)
+class Filters:
+    """What the search query could not express, applied on this side.
+
+    `min_threads` is one rather than zero: a pull request nobody commented on a
+    line of cannot have a review that found anything, so it is never a candidate.
+
+    `licences` keeps what GitHub named as one of `SAFE_LICENCES` and drops
+    everything else — including both of GitHub's ways of saying it does not know:
+    no `licenseInfo` when it found no file, and `NOASSERTION` when it found one
+    it could not map. Neither means the repository is unlicensed; `juju/juju`
+    spells the file `LICENCE`, carries AGPL-3.0 in full, and comes back as
+    `NOASSERTION`. But an entry records a licence, and a recorded value nobody
+    read is a claim nobody checked. Any of it is recoverable by reading the
+    repository and writing the licence into the entry by hand.
+    """
+
+    min_files: int = 0
+    min_threads: int = 1
+    min_stars: int = 0
+    # None keeps everything, for a candidate somebody has decided to read the
+    # licence of by hand.
+    licences: frozenset[str] | None = SAFE_LICENCES
+
+    def rejects(self, candidate: Candidate) -> bool:
+        return (
+            candidate.files < self.min_files
+            or candidate.threads < self.min_threads
+            or candidate.stars < self.min_stars
+        )
+
+
+@dataclass(frozen=True)
 class Search:
-    """What one query yielded, and whether the ceiling cut it short."""
+    """What one query yielded, and what was dropped on the way."""
 
     candidates: list[Candidate]
     matched: int
     scanned: int
+    # Passed every other filter, and carried a licence not on the allowed list —
+    # unknown to GitHub, or known and not one of these. Counted rather than
+    # silently dropped: a sieve that hides what it removed is a sieve nobody can
+    # check.
+    unapproved: int = 0
 
     @property
     def truncated(self) -> bool:
@@ -118,38 +185,35 @@ class Search:
 def search(
     github: GitHub,
     query: str,
-    *,
-    min_files: int = 0,
-    min_threads: int = 1,
-    min_stars: int = 0,
+    filters: Filters | None = None,
     pages: int = 5,
 ) -> Search:
-    """Pull requests the query yields that pass the filters search cannot express.
-
-    `min_threads` defaults to one: a pull request nobody commented on a line of
-    cannot have a review that found anything, so it is never a candidate.
-    """
+    """Pull requests the query yields that pass the filters search cannot express."""
+    filters = filters or Filters()
     found: list[Candidate] = []
     cursor: str | None = None
     matched = 0
     scanned = 0
+    unapproved = 0
     for _ in range(min(pages, MAX_PAGES)):
         page = _page(github, query, cursor)
         matched = page.get("issueCount", 0)
         nodes = [node for node in page.get("nodes") or [] if node]
         scanned += len(nodes)
-        found.extend(
-            candidate
-            for candidate in (_candidate(node) for node in nodes)
-            if candidate.files >= min_files
-            and candidate.threads >= min_threads
-            and candidate.stars >= min_stars
-        )
+        for candidate in (_candidate(node) for node in nodes):
+            if filters.rejects(candidate):
+                continue
+            if filters.licences is not None and candidate.license not in filters.licences:
+                unapproved += 1
+                continue
+            found.append(candidate)
         info = page.get("pageInfo") or {}
         if not info.get("hasNextPage"):
             break
         cursor = info.get("endCursor")
-    return Search(candidates=found, matched=matched, scanned=scanned)
+    return Search(
+        candidates=found, matched=matched, scanned=scanned, unapproved=unapproved
+    )
 
 
 def propose_head(github: GitHub, candidate: Candidate) -> tuple[str, list[Thread]]:
