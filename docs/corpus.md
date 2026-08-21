@@ -159,7 +159,14 @@ asked for the wrong thing.
 
 That head is the commit the earliest review thread was written against, not the
 merged head — at the merged head everything reviewers found is already fixed and
-the entry would measure nothing. `--toml` prints the same thing as an `[[entry]]`
+the entry would measure nothing.
+
+Sometimes no head comes back. That is an answer, not a gap: the search asks
+GraphQL to resolve the commit a thread was written against rather than to repeat
+the SHA it stored, so nothing comes back when GitHub can no longer reach it —
+force-pushed and gone. An entry naming that commit could never be rebuilt, which
+is one of the things `corpus-selection.md` disqualifies, and the command says so
+instead of suggesting the SHA be found by hand. `--toml` prints the same thing as an `[[entry]]`
 block ready to paste into the list.
 
 **It does not decide whether a review found a defect.** That judgement is what

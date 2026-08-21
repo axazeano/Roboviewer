@@ -132,9 +132,16 @@ def propose_head(github: GitHub, candidate: Candidate) -> tuple[str, list[Thread
     rounds anchors its later threads at later commits — the first one is the
     state before any of the fixes were made.
 
-    Returns an empty head when no thread carries a commit, which is what an
-    anonymous REST answer looks like for an old pull request. The threads come
-    back either way: they are what the defect-or-preference judgement is made on.
+    Returns an empty head when no thread carries a commit, and that is a finding
+    rather than a gap. GraphQL resolves `originalCommit` instead of handing back
+    the SHA it stored, so a null one means GitHub cannot reach that commit any
+    more — force-pushed and unreachable — and an entry naming it could never be
+    rebuilt. The criteria disqualify exactly that. (REST answers differently: it
+    returns the stored `original_commit_id` whether or not the commit survives,
+    so the anonymous path can hand back a head that nothing will clone.)
+
+    The threads come back either way: they are what the defect-or-preference
+    judgement is made on.
     """
     threads = github.review_threads(parse_pull_url(candidate.url))
     anchored = [thread for thread in threads if thread.commit and thread.comments]

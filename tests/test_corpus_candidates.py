@@ -286,6 +286,28 @@ def test_a_review_with_no_commit_recorded_gives_no_head_rather_than_a_guess() ->
     assert len(threads) == 1, "the threads still come back: they are what a person judges"
 
 
+def test_an_unreachable_head_is_reported_as_disqualifying_not_as_homework(
+    monkeypatch, capsys
+) -> None:
+    """GraphQL resolves originalCommit rather than returning the SHA it stored,
+    so a null one means the commit is gone from GitHub. Telling the reader to
+    fetch the head by hand sends them after something nothing can clone; the
+    criteria disqualify the entry outright."""
+    github, _ = client(
+        page(node(7, files=30)),
+        graphql_threads(("", "2026-05-01T10:00:00Z", "this races")),
+    )
+    monkeypatch.setattr("corpus.cli.resolve_token", lambda: "t")
+    monkeypatch.setattr("corpus.cli.GitHub", lambda token: github)  # noqa: ARG005
+
+    assert main(["find", "q", "--min-files", "30", "--heads"]) == 0
+
+    said = capsys.readouterr()
+    assert "disqualifies it" in said.err
+    assert "by hand" not in said.err
+    assert "this races" in said.out, "the threads are still printed for the person to read"
+
+
 def test_the_draft_carries_the_facts_and_leaves_the_judgement_blank() -> None:
     draft = as_toml(CANDIDATE, "e" * 40)
 

@@ -319,10 +319,21 @@ def _with_head(github: GitHub, candidate: Candidate, *, as_toml_too: bool) -> No
         return
 
     print(f"── {candidate.id}  {candidate.url}")
-    if not head:
+    if not head and threads:
+        # GraphQL resolves originalCommit rather than reading a stored SHA, so a
+        # null there means GitHub cannot reach the commit any more. Reading the
+        # SHA off the pull request by hand does not help: nothing can clone it.
         print(
-            "   No thread names the commit it was written against; the head has to be "
-            "read off the pull request by hand.",
+            "   Every thread was written against a commit GitHub can no longer reach — "
+            "force-pushed and gone. The entry cannot be rebuilt, which disqualifies it "
+            "(docs/corpus-selection.md).",
+            file=sys.stderr,
+        )
+    elif not head:
+        print(
+            "   The search counted review threads and none came back; nothing here "
+            "names a head. Worth a look at the pull request before trusting either "
+            "number.",
             file=sys.stderr,
         )
     else:
