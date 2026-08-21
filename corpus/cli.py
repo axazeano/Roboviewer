@@ -22,7 +22,8 @@ from pathlib import Path
 
 from .build import Result, build
 from .candidates import entry_toml, on_github
-from .candidates.criteria import SAFE_LICENCES, Candidate, Filters
+from .candidates.candidate import Candidate
+from .candidates.criteria import SAFE_LICENCES, Filters
 from .entries import Entry, load_list, select
 from .github import GitHub, GitHubError, RateLimited, resolve_token
 from .store import UNKNOWN, Store, default_root

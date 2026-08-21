@@ -9,9 +9,10 @@ on this side, at one request per page instead of one per candidate.
 Three parts, and they are separate because they fail and change for different
 reasons:
 
-- `criteria` — what a candidate is and what disqualifies one. No client, no
-  request, nothing that can fail; a statement about a pull request rather than
-  a way of getting one, and true whoever is asked.
+- `candidate` — the pull request a search yielded, as facts. The word the other
+  three are about, so it belongs to none of them.
+- `criteria` — the bar one is held to, and what to say when it is missed. No
+  client, no request, nothing that can fail, and true whoever is asked.
 - `on_github` — the two questions only GitHub can answer: which pull requests
   match, and which commit their reviewers were looking at. Named for the forge
   because a different forge is what replaces it, and both questions go at once.

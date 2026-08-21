@@ -12,7 +12,7 @@ here is exactly what it will not hold yet.
 
 from __future__ import annotations
 
-from .criteria import Candidate
+from .candidate import Candidate
 
 
 def from_candidate(candidate: Candidate, head: str) -> str:

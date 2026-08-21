@@ -175,11 +175,12 @@ it — a review made of naming notes has the same thread count as one that caugh
 a race. The threads are printed so the call can be made without opening the pull
 request, and it stays a person's call.
 
-Two limits worth knowing. Pages are fifty, because GitHub answers fifty nodes of
-this shape and refuses a hundred with a 502. And search never returns more than
-1000 results however far the cursor is walked: when a run hits that, it says so,
-and the fix is a narrower query — usually a shorter `created:` window — rather
-than more pages.
+Two limits worth knowing. Pages are fifty because a hundred nodes of this shape
+502s intermittently — a hundred comes back most of the time and then fails twice
+in a row under load, which is worse than a limit that always refuses. And search
+never returns more than 1000 results however far the cursor is walked: when a run
+hits that, it says so, and the fix is a narrower query — usually a shorter
+`created:` window — rather than more pages.
 
 **Licences are allowed, not refused.** Only the ones on a listed set survive —
 MIT, Apache-2.0, the BSD family, ISC, and the copyleft licences, which are fine

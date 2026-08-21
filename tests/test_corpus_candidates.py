@@ -14,7 +14,8 @@ import json
 from typing import Any
 
 from corpus.candidates import entry_toml, on_github
-from corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Candidate, Filters
+from corpus.candidates.candidate import Candidate
+from corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Filters
 from corpus.cli import main
 from corpus.github import GitHub, Response
 

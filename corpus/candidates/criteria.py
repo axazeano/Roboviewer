@@ -1,9 +1,9 @@
-"""What a candidate is, and what puts one out.
+"""The bar a candidate is held to, and what to say when it does not clear it.
 
-Nothing here talks to GitHub. A candidate is the facts the criteria ask about,
-a `Filters` is the bar those facts are held to, and a `Reason` is what to say
-when they do not clear it — which makes this the one file to read to find out
-what the command keeps, and the one to change to keep something else.
+Nothing here talks to GitHub, and nothing here is a candidate: `Filters` is the
+bar, `Reason` is the answer when it is missed. Which makes this the one file to
+read to find out what the command keeps, and the one to change to keep something
+else.
 
 The prose version is `docs/corpus-selection.md`, and most of it stays prose on
 purpose: whether a review found a defect or argued about naming is judgement,
@@ -14,32 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
-@dataclass(frozen=True)
-class Candidate:
-    """One pull request a search yielded, with the facts the criteria ask about.
-
-    `base` comes back with the search; `head` does not, because deriving it
-    costs a request of its own — see `proposal.propose_head`.
-    """
-
-    url: str
-    slug: str
-    number: int
-    files: int
-    added: int
-    removed: int
-    threads: int
-    stars: int
-    language: str
-    license: str
-    base: str
-
-    @property
-    def id(self) -> str:
-        """The directory name this entry would build into: repo and number, the
-        shape the committed list already uses."""
-        return f"{self.slug.split('/')[-1].lower()}-{self.number}"
+from .candidate import Candidate
 
 
 @dataclass(frozen=True)

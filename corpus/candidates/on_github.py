@@ -21,11 +21,15 @@ from typing import Any
 
 from ..entries import parse_pull_url
 from ..github import GitHub, GitHubError, Thread
-from .criteria import Candidate, Filters, Reason
+from .candidate import Candidate
+from .criteria import Filters, Reason
 
-# GitHub answers 50 nodes of this shape and refuses 100 with a 502 — the nested
-# repository and thread counts are resolved per node, and a hundred of them is
-# past what the search endpoint will do in one go.
+# 100 nodes of this shape 502s some of the time: measured against three queries,
+# a hundred came back twice on each and then failed twice in a row on one of
+# them, and the same query answered a hundred again a minute later. So it is
+# load, not the query — the nested repository and thread counts are resolved per
+# node, and a hundred of those is close enough to the endpoint's own timeout to
+# fall over when it is busy. 50 has not been seen to fail.
 PAGE_SIZE = 50
 # Search never returns more than this, however far the cursor is walked. Hitting
 # it means the query was too wide, not that the corpus ran out of candidates.
