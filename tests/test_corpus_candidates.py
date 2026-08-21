@@ -13,9 +13,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from corpus.candidates import on_github
 from corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Candidate, Filters
-from corpus.candidates.proposal import as_toml, propose_head
-from corpus.candidates.search import search
+from corpus.candidates.stanza import as_toml
 from corpus.cli import main
 from corpus.github import GitHub, Response
 
@@ -85,7 +85,7 @@ def client(*answers: Any) -> tuple[GitHub, Answers]:
 def test_the_size_filter_is_the_whole_point_and_it_keeps_the_boundary() -> None:
     github, _ = client(page(node(1, files=29), node(2, files=30), node(3, files=31)))
 
-    result = search(github, "q", Filters(min_files=30))
+    result = on_github.search(github, "q", Filters(min_files=30))
 
     assert [c.number for c in result.candidates] == [2, 3]
 
@@ -95,18 +95,18 @@ def test_a_pull_request_nobody_reviewed_a_line_of_is_never_a_candidate() -> None
     nothing to judge, whatever the diff looks like."""
     github, _ = client(page(node(1, threads=0), node(2, threads=1)))
 
-    result = search(github, "q")
+    result = on_github.search(github, "q")
 
     assert [c.number for c in result.candidates] == [2]
 
 
 def test_stars_filter_and_defaults_leave_a_bare_query_unfiltered() -> None:
     github, _ = client(page(node(1, stars=10), node(2, stars=1000)))
-    kept = search(github, "q", Filters(min_stars=500)).candidates
+    kept = on_github.search(github, "q", Filters(min_stars=500)).candidates
     assert [c.number for c in kept] == [2]
 
     github, _ = client(page(node(1, stars=10), node(2, stars=1000)))
-    assert len(search(github, "q").candidates) == 2
+    assert len(on_github.search(github, "q").candidates) == 2
 
 
 def test_paging_follows_the_cursor_and_stops_at_the_page_budget() -> None:
@@ -116,7 +116,7 @@ def test_paging_follows_the_cursor_and_stops_at_the_page_budget() -> None:
         page(node(3), more=True),
     )
 
-    result = search(github, "q", pages=2)
+    result = on_github.search(github, "q", pages=2)
 
     assert [c.number for c in result.candidates] == [1, 2]
     assert len(transport.bodies) == 2
@@ -127,7 +127,7 @@ def test_paging_follows_the_cursor_and_stops_at_the_page_budget() -> None:
 def test_paging_stops_when_github_says_there_is_no_more() -> None:
     github, transport = client(page(node(1), more=False))
 
-    search(github, "q", pages=5)
+    on_github.search(github, "q", pages=5)
 
     assert len(transport.bodies) == 1
 
@@ -136,18 +136,18 @@ def test_the_thousand_result_ceiling_is_told_apart_from_a_short_page_budget() ->
     """Two different situations, two different fixes: narrow the query, or read
     further. Reporting both as one leaves the caller guessing."""
     github, _ = client(page(*[node(n) for n in range(50)], more=True, matched=50_000))
-    budget = search(github, "q", pages=1)
+    budget = on_github.search(github, "q", pages=1)
     assert budget.stopped_early and not budget.truncated
 
     github, _ = client(page(*[node(n) for n in range(50)], more=True, matched=50_000))
-    ceiling = search(github, "q", pages=20)
+    ceiling = on_github.search(github, "q", pages=20)
     assert ceiling.truncated and not ceiling.stopped_early
 
 
 def test_everything_read_is_reported_even_when_nothing_passes() -> None:
     github, _ = client(page(node(1, files=2), matched=7))
 
-    result = search(github, "q", Filters(min_files=30))
+    result = on_github.search(github, "q", Filters(min_files=30))
 
     assert result.candidates == []
     assert (result.matched, result.scanned) == (7, 1)
@@ -167,7 +167,7 @@ def test_only_a_licence_on_the_allowed_list_survives() -> None:
         )
     )
 
-    result = search(github, "q")
+    result = on_github.search(github, "q")
 
     assert [c.number for c in result.candidates] == [5]
     assert result.rejected[LICENCE] == 4
@@ -181,7 +181,7 @@ def test_copyleft_is_allowed_and_the_boost_lookalike_is_not_confused_for_it() ->
         page(node(1, license="AGPL-3.0"), node(2, license="BSL-1.0"), node(3, license="BUSL-1.1"))
     )
 
-    result = search(github, "q")
+    result = on_github.search(github, "q")
 
     assert [c.number for c in result.candidates] == [1, 2]
 
@@ -192,7 +192,7 @@ def test_the_allowed_list_can_be_stood_down_on_purpose() -> None:
     once somebody has read the repository is not."""
     github, _ = client(page(node(1, license="NOASSERTION")))
 
-    result = search(github, "q", Filters(licences=None))
+    result = on_github.search(github, "q", Filters(licences=None))
 
     assert [c.number for c in result.candidates] == [1]
     assert result.rejected == {}
@@ -203,7 +203,7 @@ def test_a_candidate_rejected_on_size_is_not_counted_against_its_licence() -> No
     other away."""
     github, _ = client(page(node(1, files=2, license=None)))
 
-    result = search(github, "q", Filters(min_files=30))
+    result = on_github.search(github, "q", Filters(min_files=30))
 
     assert result.candidates == []
     assert result.rejected == {TOO_SMALL: 1}, "one reason each, so the counts add up"
@@ -271,7 +271,7 @@ def test_the_head_is_the_commit_the_earliest_thread_was_written_against() -> Non
         )
     )
 
-    head, threads = propose_head(github, CANDIDATE)
+    head, threads = on_github.propose_head(github, CANDIDATE)
 
     assert head == "e" * 40
     assert len(threads) == 2
@@ -280,7 +280,7 @@ def test_the_head_is_the_commit_the_earliest_thread_was_written_against() -> Non
 def test_a_review_with_no_commit_recorded_gives_no_head_rather_than_a_guess() -> None:
     github, _ = client(graphql_threads(("", "2026-05-01T10:00:00Z", "naming")))
 
-    head, threads = propose_head(github, CANDIDATE)
+    head, threads = on_github.propose_head(github, CANDIDATE)
 
     assert head == ""
     assert len(threads) == 1, "the threads still come back: they are what a person judges"
@@ -333,7 +333,7 @@ def test_a_run_that_finds_nothing_says_which_filter_took_everything() -> None:
     The dominant reason is what names the fix."""
     github, _ = client(page(*[node(n, threads=0) for n in range(5)]))
 
-    result = search(github, "q", Filters(min_files=30))
+    result = on_github.search(github, "q", Filters(min_files=30))
 
     assert result.candidates == []
     assert result.worst == (NO_REVIEW, 5)
@@ -344,7 +344,7 @@ def test_the_reasons_are_counted_in_the_order_the_filters_ask() -> None:
     the counts sum to what was dropped rather than double-counting it."""
     github, _ = client(page(node(1, files=2, threads=0, stars=0, license=None)))
 
-    result = search(github, "q", Filters(min_files=30, min_stars=500))
+    result = on_github.search(github, "q", Filters(min_files=30, min_stars=500))
 
     assert sum(result.rejected.values()) == 1
     assert result.worst == (NO_REVIEW, 1)

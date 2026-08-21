@@ -11,10 +11,11 @@ reasons:
 
 - `criteria` — what a candidate is and what disqualifies one. No client, no
   request, nothing that can fail; a statement about a pull request rather than
-  a way of getting one.
-- `search` — walking GitHub's search API, with the two limits it imposes.
-- `proposal` — what to put in front of a person once a candidate survives: the
-  commit reviewers were looking at, and the entry stanza to paste.
+  a way of getting one, and true whoever is asked.
+- `on_github` — the two questions only GitHub can answer: which pull requests
+  match, and which commit their reviewers were looking at. Named for the forge
+  because a different forge is what replaces it, and both questions go at once.
+- `stanza` — the `[[entry]]` text to paste, which outlives both.
 
 What is deliberately absent is the judgement `docs/corpus-selection.md` asks
 for: whether a thread found a defect or a naming preference. That decides

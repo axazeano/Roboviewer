@@ -21,9 +21,9 @@ import sys
 from pathlib import Path
 
 from .build import Result, build
+from .candidates import on_github
 from .candidates.criteria import SAFE_LICENCES, Candidate, Filters
-from .candidates.proposal import as_toml, propose_head
-from .candidates.search import Search, search
+from .candidates.stanza import as_toml
 from .entries import Entry, load_list, select
 from .github import GitHub, GitHubError, RateLimited, resolve_token
 from .store import UNKNOWN, Store, default_root
@@ -121,7 +121,7 @@ def find_main(argv: list[str]) -> int:
         )
         return SETUP
     try:
-        result = search(
+        result = on_github.search(
             github,
             args.query,
             Filters(
@@ -271,7 +271,7 @@ def _summary(results: list[Result], store: Store) -> None:
         )
 
 
-def _search_header(result: Search) -> None:
+def _search_header(result: on_github.Search) -> None:
     """What was read, and — when it matters — why it stopped. The ceiling and an
     exhausted page budget look the same in the output and have opposite fixes."""
     print(
@@ -290,7 +290,7 @@ def _search_header(result: Search) -> None:
         print(f"  {count:>4} dropped — {reason.why}")
     _why_nothing_passed(result)
 
-def _why_nothing_passed(result: Search) -> None:
+def _why_nothing_passed(result: on_github.Search) -> None:
     """A run that found nothing usually died on one filter, and the fix depends
     on which. The fix is the reason's own — see `candidates.criteria` — so the two
     cannot drift apart."""
@@ -313,7 +313,7 @@ def _with_head(github: GitHub, candidate: Candidate, *, as_toml_too: bool) -> No
     the criteria turn on whether they found a defect, and that is unreadable from
     a count of threads."""
     try:
-        head, threads = propose_head(github, candidate)
+        head, threads = on_github.propose_head(github, candidate)
     except (GitHubError, RateLimited) as exc:
         print(f"✗ {candidate.id}: {exc}", file=sys.stderr)
         return

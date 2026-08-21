@@ -1,12 +1,16 @@
-"""Walking GitHub's search API, and the two limits it puts on the walk.
+"""Finding candidates on GitHub: everything only GitHub can answer.
+
+Two questions, and they are together because one thing replaces both — another
+forge, whose search and whose reviews would have to be asked differently. What
+a candidate has to be is `criteria.py` and stays true whoever is asked.
 
 Search is the only part of the corpus commands that must be GraphQL: the size
 of a pull request is not a search qualifier, but it comes back as a field, so
 asking for it with the results is what makes filtering here affordable.
 
-Both limits are GitHub's rather than ours, and both look like a thin result
-from the outside — which is why `Search` tells them apart. A page is fifty
-because a hundred nodes of this shape times out with a 502, and no query
+Both search limits are GitHub's rather than ours, and both look like a thin
+result from the outside — which is why `Search` tells them apart. A page is
+fifty because a hundred nodes of this shape times out with a 502, and no query
 returns more than a thousand results however far the cursor is walked.
 """
 
@@ -15,7 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..github import GitHub, GitHubError
+from ..entries import parse_pull_url
+from ..github import GitHub, GitHubError, Thread
 from .criteria import Candidate, Filters, Reason
 
 # GitHub answers 50 nodes of this shape and refuses 100 with a 502 — the nested
@@ -118,6 +123,25 @@ def search(
         cursor = info.get("endCursor")
     return Search(candidates=found, matched=matched, scanned=scanned, rejected=rejected)
 
+
+def propose_head(github: GitHub, candidate: Candidate) -> tuple[str, list[Thread]]:
+    """(the commit the earliest review thread was written against, every thread).
+
+    Not the merged head, and not the base: the state reviewers were looking at
+    when they first wrote something about a line. A review that ran over several
+    rounds anchors its later threads at later commits — the first one is the
+    state before any of the fixes were made.
+
+    Returns an empty head when no thread carries a commit, which is what an
+    anonymous REST answer looks like for an old pull request. The threads come
+    back either way: they are what the defect-or-preference judgement is made on.
+    """
+    threads = github.review_threads(parse_pull_url(candidate.url))
+    anchored = [thread for thread in threads if thread.commit and thread.comments]
+    if not anchored:
+        return "", threads
+    earliest = min(anchored, key=lambda thread: thread.comments[0].created_at)
+    return earliest.commit, threads
 
 def _page(github: GitHub, query: str, cursor: str | None) -> dict[str, Any]:
     variables = {"q": query, "size": PAGE_SIZE, "cursor": cursor}
