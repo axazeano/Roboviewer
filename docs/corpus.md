@@ -110,6 +110,53 @@ commit each thread belongs to is saved in `comments.json`, so an entry built
 earlier can be checked without asking GitHub again — after one `--refresh`,
 which is what fills the field in.
 
+## Finding candidates
+
+Adding an entry starts with a pull request of the right size whose review found
+something, and GitHub cannot search for the first half: there is no `files:`
+qualifier and no `additions:`. The size does come back with the results through
+GraphQL, so the filter runs on this side — one request per fifty candidates
+instead of one per candidate.
+
+```bash
+python -m corpus find "is:pr is:merged language:Go" --min-files 30 --min-stars 500
+```
+
+```
+▸ 105373 match the query, 150 read, 4 pass the filters
+    64 files    4471+/125   -   1 threads     7015 ★  Apache-2.0   .../kubevirt/pull/15039
+    37 files    2449+/7     -  40 threads    26228 ★  Apache-2.0   .../typescript-go/pull/1326
+```
+
+`--heads` adds the commit reviewers were looking at, and what they said at it:
+
+```
+── cluster-api-14069  https://github.com/kubernetes-sigs/cluster-api/pull/14069
+   base 1e0c0efc3f13 → head 9e471f2dadcc (the commit reviewers saw)
+   · Makefile:386 @sbueringer: I think this line should not be changed
+   · test/infrastructure/docker/main.go:438 @sbueringer: Let's also drop the now redundant …
+```
+
+That head is the commit the earliest review thread was written against, not the
+merged head — at the merged head everything reviewers found is already fixed and
+the entry would measure nothing. `--toml` prints the same thing as an `[[entry]]`
+stanza ready to paste into the list.
+
+**It does not decide whether a review found a defect.** That judgement is what
+[the selection criteria](corpus-selection.md) are for, and no query expresses
+it — a review made of naming notes has the same thread count as one that caught
+a race. The threads are printed so the call can be made without opening the pull
+request, and it stays a person's call.
+
+Two limits worth knowing. Pages are fifty, because GitHub answers fifty nodes of
+this shape and refuses a hundred with a 502. And search never returns more than
+1000 results however far the cursor is walked: when a run hits that, it says so,
+and the fix is a narrower query — usually a shorter `created:` window — rather
+than more pages.
+
+A token is required here, unlike the rest of the command: the search API is
+GraphQL, and GraphQL refuses anonymous requests.
+
 ## Where the corpus lives
 
 In order:
@@ -177,7 +224,8 @@ neither has it, the entry needs a different head — or a different pull request
 
 ## Tests
 
-`tests/test_corpus_list.py`, `tests/test_corpus_fetch.py` and
-`tests/test_corpus_github.py` run under `pytest` with the rest of the suite and
+`tests/test_corpus_list.py`, `tests/test_corpus_fetch.py`,
+`tests/test_corpus_github.py` and `tests/test_corpus_find.py` run under `pytest`
+with the rest of the suite and
 never touch the network: the origins are local repositories, and every HTTP
 request goes through an injected transport.

@@ -111,6 +111,12 @@ class GitHub:
         is null on half the corpus."""
         return self.token is not None
 
+    def graphql(self, query: str, variables: dict[str, Any]) -> Any:
+        """One GraphQL request, for callers that ask something other than review
+        threads. Errors surface the same way they do everywhere else here."""
+        body = json.dumps({"query": query, "variables": variables}).encode()
+        return self._call(f"{self.api_url}/graphql", body=body)
+
     def review_threads(self, pull: PullRequest) -> list[Thread]:
         if self.token:
             return self._threads_via_graphql(pull)
