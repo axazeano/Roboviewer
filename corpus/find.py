@@ -37,6 +37,14 @@ PAGE_SIZE = 50
 # it means the query was too wide, not that the corpus ran out of candidates.
 SEARCH_CEILING = 1000
 MAX_PAGES = 20
+# Why a candidate was dropped, in the order the filters ask. The order is the
+# useful part: a query that returns nothing usually dies on the first of these,
+# and knowing which one names the fix.
+NO_REVIEW = "nobody reviewed a line"
+TOO_SMALL = "too few files"
+TOO_OBSCURE = "too few stars"
+LICENCE = "licence not on the allowed list"
+
 # Licences an entry may be recorded under. An allowed list rather than a
 # refused one, because the two are not symmetric: what is safe here is a closed
 # set that changes about once a decade, while what is unsafe is open and keeps
@@ -52,14 +60,6 @@ MAX_PAGES = 20
 # Note BSL-1.0 is the Boost Software Licence, permissive, and has nothing to do
 # with BUSL-1.1, the Business Source Licence, which is source-available. The
 # names collide; only one of them is here.
-# Why a candidate was dropped, in the order the filters ask. The order is the
-# useful part: a query that returns nothing usually dies on the first of these,
-# and knowing which one names the fix.
-NO_REVIEW = "nobody reviewed a line"
-TOO_SMALL = "too few files"
-TOO_OBSCURE = "too few stars"
-LICENCE = "licence not on the allowed list"
-
 SAFE_LICENCES = frozenset(
     {
         # permissive
