@@ -22,9 +22,10 @@ added = 3816
 removed = 87
 established = "2026-08-04"    # пункты 1-16, ручное ревью
 extended = "2026-08-20"       # пункты 17-31, разбор выхлопа muse-glimmer
+extended_2 = "2026-08-21"     # пункт 32, разбор серии muse-3-low-nobuild
 note = """
 Осторожно при сравнении моделей: пункты 1-16 собраны независимо от прогонов,
-пункты 17-31 — из выхлопа muse-glimmer, проверенного по коду. Модель, породившая
+пункты 17-32 — из выхлопа muse-glimmer, проверенного по коду. Модель, породившая
 половину эталона, имеет на ней преимущество; честное сравнение моделей — только
 по пунктам 1-16 (`origin = "manual"`).
 """
@@ -344,6 +345,22 @@ kind = "tests"
 file = "iOSClient/Albums"
 what = "Ни один тест не покрывает новую фичу"
 evidence = "ни один файл с test в пути не упоминает AlbumsListViewModel / AlbumsManager / AlbumMapper"
+
+# Добавлено 2026-08-21 из серии muse-3-low-nobuild (прогон 3), проверено по коду.
+
+[[expected]]
+id = "copy-ocid-source-path"
+origin = "verified-from-run"
+severity = "major"
+kind = "correctness"
+file = "iOSClient/Albums/Presentation/Details/AlbumDetailsViewModel.swift"
+line = 299
+what = """
+sourcePath строится как metadata?.serverUrlFileName ?? photo, где photo — ocId.
+Метаданных нет — в COPY уходит ocId вместо серверного пути, запрос заведомо не
+выполнится. Тот же фолбэк во втором месте: AlbumsListViewModel.onPhotosSelected.
+"""
+evidence = "AlbumDetailsViewModel.swift:294-302 — строкой выше photo передан в getMetadataFromOcId(photo), то есть это ocId; AlbumsListViewModel.swift:212"
 
 # ---------------------------------------------------------------------------
 # Ложные утверждения: инструмент их выдавал, судья подтверждал, проверка опровергла.
