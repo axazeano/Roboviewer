@@ -1,8 +1,11 @@
-"""The `[[entry]]` text a candidate becomes, once somebody has decided about it.
+"""The `[[entry]]` a candidate becomes, half-written, for somebody to finish.
 
-The one part of this package that would survive moving the search to another
-forge, and the one that changes when the entry format does: `entries.py` reads
-this shape, and this writes it.
+A draft rather than an entry: the two fields carrying judgement are left
+blank, and a person fills them in or throws the whole thing away.
+
+The one part of this package that survives moving the search to another
+forge, and the one that changes when the entry format does: `entries.py`
+reads this shape, and this writes it.
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ from .criteria import Candidate
 
 
 def as_toml(candidate: Candidate, head: str) -> str:
-    """The `[[entry]]` stanza, with what needs judging left empty.
+    """The `[[entry]]` block, with what needs judging left empty.
 
     `found` and `domain` are blank on purpose. They are the two fields a reader
     uses to decide whether an entry earns its place, and a sentence generated

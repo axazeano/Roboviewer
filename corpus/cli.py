@@ -23,7 +23,7 @@ from pathlib import Path
 from .build import Result, build
 from .candidates import on_github
 from .candidates.criteria import SAFE_LICENCES, Candidate, Filters
-from .candidates.stanza import as_toml
+from .candidates.draft import as_toml
 from .entries import Entry, load_list, select
 from .github import GitHub, GitHubError, RateLimited, resolve_token
 from .store import UNKNOWN, Store, default_root
@@ -107,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
 def find_main(argv: list[str]) -> int:
     """`python -m corpus find` — the sieve, not the judge.
 
-    Prints what passed, and with --toml the stanzas to paste. Whether a review
+    Prints what passed, and with --toml the entries to paste. Whether a review
     found a defect or a naming preference is a person's call, and the threads
     are printed so it can be made without opening the pull request.
     """
@@ -217,7 +217,7 @@ def find_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--toml",
         action="store_true",
-        help="Print [[entry]] stanzas to paste into the corpus list (implies --heads)",
+        help="Print [[entry]] blocks to paste into the corpus list (implies --heads)",
     )
     return parser
 

@@ -15,7 +15,7 @@ from typing import Any
 
 from corpus.candidates import on_github
 from corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Candidate, Filters
-from corpus.candidates.stanza import as_toml
+from corpus.candidates.draft import as_toml
 from corpus.cli import main
 from corpus.github import GitHub, Response
 
@@ -286,16 +286,16 @@ def test_a_review_with_no_commit_recorded_gives_no_head_rather_than_a_guess() ->
     assert len(threads) == 1, "the threads still come back: they are what a person judges"
 
 
-def test_the_stanza_carries_the_facts_and_leaves_the_judgement_blank() -> None:
-    stanza = as_toml(CANDIDATE, "e" * 40)
+def test_the_draft_carries_the_facts_and_leaves_the_judgement_blank() -> None:
+    draft = as_toml(CANDIDATE, "e" * 40)
 
-    assert 'id = "widget-7"' in stanza
-    assert f'head = "{"e" * 40}"' in stanza
-    assert 'found = ""' in stanza, "what the review found is a person's sentence, not a guess"
-    assert 'domain = ""' in stanza
+    assert 'id = "widget-7"' in draft
+    assert f'head = "{"e" * 40}"' in draft
+    assert 'found = ""' in draft, "what the review found is a person's sentence, not a guess"
+    assert 'domain = ""' in draft
 
 
-def test_the_stanza_parses_as_the_entry_the_fetcher_already_loads() -> None:
+def test_the_draft_parses_as_the_entry_the_fetcher_already_loads() -> None:
     import tomllib
 
     from corpus.entries import Entry

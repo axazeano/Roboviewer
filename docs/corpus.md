@@ -160,7 +160,7 @@ asked for the wrong thing.
 That head is the commit the earliest review thread was written against, not the
 merged head — at the merged head everything reviewers found is already fixed and
 the entry would measure nothing. `--toml` prints the same thing as an `[[entry]]`
-stanza ready to paste into the list.
+block ready to paste into the list.
 
 **It does not decide whether a review found a defect.** That judgement is what
 [the selection criteria](corpus-selection.md) are for, and no query expresses
