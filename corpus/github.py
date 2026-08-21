@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -26,8 +27,11 @@ from .entries import PullRequest
 
 API_URL = "https://api.github.com"
 # In the order the GitHub CLI reads them, so a machine already set up for `gh`
-# needs nothing else.
+# needs nothing else — and where `gh` keeps its login outside the environment,
+# `token_from_gh` asks it.
 TOKEN_VARS = ("GITHUB_TOKEN", "GH_TOKEN")
+GH_TOKEN_COMMAND = ("gh", "auth", "token")
+GH_TIMEOUT_S = 5.0
 PAGE_SIZE = 100
 # A stop for the paging loops. Nothing in the corpus is near it; a pull request
 # that is would be a discussion, not a review.
@@ -37,6 +41,9 @@ TIMEOUT_S = 30.0
 # (status, lowercased headers, body)
 Response = tuple[int, dict[str, str], bytes]
 Transport = Callable[[str, dict[str, str], bytes | None], Response]
+# How `gh` is asked for its token. Injectable for the same reason the transport
+# is: a test that shells out is a test that depends on the machine.
+Runner = Callable[[list[str]], "subprocess.CompletedProcess[str]"]
 
 THREADS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
@@ -111,6 +118,12 @@ class GitHub:
         is null on half the corpus."""
         return self.token is not None
 
+    def graphql(self, query: str, variables: dict[str, Any]) -> Any:
+        """One GraphQL request, for callers that ask something other than review
+        threads. Errors surface the same way they do everywhere else here."""
+        body = json.dumps({"query": query, "variables": variables}).encode()
+        return self._call(f"{self.api_url}/graphql", body=body)
+
     def review_threads(self, pull: PullRequest) -> list[Thread]:
         if self.token:
             return self._threads_via_graphql(pull)
@@ -181,6 +194,42 @@ def token_from_env(environ: dict[str, str] | None = None) -> str | None:
         if value:
             return value
     return None
+
+
+def token_from_gh(runner: Runner | None = None) -> str | None:
+    """The login `gh` is already holding, or None if it is not there to ask.
+
+    Most machines that have a reason to build a corpus have `gh` set up, and its
+    token lives in a keyring rather than in the environment — so without this,
+    the answer to "you need a token" is to copy one out of `gh` and paste it into
+    a shell profile, which is a worse place for it than where it already is.
+
+    Every failure is the same answer: `gh` missing, `gh` not logged in, `gh`
+    hanging. None of them is worth an error, because the caller has a perfectly
+    good next step either way.
+    """
+    run = runner or _run_gh
+    try:
+        completed = run(list(GH_TOKEN_COMMAND))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip() or None
+
+
+def resolve_token(
+    environ: dict[str, str] | None = None, runner: Runner | None = None
+) -> str | None:
+    """The environment first, then `gh`. An explicit variable is a deliberate
+    choice — a CI job, or a second account — and beats whoever is logged in."""
+    return token_from_env(environ) or token_from_gh(runner)
+
+
+def _run_gh(command: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command, capture_output=True, text=True, timeout=GH_TIMEOUT_S, check=False
+    )
 
 
 def _threads_from_rest(comments: list[dict[str, Any]]) -> list[Thread]:

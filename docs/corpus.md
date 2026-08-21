@@ -50,28 +50,30 @@ page was looking at.
 
 ## The list
 
-One committed TOML file describes the corpus. It is the whole input: delete the
-clones, run the command again, and the same corpus comes back. Nobody has to
-remember which commit was the right head.
+One committed TOML file describes the corpus — [`corpus.toml`](../corpus.toml)
+in the repository root. It is the whole input: delete the clones, run the command
+again, and the same corpus comes back. Nobody has to remember which commit was
+the right head.
 
 ```toml
 [[entry]]
-id = "requests-6800"
-url = "https://github.com/psf/requests/pull/6800"
-base = "1111111111111111111111111111111111111111"
-head = "2222222222222222222222222222222222222222"
+id = "prometheus-19339"
+url = "https://github.com/prometheus/prometheus/pull/19339"
+base = "e75af386be14c1229b3976d4b7adfff853a4022e"
+head = "bfbc9d9295f7a9f1e32f14428f1f36e49319a5d9"
 
-language = "Python"
-domain = "HTTP client library"
-found = "Retries reused a consumed request body, so the second attempt sent nothing."
+language = "Go"
+domain = "time-series database"
+found = "A reviewer found the added lock guard cannot fix the hang it is for."
 license = "Apache-2.0"
-files = 3
-added = 74
-removed = 12
+files = 1
+added = 17
+removed = 11
 ```
 
-`corpus.example.toml` in the repository root is this file with the fields
-explained.
+Which pull requests belong in it, and what disqualifies one, is
+[corpus-selection.md](corpus-selection.md). `corpus.example.toml` is the same
+format with every field explained and deliberately unbuildable SHAs.
 
 | Field | Read by | Meaning |
 | --- | --- | --- |
@@ -110,6 +112,104 @@ commit each thread belongs to is saved in `comments.json`, so an entry built
 earlier can be checked without asking GitHub again — after one `--refresh`,
 which is what fills the field in.
 
+## Finding candidates
+
+Adding an entry starts with a pull request of the right size whose review found
+something, and GitHub cannot search for the first half: there is no `files:`
+qualifier and no `additions:`. The size does come back with the results through
+GraphQL, so the filter runs on this side — one request per fifty candidates
+instead of one per candidate.
+
+```bash
+python -m corpus find "is:pr is:merged language:Go review:changes_requested" \
+  --min-files 30 --min-stars 500
+```
+
+```
+▸ 41742 match the query, 250 read, 12 pass the filters
+   171 dropped — too few files
+    42 dropped — nobody reviewed a line
+    25 dropped — too few stars
+   410 files    3892+/1974  -  18 threads     2636 ★  MIT          .../compozy/pull/440
+   103 files    6523+/243   -  31 threads     7858 ★  Apache-2.0   .../filebrowser/pull/2806
+```
+
+**`review:changes_requested` is doing most of the work there, and without it the
+command returns nothing.** On a bare `is:pr is:merged` search about 98 per cent
+of what comes back has no review thread at all — merged bot updates and solo
+merges — so every other filter is applied to pull requests that were never going
+to qualify. With the qualifier the reviewed share goes to roughly 80 per cent.
+`comments:>5` works too and less well; sorting is not an option, since GitHub
+times out sorting a result set this large.
+
+Every rejection is counted by reason, one reason per candidate in the order the
+filters ask, so the numbers add up to what was dropped and read as a funnel. When
+nothing passes, the dominant reason is named along with the fix — a bare count of
+zero looks like the corpus has run out of GitHub, when it usually means the query
+asked for the wrong thing.
+
+`--heads` adds the commit reviewers were looking at, and what they said at it:
+
+```
+── cluster-api-14069  https://github.com/kubernetes-sigs/cluster-api/pull/14069
+   base 1e0c0efc3f13 → head 9e471f2dadcc (the commit reviewers saw)
+   · Makefile:386 @sbueringer: I think this line should not be changed
+   · test/infrastructure/docker/main.go:438 @sbueringer: Let's also drop the now redundant …
+```
+
+That head is the commit the earliest review thread was written against, not the
+merged head — at the merged head everything reviewers found is already fixed and
+the entry would measure nothing.
+
+Sometimes no head comes back. That is an answer, not a gap: the search asks
+GraphQL to resolve the commit a thread was written against rather than to repeat
+the SHA it stored, so nothing comes back when GitHub can no longer reach it —
+force-pushed and gone. An entry naming that commit could never be rebuilt, which
+is one of the things `corpus-selection.md` disqualifies, and the command says so
+instead of suggesting the SHA be found by hand. `--toml` prints the same thing as an `[[entry]]`
+block ready to paste into the list.
+
+**It does not decide whether a review found a defect.** That judgement is what
+[the selection criteria](corpus-selection.md) are for, and no query expresses
+it — a review made of naming notes has the same thread count as one that caught
+a race. The threads are printed so the call can be made without opening the pull
+request, and it stays a person's call.
+
+Two limits worth knowing. Pages are fifty because a hundred nodes of this shape
+502s intermittently — a hundred comes back most of the time and then fails twice
+in a row under load, which is worse than a limit that always refuses. And search
+never returns more than 1000 results however far the cursor is walked: when a run
+hits that, it says so, and the fix is a narrower query — usually a shorter
+`created:` window — rather than more pages.
+
+**Licences are allowed, not refused.** Only the ones on a listed set survive —
+MIT, Apache-2.0, the BSD family, ISC, and the copyleft licences, which are fine
+here because every entry is read locally and nothing is redistributed. Everything
+else is dropped, and the count is printed rather than swallowed.
+
+The list is written this way round because the two directions are not
+symmetric. What is safe is a closed set that changes about once a decade; what is
+unsafe is open and keeps growing, and a refused list is out of date the day after
+it is written. It also disposes of GitHub's two ways of saying it does not know —
+no `licenseInfo` when it found no file, `NOASSERTION` when it found one it could
+not map — without having to guess what a file called `Лицензия.md` or
+`old_license.md` contains.
+
+Being dropped is not a claim that a repository is unlicensed. `juju/juju` spells
+the file `LICENCE`, carries AGPL-3.0 in full, and comes back as `NOASSERTION`.
+It is a claim that nobody has read it — and an entry records a licence, so a
+recorded value nobody read is a claim nobody checked. `--any-license` stands the
+list down for a candidate somebody has decided to read the repository for.
+
+One name is worth knowing: `BSL-1.0` is the Boost Software Licence, permissive
+and on the list; `BUSL-1.1` is the Business Source Licence, source-available and
+not. Source-available terms are the ones that actually bite here, because they
+restrict use rather than distribution.
+
+A token is required here, unlike the rest of the command: the search API is
+GraphQL, and GraphQL refuses anonymous requests. It comes from the same three
+places as everywhere else — see [the token](#the-token).
+
 ## Where the corpus lives
 
 In order:
@@ -146,10 +246,14 @@ the entry is built again.
 ## The token
 
 ```bash
-export GITHUB_TOKEN=ghp_...
+gh auth login          # or: export GITHUB_TOKEN=ghp_...
 ```
 
-Read from `GITHUB_TOKEN` or `GH_TOKEN`, and worth setting for two reasons.
+Read from `GITHUB_TOKEN`, then `GH_TOKEN`, then from whatever `gh auth login` is
+holding — a machine already set up for the GitHub CLI needs nothing further, and
+its token stays in the keyring rather than being copied into a shell profile. An
+explicit variable wins where both exist, because setting one is a deliberate
+choice: a CI job, or a second account. Worth having for two reasons.
 Anonymous requests are capped at sixty an hour, which a corpus of a dozen
 entries can reach. And thread resolution exists only in GitHub's GraphQL API,
 which never answers without a token: fetched anonymously, every thread is saved
@@ -177,7 +281,8 @@ neither has it, the entry needs a different head — or a different pull request
 
 ## Tests
 
-`tests/test_corpus_list.py`, `tests/test_corpus_fetch.py` and
-`tests/test_corpus_github.py` run under `pytest` with the rest of the suite and
+`tests/test_corpus_list.py`, `tests/test_corpus_fetch.py`,
+`tests/test_corpus_github.py` and `tests/test_corpus_candidates.py` run under `pytest`
+with the rest of the suite and
 never touch the network: the origins are local repositories, and every HTTP
 request goes through an injected transport.

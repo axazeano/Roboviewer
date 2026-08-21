@@ -3,6 +3,7 @@ touches the network."""
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,24 @@ ANNOTATED = """\
    42 + |     self.total -= discount(code)
 ```
 """
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_github_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test inherits a login from the machine it runs on.
+
+    The corpus client takes a token from the environment and, failing that, from
+    whatever `gh` is logged in as. Both are ambient: with a token the client
+    takes the GraphQL path and a real one sends real requests, so the same test
+    passes on a laptop and fails in CI, or worse, quietly goes to the network.
+    A test that wants a token asks for one explicitly.
+    """
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(
+        "corpus.github._run_gh",
+        lambda command: subprocess.CompletedProcess(command, 1, stdout="", stderr=""),
+    )
 
 
 def make_bundle(root: Path, **overrides: Any) -> DiffBundle:
