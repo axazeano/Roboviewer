@@ -21,9 +21,8 @@ import sys
 from pathlib import Path
 
 from .build import Result, build
-from .candidates import on_github
+from .candidates import entry_toml, on_github
 from .candidates.criteria import SAFE_LICENCES, Candidate, Filters
-from .candidates.entry_text import as_toml
 from .entries import Entry, load_list, select
 from .github import GitHub, GitHubError, RateLimited, resolve_token
 from .store import UNKNOWN, Store, default_root
@@ -150,7 +149,7 @@ def find_main(argv: list[str]) -> int:
 
     print()
     for candidate in candidates:
-        _with_head(github, candidate, as_toml_too=args.toml)
+        _with_head(github, candidate, with_toml=args.toml)
     return OK
 
 
@@ -308,7 +307,7 @@ def _candidate_line(candidate: Candidate) -> None:
     )
 
 
-def _with_head(github: GitHub, candidate: Candidate, *, as_toml_too: bool) -> None:
+def _with_head(github: GitHub, candidate: Candidate, *, with_toml: bool) -> None:
     """The head, and the review at it. Printing what reviewers said is the point:
     the criteria turn on whether they found a defect, and that is unreadable from
     a count of threads."""
@@ -346,6 +345,6 @@ def _with_head(github: GitHub, candidate: Candidate, *, as_toml_too: bool) -> No
         print(f"   · {thread.file}:{thread.line or '?'} @{first.author}: {said}")
     if len(threads) > 5:
         print(f"   · [... {len(threads) - 5} more thread(s), not shown ...]")
-    if as_toml_too:
+    if with_toml:
         print()
-        print(as_toml(candidate, head))
+        print(entry_toml.from_candidate(candidate, head))

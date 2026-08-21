@@ -1,13 +1,13 @@
-"""The text of an `[[entry]]`, half-written, for a person to finish.
+"""The `[[entry]]` table of the corpus list, written from a candidate.
 
-Text rather than an `Entry`, and there is no draft type here, because a draft
-is precisely what the model refuses to be: the head is empty whenever no review
-thread named the commit it was written against, and `Entry` wants a 40-character
-SHA. A type for that would be a type for a state the corpus does not accept.
+One direction of a mapping whose other direction is `entries.py`: that parses
+this text into an `Entry`, this writes what it will parse. The round-trip test
+is what keeps the two from drifting.
 
-So this writes the shape `entries.py` reads, and the round-trip test is what
-keeps the two from drifting. It changes when the entry format does, and not when
-the search moves to another forge.
+Text rather than an `Entry` dumped back out, though the shape is the same one.
+The head is empty whenever no review thread named the commit it was written
+against, and the model refuses anything short of a full SHA — so what is printed
+here is exactly what it will not hold yet.
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ from __future__ import annotations
 from .criteria import Candidate
 
 
-def as_toml(candidate: Candidate, head: str) -> str:
-    """The `[[entry]]` block, with what needs judging left empty.
+def from_candidate(candidate: Candidate, head: str) -> str:
+    """The table, with what needs judging left empty.
 
     `found` and `domain` are blank on purpose. They are the two fields a reader
     uses to decide whether an entry earns its place, and a sentence generated

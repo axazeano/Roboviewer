@@ -13,9 +13,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from corpus.candidates import on_github
+from corpus.candidates import entry_toml, on_github
 from corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Candidate, Filters
-from corpus.candidates.entry_text import as_toml
 from corpus.cli import main
 from corpus.github import GitHub, Response
 
@@ -309,7 +308,7 @@ def test_an_unreachable_head_is_reported_as_disqualifying_not_as_homework(
 
 
 def test_the_draft_carries_the_facts_and_leaves_the_judgement_blank() -> None:
-    draft = as_toml(CANDIDATE, "e" * 40)
+    draft = entry_toml.from_candidate(CANDIDATE, "e" * 40)
 
     assert 'id = "widget-7"' in draft
     assert f'head = "{"e" * 40}"' in draft
@@ -322,7 +321,7 @@ def test_the_draft_parses_as_the_entry_the_fetcher_already_loads() -> None:
 
     from corpus.entries import Entry
 
-    raw = tomllib.loads(as_toml(CANDIDATE, "e" * 40))
+    raw = tomllib.loads(entry_toml.from_candidate(CANDIDATE, "e" * 40))
 
     entry = Entry.model_validate(raw["entry"][0])
     assert entry.pull.number == 7
