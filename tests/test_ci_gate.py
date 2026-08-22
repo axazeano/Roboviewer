@@ -14,8 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer import ci, console, gate
-from roboviewer.cli import main
+from roboviewer.cli import ci_env, console, exit_codes, main
 from roboviewer.models import Finding, ItemResult, ReviewRun, Severity, Verdict
 
 
@@ -58,9 +57,9 @@ def test_the_threshold_takes_everything_at_that_severity_and_worse() -> None:
         [item("ok")],
     )
 
-    assert [f.id for f in gate.blocking(run, "major")] == ["F001"]
-    assert [f.id for f in gate.blocking(run, "minor")] == ["F001", "F002"]
-    assert gate.blocking(run, gate.NEVER) == []
+    assert [f.id for f in exit_codes.blocking(run, "major")] == ["F001"]
+    assert [f.id for f in exit_codes.blocking(run, "minor")] == ["F001", "F002"]
+    assert exit_codes.blocking(run, exit_codes.NEVER) == []
 
 
 def test_a_finding_the_judge_threw_out_does_not_fail_the_build() -> None:
@@ -68,15 +67,15 @@ def test_a_finding_the_judge_threw_out_does_not_fail_the_build() -> None:
     turns a pipeline red is how a team learns to pass --fail-on never."""
     run = make_run([finding("F001", Severity.BLOCKER)], {"F001": "false_positive"}, [item("ok")])
 
-    assert gate.blocking(run, "blocker") == []
-    assert gate.exit_code(run, "blocker") == gate.OK
+    assert exit_codes.blocking(run, "blocker") == []
+    assert exit_codes.exit_code(run, "blocker") == exit_codes.OK
 
 
 def test_a_finding_outside_the_changed_lines_does_not_fail_the_build() -> None:
     run = make_run([], {}, [item("ok")])
     run.out_of_scope = [finding("F009", Severity.BLOCKER)]
 
-    assert gate.exit_code(run, "blocker") == gate.OK
+    assert exit_codes.exit_code(run, "blocker") == exit_codes.OK
 
 
 def test_a_crashed_item_and_a_real_blocker_exit_differently() -> None:
@@ -85,15 +84,15 @@ def test_a_crashed_item_and_a_real_blocker_exit_differently() -> None:
     crashed = make_run([], {}, [item("failed")])
     found = make_run([finding("F001", Severity.BLOCKER)], {"F001": "confirmed"}, [item("ok")])
 
-    assert gate.exit_code(crashed, "blocker") == gate.INCOMPLETE
-    assert gate.exit_code(found, "blocker") == gate.FINDINGS
-    assert gate.exit_code(make_run([], {}, [item("ok")]), "blocker") == gate.OK
+    assert exit_codes.exit_code(crashed, "blocker") == exit_codes.INCOMPLETE
+    assert exit_codes.exit_code(found, "blocker") == exit_codes.FINDINGS
+    assert exit_codes.exit_code(make_run([], {}, [item("ok")]), "blocker") == exit_codes.OK
 
 
 def test_findings_win_over_an_incomplete_run() -> None:
     run = make_run([finding("F001", Severity.BLOCKER)], {"F001": "confirmed"}, [item("failed")])
 
-    assert gate.exit_code(run, "blocker") == gate.FINDINGS
+    assert exit_codes.exit_code(run, "blocker") == exit_codes.FINDINGS
 
 
 def test_without_a_gate_a_blocker_still_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
@@ -101,8 +100,8 @@ def test_without_a_gate_a_blocker_still_exits_zero(capsys: pytest.CaptureFixture
     nobody asked to gate has no line about gating in it either."""
     run = make_run([finding("F001", Severity.BLOCKER)], {"F001": "confirmed"}, [item("ok")])
 
-    assert gate.exit_code(run, gate.NEVER) == gate.OK
-    console.gate_result(gate.blocking(run, gate.NEVER), gate.NEVER)
+    assert exit_codes.exit_code(run, exit_codes.NEVER) == exit_codes.OK
+    console.gate_result(exit_codes.blocking(run, exit_codes.NEVER), exit_codes.NEVER)
     assert capsys.readouterr().out == ""
 
 
@@ -114,7 +113,7 @@ def test_without_a_gate_a_blocker_still_exits_zero(capsys: pytest.CaptureFixture
     [("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", "GitLab CI"), ("GITHUB_BASE_REF", "GitHub Actions")],
 )
 def test_a_merge_request_pipeline_names_its_own_target(variable: str, forge: str) -> None:
-    environment = ci.detect({variable: "develop"})
+    environment = ci_env.detect({variable: "develop"})
 
     assert environment is not None
     assert (environment.target, environment.name) == ("develop", forge)
@@ -123,8 +122,8 @@ def test_a_merge_request_pipeline_names_its_own_target(variable: str, forge: str
 def test_a_branch_pipeline_has_no_target_to_offer() -> None:
     """GITHUB_BASE_REF is set and empty outside a pull request, and reviewing
     against a guessed branch is worse than asking for one."""
-    assert ci.detect({"GITHUB_BASE_REF": "", "CI_COMMIT_BRANCH": "main"}) is None
-    assert ci.detect({}) is None
+    assert ci_env.detect({"GITHUB_BASE_REF": "", "CI_COMMIT_BRANCH": "main"}) is None
+    assert ci_env.detect({}) is None
 
 
 def test_the_target_branch_can_come_from_the_environment(
@@ -168,7 +167,7 @@ def test_a_shallow_clone_is_named_as_the_likely_cause(
 
     code = main(["main", "--diff-only", "-C", str(clone)])
 
-    assert code == gate.SETUP
+    assert code == exit_codes.SETUP
     assert "clone is shallow" in capsys.readouterr().err
 
 

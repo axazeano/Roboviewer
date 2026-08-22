@@ -13,7 +13,7 @@ do next, and the job goes red either way.
 
 from __future__ import annotations
 
-from .models import SEVERITY_ORDER, Finding, ReviewRun, Severity
+from ..models import SEVERITY_ORDER, Finding, ReviewRun, Severity
 
 OK = 0
 # Findings at or above the threshold. The review itself went fine.

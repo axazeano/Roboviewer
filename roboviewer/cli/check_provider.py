@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import asyncio
 
-from .config import ProviderConfig, provider_config_path
-from .provider.probe import TOOL_MODES, ProbeResult, Wire, mask_headers, probe_all
+from ..config import ProviderConfig, provider_config_path
+from ..provider.probe import TOOL_MODES, ProbeResult, Wire, mask_headers, probe_all
 
 
 def check_provider(provider: ProviderConfig, model: str, source: str | None = None) -> int:
@@ -55,7 +55,27 @@ def check_provider(provider: ProviderConfig, model: str, source: str | None = No
 
     print()
     print("2. Tool call — this is how the reviewer submits its result")
-    return _report_tool_modes(modes)
+    return report_tool_modes(modes)
+
+
+def report_tool_modes(modes: dict[str, ProbeResult]) -> int:
+    """Prints what each tool_choice mode did and the verdict that follows from
+    it; returns the exit code that verdict implies — 1 when the gateway cannot
+    run a review."""
+    _print_mode_table(modes)
+    print()
+
+    working = [key for key, _, _ in TOOL_MODES if modes[key].tool_calls]
+    if not working:
+        _explain_no_tool_calls(modes)
+        return 1
+    # The reviewer needs "auto" during the run and the terminal mode on the last turn.
+    if "auto" not in working:
+        _explain_auto_missing()
+        return 1
+
+    _recommend_terminal_choice(working)
+    return 0
 
 
 def _dump_wire(wire: Wire) -> None:
@@ -82,26 +102,6 @@ def _print_auth_hints() -> None:
     print('  auth_header = "api-key",   auth_scheme = ""       → api-key: <key>')
     print('  auth_header = "X-Api-Key", auth_scheme = ""       → X-Api-Key: <key>')
     print('  auth_scheme = "Token"                             → Authorization: Token <key>')
-
-
-def _report_tool_modes(modes: dict[str, ProbeResult]) -> int:
-    """Prints what each tool_choice mode did and the verdict that follows from
-    it; returns the exit code that verdict implies — 1 when the gateway cannot
-    run a review."""
-    _print_mode_table(modes)
-    print()
-
-    working = [key for key, _, _ in TOOL_MODES if modes[key].tool_calls]
-    if not working:
-        _explain_no_tool_calls(modes)
-        return 1
-    # The reviewer needs "auto" during the run and the terminal mode on the last turn.
-    if "auto" not in working:
-        _explain_auto_missing()
-        return 1
-
-    _recommend_terminal_choice(working)
-    return 0
 
 
 def _print_mode_table(modes: dict[str, ProbeResult]) -> None:

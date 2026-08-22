@@ -20,8 +20,7 @@ PACKAGE = ROOT / "roboviewer"
 ENFORCED = [
     *sorted((PACKAGE / "reports").rglob("*.py")),
     PACKAGE / "observer.py",
-    PACKAGE / "cli.py",
-    PACKAGE / "console.py",
+    *sorted((PACKAGE / "cli").rglob("*.py")),
     *sorted((PACKAGE / "config").rglob("*.py")),
     *sorted((PACKAGE / "provider").rglob("*.py")),
     *sorted((PACKAGE / "repo").rglob("*.py")),

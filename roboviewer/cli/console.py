@@ -15,8 +15,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from . import gate
-from .config import (
+from ..config import (
     Config,
     ModelConfig,
     RateLimits,
@@ -24,11 +23,12 @@ from .config import (
     overrides,
     provider_config_path,
 )
-from .models import SEVERITY_LABEL, Finding, ItemResult, ReviewRun
-from .observer import AgentKind, AgentObserver, Observer
-from .repo import ChangeSet
-from .review import ChecklistItem, PromptError, Prompts
-from .review.prompts import language_name
+from ..models import SEVERITY_LABEL, Finding, ItemResult, ReviewRun
+from ..observer import AgentKind, AgentObserver, Observer
+from ..repo import ChangeSet
+from ..review import ChecklistItem, PromptError, Prompts
+from ..review.prompts import language_name
+from . import exit_codes
 
 
 class Console(Observer):
@@ -132,7 +132,7 @@ def gate_result(blocking: list[Finding], threshold: str) -> None:
     a line about gating in it. The severity is named because the reader's next
     move is either to fix the finding or to lower the threshold.
     """
-    if threshold == gate.NEVER:
+    if threshold == exit_codes.NEVER:
         return
     if not blocking:
         print(f"✔ Gate: nothing at {threshold} or worse.")
@@ -260,8 +260,8 @@ def _run(cfg: Config, root: Path) -> None:
     print(f"  reference pass {'on' if cfg.run.resolve_references else 'off'}")
     scope_state = f"±{cfg.run.scope_margin} lines" if cfg.run.enforce_scope else "off"
     print(f"  scope gate     {scope_state}")
-    print(f"  fail_on        {cfg.run.fail_on}"
-          f"{'' if cfg.run.fail_on == gate.NEVER else ' (exits 1 at this severity or worse)'}")
+    gated = "" if cfg.run.fail_on == exit_codes.NEVER else " (exits 1 at this severity or worse)"
+    print(f"  fail_on        {cfg.run.fail_on}{gated}")
     judge_state = "off" if not cfg.run.enable_judge else cfg.run.judge_mode.replace("_", "-")
     print(f"  judge          {judge_state}")
 
