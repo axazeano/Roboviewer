@@ -9,7 +9,7 @@ it is asked while tuning rather than while reviewing.
 So it lives beside the tool rather than inside it, the way `corpus` does: not
 part of the wheel, run from the repository root, and off the review path
 entirely. The tool keeps nothing and renders nothing — it reports through
-`roboviewer.observe`, with nobody listening unless a command here is what
+`roboviewer.observer`, with nobody listening unless a command here is what
 started the run.
 
 ```bash

@@ -23,7 +23,7 @@ import inspect
 import json
 import re
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -36,8 +36,12 @@ from ..repo.tools import dispatch, parse_arguments
 from . import ratelimit
 from .ratelimit import RateLimiter
 from .request import request_body, request_headers, terminal_tool_choice
-from .runner import AgentOutcome, AgentRequest, ProgressHook, Runner
+from .runner import AgentOutcome, AgentRequest, Runner
 from .usage import extract_usage
+
+# (kind, detail) — what the loop says about its own progress, handed to the
+# agent's observer: tool calls, retries, pacing, the wrap-up
+Progress = Callable[[str, str], None]
 
 _JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
@@ -98,9 +102,7 @@ class OpenAIAgentRunner(Runner):
 
     # ------------------------------------------------------------------ public
 
-    async def run(
-        self, request: AgentRequest, on_progress: ProgressHook | None = None
-    ) -> AgentOutcome:
+    async def run(self, request: AgentRequest) -> AgentOutcome:
         """The agent, from its prompt to its outcome — and an account of both.
 
         The loop is wrapped rather than sprinkled with reporting calls because
@@ -109,7 +111,7 @@ class OpenAIAgentRunner(Runner):
         interesting reason there is.
         """
         started = time.monotonic()
-        outcome = await self._loop(request, on_progress)
+        outcome = await self._loop(request)
         request.observer.finished(
             payload=outcome.payload,
             usage=outcome.usage,
@@ -122,13 +124,8 @@ class OpenAIAgentRunner(Runner):
 
     # ----------------------------------------------------------------- private
 
-    async def _loop(
-        self, request: AgentRequest, on_progress: ProgressHook | None
-    ) -> AgentOutcome:
-        def emit(kind: str, detail: str) -> None:
-            if on_progress:
-                on_progress(kind, detail)
-
+    async def _loop(self, request: AgentRequest) -> AgentOutcome:
+        emit = request.observer.progress
         transcript = _Transcript.open(request)
         # The system prompt as the agent received it, budget note included
         request.observer.started(
@@ -183,7 +180,7 @@ class OpenAIAgentRunner(Runner):
         request: AgentRequest,
         transcript: _Transcript,
         turn: int,
-        emit: ProgressHook,
+        emit: Progress,
     ) -> dict[str, Any] | None:
         """Runs the tools the model asked for, and returns the submitted payload
         as soon as one of the calls is the terminal one — the review is over at
@@ -221,7 +218,7 @@ class OpenAIAgentRunner(Runner):
         transcript: _Transcript,
         *,
         force_terminal: bool,
-        emit: ProgressHook,
+        emit: Progress,
     ) -> Any:
         return await self._send(self._body(request, transcript, force_terminal), emit)
 
@@ -247,7 +244,7 @@ class OpenAIAgentRunner(Runner):
             kwargs["parallel_tool_calls"] = False
         return kwargs
 
-    async def _send(self, kwargs: dict[str, Any], emit: ProgressHook) -> Any:
+    async def _send(self, kwargs: dict[str, Any], emit: Progress) -> Any:
         """Waits for the run's share of the provider, then retries what is worth
         retrying with the delay doubling each time."""
         delay = RETRY_DELAY_S
@@ -284,7 +281,7 @@ class OpenAIAgentRunner(Runner):
         assert last_exc is not None
         raise last_exc
 
-    async def _attempt(self, kwargs: dict[str, Any], emit: ProgressHook) -> Any:
+    async def _attempt(self, kwargs: dict[str, Any], emit: Progress) -> Any:
         """One request, paced against what the run has already spent.
 
         The raw response rather than the parsed one, because the headers carry
@@ -380,7 +377,7 @@ def _reply_without_tools(
     transcript: _Transcript,
     turn: int,
     usage: Usage,
-    emit: ProgressHook,
+    emit: Progress,
 ) -> AgentOutcome | None:
     """A reply that called no tools. Returns the outcome when this ends the run,
     or None to go round again after a nudge."""
@@ -410,7 +407,7 @@ def _reply_without_tools(
     return None
 
 
-def _wrap_up(request: AgentRequest, transcript: _Transcript, turn: int, emit: ProgressHook) -> None:
+def _wrap_up(request: AgentRequest, transcript: _Transcript, turn: int, emit: Progress) -> None:
     """Said after the tool results, so it is the last thing the agent reads
     before deciding what to do with the turn it has left."""
     left = request.settings.max_turns - turn

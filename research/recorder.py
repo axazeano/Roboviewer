@@ -1,6 +1,6 @@
 """Watching a run, and writing down what it did.
 
-`Recorder` is the observer the tool hands its account to — `roboviewer.observe`
+`Recorder` is the observer the tool hands its account to — `roboviewer.observer`
 defines that seam and nothing else; everything about the log is here. One agent
 gets one `AgentRecorder`, so an agent can only ever write its own part and the
 file stays in the order things actually happened.
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from roboviewer.models import ReviewRun, Usage
-from roboviewer.observe import AgentKind, AgentObserver
+from roboviewer.observer import AgentKind, AgentObserver, Observer
 
 from .records import (
     LOG,
@@ -112,6 +112,10 @@ class AgentRecorder:
             )
         )
 
+    def progress(self, kind: str, detail: str) -> None:
+        """The runner's notes between turns are not kept yet — what it said to
+        the agent is invisible in the log, which is TASK-51's to change."""
+
     def finished(
         self,
         *,
@@ -144,7 +148,7 @@ class AgentRecorder:
         )
 
 
-class Recorder:
+class Recorder(Observer):
     """The run's log file, from the first line to the last.
 
     Nothing is known about the run until it opens: the log lives in the run's
@@ -160,7 +164,7 @@ class Recorder:
         # finished it. One line per write, under one lock.
         self._lock = threading.Lock()
 
-    def opened(self, run: ReviewRun, directory: Path) -> None:
+    def run_started(self, run: ReviewRun, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)
         self.directory = directory
         self._stream = (directory / LOG).open("w", encoding="utf-8")
@@ -205,7 +209,12 @@ class Recorder:
             self.write(BlobRecord(h=digest, text=text))
         return digest
 
-    def closed(self) -> None:
+    def run_finished(self, run: ReviewRun, message: str) -> None:  # noqa: ARG002
+        self.close()
+
+    def close(self) -> None:
+        """Ends the log. Safe to call twice: the command closes it again after the
+        run, so a review that raised on its way out still leaves a whole file."""
         if self._stream is None:
             return
         with self._lock:

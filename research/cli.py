@@ -62,7 +62,7 @@ def _review(argv: list[str]) -> int:
     code = review_main(argv, observer=recorder)
     # Closed again here, and a no-op when the run closed it itself: a review
     # that raised on its way out still leaves a file that is not half-written.
-    recorder.closed()
+    recorder.close()
 
     if recorder.directory is None:
         # The review stopped before it started — a bad flag, no changes, or a

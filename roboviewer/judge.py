@@ -16,22 +16,20 @@ against the batch judge on a 64-file MR: seven duplicates collapsed where the
 text-similarity merge caught none, and the tail moved out of Minor into Nit.
 
 The two are separate classes rather than two branches in one: they share how a
-pass reaches the model, which is `Passes`, and nothing else. Adding a third way
-means adding a class, not editing the one that picks.
+pass reaches the model, which is `JudgeContext`, and nothing else. Adding a
+third way means adding a class, not editing the one that picks.
 """
 
 from __future__ import annotations
 
 import asyncio
 from collections import Counter
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .config import ModelConfig
-from .events import Event, EventSink
 from .models import Finding, ReviewRun, Severity, Usage, Verdict
-from .observe import SILENT, RunObserver
+from .observer import SILENT, RunObserver
 from .prompts import Prompts
 from .prompts.tool_schemas import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
 from .provider import AgentOutcome, AgentRequest, Runner
@@ -65,8 +63,8 @@ class JudgeSettings:
 
 
 @dataclass
-class Passes:
-    """How a judging pass reaches the model.
+class JudgeContext:
+    """Everything a judging pass needs to reach the model, and the one way to.
 
     Every pass — batch, per finding, final — is the same request with different
     contents, so the plumbing lives here once and the modes are left with what
@@ -78,7 +76,6 @@ class Passes:
     changes: ChangeSet
     runner: Runner
     tools: list[dict[str, Any]]
-    emit: EventSink
     # Judging passes are agents like any other and report like any other; what
     # tells them apart to an observer is that they say which they are.
     observer: RunObserver = SILENT
@@ -101,40 +98,34 @@ class Passes:
             metadata=metadata,
             observer=self.observer.agent("judge", label, str(metadata.get("finding_id", ""))),
         )
-        return await self.runner.run(request, self._progress(label))
+        return await self.runner.run(request)
 
     def announce(self, message: str) -> None:
-        self.emit(Event("judge_start", message))
+        self.observer.judging(message)
 
     def failed(self, message: str) -> None:
-        self.emit(Event("error", message))
-
-    def _progress(self, label: str) -> Callable[[str, str], None]:
-        def progress(kind: str, detail: str) -> None:
-            self.emit(Event("item_progress", f"{label} {kind}: {detail}", item_id="__judge__"))
-
-        return progress
+        self.observer.failed(message)
 
 
-def judge_for(passes: Passes) -> Judge:
+def judge_for(context: JudgeContext) -> Judge:
     """The judge the configured mode asks for."""
-    if passes.settings.mode == "two_stage":
-        return TwoStageJudge(passes)
-    return BatchJudge(passes)
+    if context.settings.mode == "two_stage":
+        return TwoStageJudge(context)
+    return BatchJudge(context)
 
 
 @dataclass
 class BatchJudge:
     """One pass over the whole list."""
 
-    passes: Passes
+    context: JudgeContext
 
     async def rule(self, run: ReviewRun) -> None:
-        self.passes.announce(f"The judge is checking {len(run.findings)} findings")
+        self.context.announce(f"The judge is checking {len(run.findings)} findings")
 
-        outcome = await self.passes.ask(
-            system=self.passes.prompts.judge_system,
-            prompt=self.passes.prompts.build_judge_prompt(run.findings, self.passes.changes),
+        outcome = await self.context.ask(
+            system=self.context.prompts.judge_system,
+            prompt=self.context.prompts.build_judge_prompt(run.findings, self.context.changes),
             terminal_tool=SUBMIT_VERDICTS_TOOL,
             metadata={"stage": "judge"},
             label="judge",
@@ -149,7 +140,7 @@ class BatchJudge:
             run.judge_summary = (
                 f"The judge failed: {outcome.error}. Findings are shown unfiltered."
             )
-            self.passes.failed(run.judge_summary)
+            self.context.failed(run.judge_summary)
             return
 
         run.judge_summary, verdicts = _verdicts_from_payload(outcome.payload)
@@ -170,7 +161,7 @@ class BatchJudge:
 class TwoStageJudge:
     """A pass per finding, then one pass over what survived."""
 
-    passes: Passes
+    context: JudgeContext
 
     async def rule(self, run: ReviewRun) -> None:
         run.verdicts = await self._verify_each(run)
@@ -187,21 +178,21 @@ class TwoStageJudge:
         Severity corrections land on the findings and usage on the run; the
         verdicts come back to the caller.
         """
-        self.passes.announce(
+        self.context.announce(
             f"Stage 1 of 2: checking {len(run.findings)} findings, one pass each"
         )
 
-        semaphore = asyncio.Semaphore(max(1, self.passes.settings.concurrency))
+        semaphore = asyncio.Semaphore(max(1, self.context.settings.concurrency))
         verdicts: dict[str, Verdict] = {}
         corrections: dict[str, Severity] = {}
 
         async def judge_one(finding: Finding) -> Usage:
             others = [f for f in run.findings if f.id != finding.id]
             async with semaphore:
-                outcome = await self.passes.ask(
-                    system=self.passes.prompts.judge_one_system,
-                    prompt=self.passes.prompts.build_judge_one_prompt(
-                        finding, others, self.passes.changes
+                outcome = await self.context.ask(
+                    system=self.context.prompts.judge_one_system,
+                    prompt=self.context.prompts.build_judge_one_prompt(
+                        finding, others, self.context.changes
                     ),
                     terminal_tool=SUBMIT_VERDICT_TOOL,
                     metadata={"stage": "judge", "finding_id": finding.id},
@@ -216,7 +207,7 @@ class TwoStageJudge:
                     verdict="unreviewed",
                     reason=f"the judging pass failed: {outcome.error or 'no result'}",
                 )
-                self.passes.failed(f"Judging {finding.id} failed: {outcome.error}")
+                self.context.failed(f"Judging {finding.id} failed: {outcome.error}")
                 return outcome.usage
 
             verdict = _verdict_from_payload(outcome.payload, finding.id)
@@ -252,7 +243,7 @@ class TwoStageJudge:
         Applies its verdicts and severities to the run and returns its assessment
         of the merge request, which the caller puts under the tally.
         """
-        self.passes.announce(f"Stage 2 of 2: ruling on {len(survivors)} verified findings")
+        self.context.announce(f"Stage 2 of 2: ruling on {len(survivors)} verified findings")
 
         # What each finding's own pass reported checking. The second stage reads
         # it instead of repeating the search, and can see when a note settles
@@ -263,10 +254,10 @@ class TwoStageJudge:
             if f.id in run.verdicts and run.verdicts[f.id].reason
         }
 
-        outcome = await self.passes.ask(
-            system=self.passes.prompts.judge_final_system,
-            prompt=self.passes.prompts.build_judge_final_prompt(
-                survivors, notes, self.passes.changes
+        outcome = await self.context.ask(
+            system=self.context.prompts.judge_final_system,
+            prompt=self.context.prompts.build_judge_final_prompt(
+                survivors, notes, self.context.changes
             ),
             terminal_tool=SUBMIT_VERDICTS_TOOL,
             metadata={"stage": "judge", "pass": "final"},
@@ -277,7 +268,7 @@ class TwoStageJudge:
         if not outcome.ok or outcome.payload is None:
             # Verification already happened, so a failure here costs calibration,
             # not the verdicts. Say which of the two the report is missing.
-            self.passes.failed(f"The final judging pass failed: {outcome.error}")
+            self.context.failed(f"The final judging pass failed: {outcome.error}")
             return (
                 f"The pass that rules on the set as a whole failed ({outcome.error}), "
                 f"so severities are the ones each finding was given on its own."

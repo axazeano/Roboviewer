@@ -11,7 +11,7 @@ import pytest
 
 from roboviewer.config import Config
 from roboviewer.models import DiffStat, Usage
-from roboviewer.provider import AgentOutcome, AgentRequest, ProgressHook, Runner
+from roboviewer.provider import AgentOutcome, AgentRequest, Runner
 from roboviewer.repo import Attachments, ChangeSet, Comparison
 
 ANNOTATED = """\
@@ -88,11 +88,7 @@ class ScriptedRunner(Runner):
         self._outcomes = list(outcomes)
         self.requests: list[AgentRequest] = []
 
-    async def run(
-        self,
-        request: AgentRequest,
-        on_progress: ProgressHook | None = None,  # noqa: ARG002 — the Runner signature
-    ) -> AgentOutcome:
+    async def run(self, request: AgentRequest) -> AgentOutcome:
         self.requests.append(request)
         if len(self._outcomes) > 1:
             return self._outcomes.pop(0)

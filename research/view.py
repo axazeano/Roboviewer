@@ -19,8 +19,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from roboviewer.models import ItemStatus
-from roboviewer.observe import AgentKind
+from roboviewer.models import ItemStatus, repo_path
+from roboviewer.observer import AgentKind
 
 from .records import (
     LOG,
@@ -352,9 +352,7 @@ def _subject(record: CallRecord) -> str:
 
 
 def _path(value: object) -> str:
-    if not isinstance(value, str):
-        return ""
-    return value.strip().lstrip("./")
+    return repo_path(value) if isinstance(value, str) else ""
 
 
 def _preview(text: str) -> str:

@@ -14,7 +14,7 @@ repeat on every line of a file that has thousands, and nothing reads them by
 hand — `view.py` turns them back into words.
 
 The tool knows none of this. It reports what its agents did through
-`roboviewer.observe` and keeps nothing; the file below is this package's
+`roboviewer.observer` and keeps nothing; the file below is this package's
 business alone.
 """
 
@@ -26,7 +26,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from roboviewer.models import Usage
-from roboviewer.observe import AgentKind
+from roboviewer.observer import AgentKind
 
 # The log itself and the page rendered from it, both inside the run directory.
 LOG = "trace.jsonl"

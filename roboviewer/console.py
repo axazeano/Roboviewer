@@ -5,7 +5,9 @@ deciding what a run does and describing it to a human are two jobs, and only one
 of them changes when the wording does. `cli` is left with the flow and the exit
 codes.
 
-Progress goes to stdout, failures to stderr.
+`Console` is the observer the CLI attaches to a run, printing a line per stage
+as it happens; the functions below it print what the CLI has to say before and
+after. Progress goes to stdout, failures to stderr.
 """
 
 from __future__ import annotations
@@ -23,10 +25,53 @@ from .config import (
     overrides,
     provider_config_path,
 )
-from .events import Event
-from .models import SEVERITY_LABEL, Finding, ReviewRun
+from .models import SEVERITY_LABEL, Finding, ItemResult, ReviewRun
+from .observer import AgentKind, AgentObserver, Observer
 from .prompts import PromptError, Prompts, language_name
 from .repo import ChangeSet
+
+
+class Console(Observer):
+    """A run's progress, one line per stage, as it happens."""
+
+    def __init__(self, verbose: bool = False) -> None:
+        self._verbose = verbose
+
+    def run_started(self, run: ReviewRun, directory: Path) -> None:  # noqa: ARG002
+        _line(
+            f"▸ {run.branch} → {run.target}: {len(run.files)} files, "
+            f"{len(run.items)} checklist items"
+        )
+
+    def item_started(self, item_id: str, title: str) -> None:  # noqa: ARG002
+        _line(f"▸ Started: {title}")
+
+    def item_finished(self, item_id: str, title: str, result: ItemResult) -> None:  # noqa: ARG002
+        _line(
+            f"• {title}: {len(result.findings)} findings ({result.status})"
+            f" · {result.usage.total_tokens} tokens · {result.duration_s:.0f}s"
+        )
+
+    def merged(self, count: int) -> None:
+        _line(f"▸ After merge and deduplication: {count} findings")
+
+    def out_of_scope(self, count: int) -> None:
+        _line(f"▸ {count} pointed outside the changed lines and are listed separately")
+
+    def judging(self, message: str) -> None:
+        _line(f"▸ {message}")
+
+    def judged(self, confirmed: int, total: int) -> None:
+        _line(f"▸ Confirmed {confirmed} of {total}")
+
+    def failed(self, message: str) -> None:
+        _line(f"✗ {message}")
+
+    def run_finished(self, run: ReviewRun, message: str) -> None:  # noqa: ARG002
+        _line(f"✔ {message}")
+
+    def agent(self, kind: AgentKind, title: str, item_id: str = "") -> AgentObserver:
+        return _AgentLines(kind, title, item_id, verbose=self._verbose)
 
 
 def error(message: str, hint: str = "") -> None:
@@ -48,19 +93,6 @@ def run_header(cfg: Config) -> None:
     # the run rather than a page in the docs nobody opens twice.
     if cfg.provider_notice:
         print(f"⚠ {cfg.provider_notice}")
-
-
-def event(entry: Event, verbose: bool = False) -> None:
-    if entry.kind == "item_progress":
-        if verbose:
-            print(f"    {entry.item_id or '-'} · {entry.message}", flush=True)
-        return
-    prefix = {"error": "✗", "item_done": "•", "run_done": "✔"}.get(entry.kind, "▸")
-    line = f"{prefix} {entry.message}"
-    if entry.kind == "item_done":
-        result = entry.data["result"]
-        line += f" · {result.usage.total_tokens} tokens · {result.duration_s:.0f}s"
-    print(line, flush=True)
 
 
 def summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> None:
@@ -128,6 +160,24 @@ def config(cfg: Config, root: Path) -> None:
     _roles(cfg)
     print()
     _run(cfg, root)
+
+
+class _AgentLines(Observer):
+    """What one agent is doing, for `-v`: tool calls, retries, pacing, the
+    wrap-up. Nothing otherwise — the item's own line says how it ended."""
+
+    def __init__(self, kind: AgentKind, title: str, item_id: str, *, verbose: bool) -> None:
+        # A judging pass has no item id; it is named by its label instead
+        self._prefix = f"{item_id or '-'} · " if kind == "item" else f"__judge__ · {title} "
+        self._verbose = verbose
+
+    def progress(self, kind: str, detail: str) -> None:
+        if self._verbose:
+            _line(f"    {self._prefix}{kind}: {detail}")
+
+
+def _line(text: str) -> None:
+    print(text, flush=True)
 
 
 def _config_source(cfg: Config) -> None:

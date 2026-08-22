@@ -8,16 +8,12 @@ and `Runner` is that contract. `openai_agent` is the one implementation.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from ..config import ModelConfig
 from ..models import Usage
-from ..observe import SILENT, AgentObserver
-
-# (event, detail) — forwarded to the console: tool calls, retries, errors
-ProgressHook = Callable[[str, str], None]
+from ..observer import SILENT, AgentObserver
 
 
 @dataclass
@@ -31,8 +27,10 @@ class AgentRequest:
     # to temperature and the request body.
     settings: ModelConfig
     metadata: dict[str, Any] = field(default_factory=dict)
-    # Whoever is keeping an account of what this agent does. Silence by default:
-    # the tool keeps none of it, and a runner reports the same way regardless.
+    # Whoever is keeping an account of what this agent does — its prompts, its
+    # turns, its tool calls, and the runner's own notes between them. Silence by
+    # default: the tool keeps none of it, and a runner reports the same way
+    # regardless.
     observer: AgentObserver = SILENT
 
     @property
@@ -62,9 +60,7 @@ class Runner(ABC):
     name: str = "base"
 
     @abstractmethod
-    async def run(
-        self, request: AgentRequest, on_progress: ProgressHook | None = None
-    ) -> AgentOutcome:
+    async def run(self, request: AgentRequest) -> AgentOutcome:
         ...
 
     async def aclose(self) -> None:

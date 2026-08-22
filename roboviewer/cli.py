@@ -17,7 +17,7 @@ from pathlib import Path
 from . import ci, console, gate, renders, repo
 from .checklist import ChecklistItem, load_checklist
 from .config import Config, load_config, overrides
-from .observe import SILENT, RunObserver
+from .observer import SILENT, Broadcast, RunObserver
 from .pipeline import ReviewPipeline, output_dir_for
 from .prompts import PromptError, Prompts
 from .provider import OpenAIAgentRunner, Runner
@@ -183,8 +183,8 @@ class RunPlan:
 
 def main(argv: list[str] | None = None, observer: RunObserver = SILENT) -> int:
     """The command. `observer` is how something outside the tool asks to be
-    told what the agents did — see `observe`; by default nobody is watching and
-    the run keeps no account of itself."""
+    told what the run and its agents did — see `observer`; by default nobody is
+    watching and the run keeps no account of itself."""
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
@@ -391,11 +391,11 @@ async def _review(plan: RunPlan, verbose: bool, observer: RunObserver = SILENT) 
         plan.changes,
         plan.items,
         plan.runner,
-        lambda entry: console.event(entry, verbose),
         plan.prompts,
+        observer=Broadcast([console.Console(verbose), observer]),
     )
     try:
-        run = await pipeline.execute(observer)
+        run = await pipeline.execute()
     finally:
         await plan.runner.aclose()
 

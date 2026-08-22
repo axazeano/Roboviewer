@@ -26,7 +26,7 @@ from roboviewer.config import Config, ModelConfig, RunConfig
 from roboviewer.models import Finding, Severity, Usage
 from roboviewer.pipeline import ReviewPipeline
 from roboviewer.prompts.tool_schemas import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
-from roboviewer.provider import AgentOutcome, AgentRequest, ProgressHook, Runner
+from roboviewer.provider import AgentOutcome, AgentRequest, Runner
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
@@ -67,11 +67,7 @@ class VerdictRunner(Runner):
         self._final = final
         self.requests: list[AgentRequest] = []
 
-    async def run(
-        self,
-        request: AgentRequest,
-        on_progress: ProgressHook | None = None,  # noqa: ARG002 — the Runner signature
-    ) -> AgentOutcome:
+    async def run(self, request: AgentRequest) -> AgentOutcome:
         self.requests.append(request)
         if request.metadata.get("pass") == "final":
             assert self._final is not None, "the run reached a final pass the test did not script"

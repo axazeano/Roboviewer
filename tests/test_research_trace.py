@@ -28,7 +28,7 @@ from research.cli import main as research_main
 from roboviewer.checklist import ChecklistItem
 from roboviewer.config import Config, ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import DiffStat, ItemResult, ReviewRun, Usage
-from roboviewer.observe import SILENT, RunObserver
+from roboviewer.observer import SILENT, RunObserver
 from roboviewer.pipeline import ReviewPipeline
 from roboviewer.prompts.tool_schemas import SUBMIT_FINDINGS_TOOL, tool_schemas
 from roboviewer.provider import AgentRequest
@@ -83,7 +83,7 @@ def _recording(directory: Path, run: ReviewRun) -> research.Recorder:
     """A recorder watching a run whose directory is already known — what the
     pipeline does at the moment the run starts."""
     recorder = research.Recorder()
-    recorder.opened(run, directory)
+    recorder.run_started(run, directory)
     return recorder
 
 
@@ -106,7 +106,7 @@ def test_a_reasoning_model_that_says_nothing_out_loud_is_not_a_blank_turn(
     agent = recorder.agent("item", "Correctness", "correctness")
     agent.started(system="s", prompt="p", max_turns=15)
     agent.replied(1, "", Usage(), "The discount is applied before the total is recomputed.")
-    recorder.closed()
+    recorder.close()
 
     turn = viewed(tmp_path).items[0].turns[0]
     assert turn.text == ""
@@ -125,7 +125,7 @@ def test_the_turn_the_agent_stopped_on_says_so(tmp_path: Path, run: ReviewRun) -
     agent.replied(2, "", Usage())
     agent.finished(payload={"summary": "done", "findings": []}, usage=Usage(), turns=2,
                    duration_s=1.0)
-    recorder.closed()
+    recorder.close()
 
     first, last = viewed(tmp_path).items[0].turns
     assert not first.ended
@@ -140,7 +140,7 @@ def test_a_read_is_recorded_by_its_file_and_line_range(tmp_path: Path, run: Revi
     agent.called(
         1, "read_file", {"path": "src/cart.py", "start_line": 1, "end_line": 3}, READ_OUTPUT
     )
-    recorder.closed()
+    recorder.close()
 
     call = viewed(tmp_path).items[0].turns[0].calls[0]
     assert call.tool == "read_file"
@@ -163,7 +163,7 @@ def test_a_search_is_recorded_by_its_hit_count(tmp_path: Path, repo: Path, run: 
             dispatch(repo, "grep", {"pattern": pattern}, base_ref="HEAD", head_ref="HEAD",
                      max_read_lines=800),
         )
-    recorder.closed()
+    recorder.close()
 
     found, missed = viewed(tmp_path).items[0].turns[0].calls
     assert found.hits == 1
@@ -181,7 +181,7 @@ def test_a_failed_call_is_recorded_as_one(tmp_path: Path, repo: Path, run: Revie
         dispatch(repo, "read_file", {"path": "gone.py"}, base_ref="HEAD", head_ref="HEAD",
                  max_read_lines=800),
     )
-    recorder.closed()
+    recorder.close()
 
     call = viewed(tmp_path).items[0].turns[0].calls[0]
     assert call.error
@@ -201,7 +201,7 @@ def test_the_verdict_says_the_turns_ran_out(tmp_path: Path, run: ReviewRun) -> N
         duration_s=1.0,
         truncated=True,
     )
-    recorder.closed()
+    recorder.close()
 
     assert viewed(tmp_path).items[0].status == "truncated"
 
@@ -222,7 +222,7 @@ def test_the_log_grows_with_the_calls_not_with_their_answers(
         agent.started(system="s", prompt="p", max_turns=15)
         for turn in range(1, calls + 1):
             agent.called(turn, "read_file", {"path": "src/cart.py"}, output)
-        recorder.closed()
+        recorder.close()
         return (directory / research.LOG).stat().st_size
 
     small = log_size(tmp_path / "small", 5, "x" * 100)
@@ -239,7 +239,7 @@ def test_no_tool_output_reaches_the_log_or_the_page(tmp_path: Path, run: ReviewR
     agent = recorder.agent("item", "Correctness", "correctness")
     agent.started(system="s", prompt="p", max_turns=15)
     agent.called(1, "read_file", {"path": "src/cart.py"}, f"src/cart.py\n     1\t{secret}")
-    recorder.closed()
+    recorder.close()
     page = research.render_into(tmp_path)
 
     assert secret not in (tmp_path / research.LOG).read_text(encoding="utf-8")
@@ -256,7 +256,7 @@ def test_a_prompt_is_written_once_and_referred_to_afterwards(
     for finding in ("F001", "F002"):
         agent = recorder.agent("judge", f"judge {finding}", finding)
         agent.started(system=system, prompt=f"verify {finding}", max_turns=8)
-    recorder.closed()
+    recorder.close()
 
     text = (tmp_path / research.LOG).read_text(encoding="utf-8")
     assert text.count("JUDGE_SYSTEM") == 1
@@ -306,7 +306,7 @@ def test_the_judge_is_told_apart_from_the_reviewers(tmp_path: Path, run: ReviewR
     item = recorder.agent("item", "Correctness", "correctness")
     item.started(system="s", prompt="p", max_turns=1)
     recorder.agent("judge", "judge F001", "F001").started(system="j", prompt="v", max_turns=1)
-    recorder.closed()
+    recorder.close()
 
     view = viewed(tmp_path)
     assert [a.title for a in view.items] == ["Correctness"]
@@ -319,7 +319,7 @@ def test_items_are_listed_in_checklist_order(tmp_path: Path, run: ReviewRun) -> 
     recorder = _recording(tmp_path, run)
     for item_id, title in (("errors", "Error handling"), ("correctness", "Correctness")):
         recorder.agent("item", title, item_id).started(system="s", prompt="p", max_turns=1)
-    recorder.closed()
+    recorder.close()
 
     assert [a.item_id for a in viewed(tmp_path).items] == ["correctness", "errors"]
 
@@ -330,7 +330,7 @@ def test_the_page_says_which_changed_files_were_opened(tmp_path: Path, run: Revi
     agent.started(system="s", prompt="p", max_turns=15)
     agent.called(1, "read_file", {"path": "src/cart.py"}, READ_OUTPUT)
     agent.called(1, "read_file", {"path": "docs/design.md"}, "docs/design.md\n     1\tx")
-    recorder.closed()
+    recorder.close()
 
     view = viewed(tmp_path)
     assert {f.file: f.readers for f in view.files} == {"src/cart.py": 1, "src/api.py": 0}
@@ -395,7 +395,7 @@ def test_the_runner_picks_up_what_the_model_thought(
                      reasoning="Nothing here touches the cart.")],
         recorder.agent("item", "Correctness", "correctness"),
     )
-    recorder.closed()
+    recorder.close()
 
     assert viewed(log).items[0].turns[0].thinking == "Nothing here touches the cart."
 
@@ -416,7 +416,7 @@ def test_the_runner_records_the_turns_it_took(tmp_path: Path, repo: Path, run: R
         ],
         recorder.agent("item", "Correctness", "correctness"),
     )
-    recorder.closed()
+    recorder.close()
 
     agent = viewed(log).items[0]
     # The prompt as the agent received it, budget note and all
@@ -439,8 +439,9 @@ def _execute(cfg: Config, root: Path, observer: RunObserver = SILENT) -> ReviewR
         make_bundle(root),
         [ChecklistItem(id="correctness", title="Correctness", body="Find logic errors.")],
         ScriptedRunner(ok_outcome(summary="nothing")),
+        observer=observer,
     )
-    return asyncio.run(pipeline.execute(observer))
+    return asyncio.run(pipeline.execute())
 
 
 def test_a_watched_run_writes_its_log_into_the_run_directory(
