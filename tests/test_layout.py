@@ -1,10 +1,8 @@
 """Public symbols on top, private ones below.
 
 No linter checks this: ruff, pylint and flake8 all order imports and class
-attributes, not module-level definitions. So it is a test.
-
-The rest of the package still reads bottom-up; converting it is a separate
-change, hence the explicit list rather than a package-wide sweep.
+attributes, not module-level definitions. So it is a test. A reader opening a
+module meets what it offers first and how it does it after.
 """
 
 from __future__ import annotations
@@ -18,16 +16,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "roboviewer"
 
 ENFORCED = [
-    *sorted((PACKAGE / "reports").rglob("*.py")),
-    PACKAGE / "observer.py",
-    *sorted((PACKAGE / "cli").rglob("*.py")),
-    *sorted((PACKAGE / "config").rglob("*.py")),
-    *sorted((PACKAGE / "provider").rglob("*.py")),
-    *sorted((PACKAGE / "repo").rglob("*.py")),
-    *sorted((PACKAGE / "review").rglob("*.py")),
-    # Written this way from the start, so the whole package is in — every
-    # module of it, subpackages included, or the rule stops applying the day
-    # one is added.
+    # The whole tree: every module of the tool and of the instruments beside it,
+    # subpackages included, or the rule stops applying the day one is added.
+    *sorted(PACKAGE.rglob("*.py")),
     *sorted((ROOT / "measure").rglob("*.py")),
 ]
 
