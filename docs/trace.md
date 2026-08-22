@@ -10,18 +10,18 @@ repository root.
 ## Commands
 
 ```bash
-python -m research review develop              # run a review, keep a log, render the page
-python -m research page .roboviewer/runs/latest  # render a log that already exists
+python -m measure.trace review develop              # run a review, keep a log, render the page
+python -m measure.trace page .roboviewer/runs/latest  # render a log that already exists
 ```
 
 `review` takes the tool's own flags and passes them through, and exits with
 whatever the review exited with:
 
 ```bash
-python -m research review develop feature/login       # someone else's branch
-python -m research review develop --no-judge          # while iterating on a prompt
-python -m research review develop --only correctness  # one checklist item
-python -m research review develop -C ~/projects/app   # a repository elsewhere
+python -m measure.trace review develop feature/login       # someone else's branch
+python -m measure.trace review develop --no-judge          # while iterating on a prompt
+python -m measure.trace review develop --only correctness  # one checklist item
+python -m measure.trace review develop -C ~/projects/app   # a repository elsewhere
 ```
 
 Both write into the run's own directory, beside the report:
@@ -129,9 +129,9 @@ with what the agents read rather than with what they did.
 
 ## Changing the page
 
-`research/templates/trace.html.j2` is an ordinary Jinja template; it extends the
+`measure/trace/templates/trace.html.j2` is an ordinary Jinja template; it extends the
 tool's `_layout.html.j2`, so the styles and filters are the same ones the report
-uses. The model it renders comes from `research/view.py`:
+uses. The model it renders comes from `measure/trace/view.py`:
 
 | Name | What is inside |
 | --- | --- |
@@ -154,8 +154,8 @@ and its `calls`. A call is `tool`, `subject`, `chars`, `lines`, `hits`, `error`,
 
 ## Watching a run yourself
 
-The tool itself keeps nothing. It reports through `roboviewer/observe.py`, and
-`research` is one listener; here is another, counting how often each file is
+The tool itself keeps nothing. It reports through `roboviewer/observer.py`, and
+`measure.trace` is one listener; here is another, counting how often each file is
 opened:
 
 ```python
@@ -179,4 +179,4 @@ main(["develop"], observer=Opens())
 ```
 
 `called` is handed the tool's whole answer; what to keep out of it is the
-observer's decision. `research` measures it and drops it.
+observer's decision. `measure.trace` measures it and drops it.

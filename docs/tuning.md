@@ -6,7 +6,7 @@ all, and what to read before turning a limit up.
 ## Prompts
 
 The eight texts the agents actually run on are markdown files in
-`roboviewer/prompts/default/`: a system prompt and a task for the reviewer, and
+`roboviewer/review/prompts/default/`: a system prompt and a task for the reviewer, and
 three such pairs for the judge — the batch pass, the per-finding verification
 and the final calibration. Drop a changed copy of any of them into
 `.roboviewer/prompts/` inside the repository being reviewed and it wins; the
@@ -41,10 +41,10 @@ models tend to lose the later aspects when asked to hold many. Compare the
 ## Reading what the agents actually did
 
 When a prompt change moves the findings, the report will not say why. Run the
-review through the research package instead and it keeps an account of itself:
+review through the `measure.trace` package instead and it keeps an account of itself:
 
 ```bash
-python -m research review develop
+python -m measure.trace review develop
 ```
 
 `trace.html` lands beside the report: per checklist item, the prompt the agent
@@ -56,7 +56,7 @@ anything.
 
 It also answers the question the report cannot: which changed files were opened
 at all. A file nobody opened and nobody reported is not a file that came back
-clean. See [Watching a run](research.md).
+clean. See [Watching a run](trace.md).
 
 ## Speed
 

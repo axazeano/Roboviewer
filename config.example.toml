@@ -52,13 +52,13 @@ checklist_dir = "checklists/default"
 # Prompt directory. Empty means the bundled texts, plus .roboviewer/prompts/
 # inside the reviewed repository if it exists. A custom set need only carry the
 # files you edit; the rest come from the bundle.
-# Files and placeholders are listed in roboviewer/prompts/default/README.md
+# Files and placeholders are listed in roboviewer/review/prompts/default/README.md
 prompts_dir = ""
 # Report template directory, resolved the same way as prompts_dir: empty means
 # the bundled set, plus .roboviewer/templates/ inside the reviewed repository.
-# Fields, filters and conventions: roboviewer/templates/default/README.md
+# Fields, filters and conventions: roboviewer/reports/templates/default/README.md
 templates_dir = ""
-# Which reports to write. A format is a module in roboviewer/renders/, one file
+# Which reports to write. A format is a module in roboviewer/reports/renders/, one file
 # per format. Bundled:
 #   md           the report for humans
 #   html         the same as one self-contained file
@@ -99,7 +99,7 @@ diff_max_chars = 300000
 #
 # It reads the files exclude_globs drops — a 539 KB pbxproj is the wrong thing
 # to show a model and the right thing to search. Resource rules are Xcode/Swift
-# specific and live in roboviewer/resolve.py; the symbol census is not.
+# specific and live in roboviewer/repo/references.py; the symbol census is not.
 resolve_references = true
 # Keep only findings that point at what this MR changed. Reviewers get changed
 # files in full — that is what stops them reporting handling that already exists

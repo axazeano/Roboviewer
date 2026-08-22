@@ -129,7 +129,7 @@ above is drawn per defect rather than per finding.
 Three things this does not say. It is one merge request, so `n = 1` at the
 repository level. Fifteen of the 31 defects entered the truth set by verifying
 one model's output, so that model is being graded partly on ground it defined —
-`truth.toml` marks which entries are independent. And Opus ran without the judge,
+`measure/truth.toml` marks which entries are independent. And Opus ran without the judge,
 as a ceiling to aim at rather than a configuration of this tool.
 
 ## Requirements
@@ -228,10 +228,10 @@ would be reviewed without spending tokens. Every flag:
 | [Output language](docs/language.md) | Findings in a language other than English |
 | [Tuning](docs/tuning.md) | Prompts, how many agents, thinking, the turn limit |
 | [Measurements](docs/measurements.md) | What it finds and gets wrong, per model and checklist size |
-| [Watching a run](docs/research.md) | What the agents did with the context: the log, the page, the command |
+| [Watching a run](docs/trace.md) | What the agents did with the context: the log, the page, the command |
 
-[docs/](docs/) also carries the tooling baseline and how the measurement corpus
-is built.
+[docs/](docs/) also carries the [map of the code](docs/architecture.md), the
+tooling baseline and how the measurement corpus is built.
 
 ## What it doesn't do
 

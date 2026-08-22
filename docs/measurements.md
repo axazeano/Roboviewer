@@ -14,7 +14,7 @@ Read [the caveats](#how-to-read-these-numbers) before quoting any of it.
 | Branch → target | `nextmcloud:nmc/albums_customisation` → `nextcloud:master` |
 | Merge base / HEAD | `3fe3a8d1432c` / `826f10c7ac32` |
 | Size | 35 files and +4227/−94 on GitHub; 32 files and +3816/−87 after `exclude_globs` drops storyboards, strings, asset catalogues and the pbxproj |
-| Truth | 31 defects in [`truth.toml`](../truth.toml), plus 6 claims proven false |
+| Truth | 31 defects in [`truth.toml`](../measure/truth.toml), plus 6 claims proven false |
 
 Counting findings and counting defects are not the same thing, and the gap is
 large enough to change conclusions. The nemotron configuration ships 48
