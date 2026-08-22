@@ -36,7 +36,7 @@ def _no_ambient_github_token(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("GITHUB_TOKEN", "GH_TOKEN"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(
-        "corpus.github._run_gh",
+        "measure.corpus.github._run_gh",
         lambda command: subprocess.CompletedProcess(command, 1, stdout="", stderr=""),
     )
 

@@ -28,8 +28,7 @@ ENFORCED = [
     # Written this way from the start, so the whole package is in — every
     # module of it, subpackages included, or the rule stops applying the day
     # one is added.
-    *sorted((ROOT / "corpus").rglob("*.py")),
-    *sorted((ROOT / "research").rglob("*.py")),
+    *sorted((ROOT / "measure").rglob("*.py")),
 ]
 
 

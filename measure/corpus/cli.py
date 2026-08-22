@@ -1,4 +1,4 @@
-"""The commands: `python -m corpus <list.toml>` and `python -m corpus find`.
+"""The commands: `python -m measure.corpus <list.toml>` and `python -m measure.corpus find`.
 
 The order of the steps and what a failure exits with, the same split
 `roboviewer.cli` uses. Everything that decides what happens to an entry is in
@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m corpus",
+        prog="python -m measure.corpus",
         description=(
             "Build the corpus the review baseline is measured on: one clone per "
             "pull request, positioned at the commits reviewers saw, with their "
@@ -74,9 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Examples:\n"
-            "  python -m corpus corpus.toml              build or refresh everything\n"
-            "  python -m corpus corpus.toml --only a,b   just these entries\n"
-            "  python -m corpus corpus.toml --refresh    fetch again, ignoring what is built\n"
+            "  python -m measure.corpus measure/corpus.toml\n"
+            "                                  build or refresh everything\n"
+            "  python -m measure.corpus measure/corpus.toml --only a,b\n"
+            "                                  just these entries\n"
+            "  python -m measure.corpus measure/corpus.toml --refresh\n"
+            "                                  fetch again, ignoring what is built\n"
             "\n"
             "Environment variables:\n"
             "  ROBOVIEWER_CORPUS  where the corpus lives (when --corpus is not given)\n"
@@ -105,7 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def find_main(argv: list[str]) -> int:
-    """`python -m corpus find` — the sieve, not the judge.
+    """`python -m measure.corpus find` — the sieve, not the judge.
 
     Prints what passed, and with --toml the entries to paste. Whether a review
     found a defect or a naming preference is a person's call, and the threads
@@ -156,7 +159,7 @@ def find_main(argv: list[str]) -> int:
 
 def find_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m corpus find",
+        prog="python -m measure.corpus find",
         description=(
             "Find candidates for the corpus. GitHub search has no qualifier for "
             "how much a pull request changed, so the size comes back with the "
@@ -164,8 +167,8 @@ def find_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Examples:\n"
-            '  python -m corpus find "is:pr is:merged language:Go" --min-files 30\n'
-            '  python -m corpus find "is:pr is:merged review:changes_requested" '
+            '  python -m measure.corpus find "is:pr is:merged language:Go" --min-files 30\n'
+            '  python -m measure.corpus find "is:pr is:merged review:changes_requested" '
             "--min-files 40 --min-stars 500 --toml\n"
             "\n"
             "It does not decide whether a review found a defect — that is what\n"

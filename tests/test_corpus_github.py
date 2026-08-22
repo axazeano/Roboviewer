@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from corpus.entries import parse_pull_url
-from corpus.github import (
+from measure.corpus.entries import parse_pull_url
+from measure.corpus.github import (
     GitHub,
     GitHubError,
     RateLimited,

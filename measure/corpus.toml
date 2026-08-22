@@ -5,7 +5,7 @@
 # looking at — not the merged one, where what they found is already fixed.
 #
 # Build it with:
-#   python -m corpus corpus.toml
+#   python -m measure.corpus measure/corpus.toml
 #
 # `id`, `url`, `base` and `head` are read by the fetcher. Everything else is
 # read by people deciding whether an entry still earns its place.

@@ -6,7 +6,7 @@
 # committed; this one is here so the format has somewhere to live.
 #
 # Build it with:
-#   python -m corpus corpus.toml
+#   python -m measure.corpus measure/corpus.toml
 #
 # See docs/corpus.md for what each field is for and how a rebuild works.
 

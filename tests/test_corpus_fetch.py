@@ -20,13 +20,13 @@ from typing import Any
 
 import pytest
 
-from corpus import clone
-from corpus import github as github_module
-from corpus.build import build
-from corpus.cli import _entry_line, main
-from corpus.entries import Entry
-from corpus.github import GitHub, RateLimited, Response
-from corpus.store import Store, default_root
+from measure.corpus import clone
+from measure.corpus import github as github_module
+from measure.corpus.build import build
+from measure.corpus.cli import _entry_line, main
+from measure.corpus.entries import Entry
+from measure.corpus.github import GitHub, RateLimited, Response
+from measure.corpus.store import Store, default_root
 from roboviewer import repo
 
 MISSING_SHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -167,7 +167,7 @@ def anonymous() -> GitHub:
 def pointing_at(origin: Origin, monkeypatch: pytest.MonkeyPatch) -> None:
     """Send the clone URL derived from the pull request URL to a local path."""
     monkeypatch.setattr(
-        "corpus.entries.PullRequest.clone_url",
+        "measure.corpus.entries.PullRequest.clone_url",
         property(lambda self: str(origin.path)),  # noqa: ARG005 — the property signature
     )
 

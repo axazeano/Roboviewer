@@ -1,4 +1,4 @@
-"""The command: `python -m research review <target>` and `python -m research page <dir>`.
+"""The command: `python -m measure.trace review <target>` and `python -m measure.trace page <dir>`.
 
 Two things to ask for. `review` runs the tool's own command with this package
 watching, so the flags are the tool's flags and there is no second command line
@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m research",
+        prog="python -m measure.trace",
         description="Watch a review and show what it did with its context.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="run a review, keep a log of it, and render the page",
         # Everything after the subcommand belongs to the tool: this command adds
         # no flags of its own, so there is nothing here to shadow one of its.
-        usage="python -m research review <target> [source] [roboviewer options]",
+        usage="python -m measure.trace review <target> [source] [roboviewer options]",
     )
     review.add_argument("review_args", nargs=argparse.REMAINDER)
 

@@ -23,8 +23,8 @@ from typing import Any
 
 import pytest
 
-import research
-from research.cli import main as research_main
+from measure import trace as research
+from measure.trace.cli import main as research_main
 from roboviewer.config import Config, ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import DiffStat, ItemResult, ReviewRun, Usage
 from roboviewer.observer import SILENT, RunObserver

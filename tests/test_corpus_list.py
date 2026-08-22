@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from corpus.entries import Entry, load_list, parse_pull_url, select
+from measure.corpus.entries import Entry, load_list, parse_pull_url, select
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -147,7 +147,7 @@ def test_only_naming_an_entry_that_is_not_there_is_an_error(tmp_path: Path) -> N
 def test_the_example_list_parses() -> None:
     # It is what anyone writing the real list starts from, and a template that
     # does not load is worse than none
-    entries = load_list(REPO_ROOT / "corpus.example.toml")
+    entries = load_list(REPO_ROOT / "measure" / "corpus.example.toml")
 
     assert [entry.pull.slug for entry in entries] == ["psf/requests", "owner/repo"]
 
@@ -162,7 +162,7 @@ def test_the_example_list_parses() -> None:
 
 @pytest.fixture(scope="module")
 def corpus() -> list[Entry]:
-    return load_list(REPO_ROOT / "corpus.toml")
+    return load_list(REPO_ROOT / "measure" / "corpus.toml")
 
 
 def test_the_corpus_has_enough_entries_to_measure_anything(corpus: list[Entry]) -> None:

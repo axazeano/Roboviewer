@@ -6,15 +6,15 @@ which files it opened and over what lines, what it searched for and how much
 came back. That is a question about the model and the context we hand it, and
 it is asked while tuning rather than while reviewing.
 
-So it lives beside the tool rather than inside it, the way `corpus` does: not
-part of the wheel, run from the repository root, and off the review path
-entirely. The tool keeps nothing and renders nothing — it reports through
+So it lives beside the tool rather than inside it, under `measure` with
+`corpus`: not part of the wheel, run from the repository root, and off the
+review path entirely. The tool keeps nothing and renders nothing — it reports through
 `roboviewer.observer`, with nobody listening unless a command here is what
 started the run.
 
 ```bash
-python -m research review develop          # a recorded run, then the page
-python -m research page .roboviewer/runs/latest
+python -m measure.trace review develop          # a recorded run, then the page
+python -m measure.trace page .roboviewer/runs/latest
 ```
 
 Four parts, in the order the data moves: `recorder` writes the log as the run
