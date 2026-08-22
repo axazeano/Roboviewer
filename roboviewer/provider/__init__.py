@@ -11,6 +11,6 @@ makes the one diagnostic request `--check-provider` is built on.
 from __future__ import annotations
 
 from .openai_agent import OpenAIAgentRunner
-from .runner import AgentOutcome, AgentRequest, Runner
+from .runner import AgentOutcome, AgentRequest, Runner, TurnNotes
 
-__all__ = ["AgentOutcome", "AgentRequest", "OpenAIAgentRunner", "Runner"]
+__all__ = ["AgentOutcome", "AgentRequest", "OpenAIAgentRunner", "Runner", "TurnNotes"]

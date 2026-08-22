@@ -16,6 +16,21 @@ from ..models import Usage
 from ..observer import SILENT, AgentObserver
 
 
+@dataclass(frozen=True)
+class TurnNotes:
+    """What the runner says to the agent between the model's turns, as format
+    strings: `{max_turns}` and `{terminal}` in the budget, `{left}` and
+    `{terminal}` in the other two. The texts are the review's — see
+    `review.prompts.turns` — and arrive on every request."""
+
+    # Appended to the system prompt
+    budget: str
+    # Said when the limit is close, after the tool results
+    wrap_up: str
+    # Said after a reply that called no tool and was not a submission
+    nudge: str
+
+
 @dataclass
 class AgentRequest:
     system: str
@@ -26,6 +41,8 @@ class AgentRequest:
     # runner: the judge and the reviewers may be configured differently, down
     # to temperature and the request body.
     settings: ModelConfig
+    # What to say between turns about the turn budget — see TurnNotes
+    notes: TurnNotes
     metadata: dict[str, Any] = field(default_factory=dict)
     # Whoever is keeping an account of what this agent does — its prompts, its
     # turns, its tool calls, and the runner's own notes between them. Silence by

@@ -27,13 +27,15 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from .config import ModelConfig
-from .models import Finding, ReviewRun, Severity, Usage, Verdict
-from .observer import SILENT, RunObserver
+from ..config import ModelConfig
+from ..models import Finding, ReviewRun, Severity, Usage, Verdict
+from ..observer import SILENT, RunObserver
+from ..provider import AgentOutcome, AgentRequest, Runner
+from ..repo import ChangeSet
 from .prompts import Prompts
 from .prompts.tool_schemas import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
-from .provider import AgentOutcome, AgentRequest, Runner
-from .repo import ChangeSet
+from .prompts.turns import TURN_NOTES
+from .submissions import verdict_from_payload, verdicts_from_payload
 
 
 class Judge(Protocol):
@@ -95,6 +97,7 @@ class JudgeContext:
             tools=self.tools,
             terminal_tool=terminal_tool,
             settings=self.settings.model,
+            notes=TURN_NOTES,
             metadata=metadata,
             observer=self.observer.agent("judge", label, str(metadata.get("finding_id", ""))),
         )
@@ -143,7 +146,7 @@ class BatchJudge:
             self.context.failed(run.judge_summary)
             return
 
-        run.judge_summary, verdicts = _verdicts_from_payload(outcome.payload)
+        run.judge_summary, verdicts = verdicts_from_payload(outcome.payload)
         for finding in run.findings:
             verdict = verdicts.get(finding.id)
             if verdict is None:
@@ -210,7 +213,7 @@ class TwoStageJudge:
                 self.context.failed(f"Judging {finding.id} failed: {outcome.error}")
                 return outcome.usage
 
-            verdict = _verdict_from_payload(outcome.payload, finding.id)
+            verdict = verdict_from_payload(outcome.payload, finding.id)
             if verdict is None:
                 verdicts[finding.id] = Verdict(
                     finding_id=finding.id,
@@ -274,7 +277,7 @@ class TwoStageJudge:
                 f"so severities are the ones each finding was given on its own."
             )
 
-        summary, verdicts = _verdicts_from_payload(outcome.payload)
+        summary, verdicts = verdicts_from_payload(outcome.payload)
         for finding in survivors:
             final = verdicts.get(finding.id)
             if final is not None:
@@ -309,29 +312,6 @@ def _apply_ruling(run: ReviewRun, finding: Finding, final: Verdict) -> None:
         severity=finding.severity,
         reason=reason,
     )
-
-
-def _verdict_from_payload(payload: dict[str, Any], finding_id: str) -> Verdict | None:
-    """One verdict, from a pass that was told about exactly one finding. The id is
-    ours, not the model's: echoing it back would only be a chance to get it wrong."""
-    try:
-        return Verdict.model_validate({**payload, "finding_id": finding_id})
-    except Exception:  # noqa: BLE001 — a malformed verdict must not sink the finding
-        return None
-
-
-def _verdicts_from_payload(payload: dict[str, Any]) -> tuple[str, dict[str, Verdict]]:
-    summary = str(payload.get("summary", "")).strip()
-    verdicts: dict[str, Verdict] = {}
-    for raw in payload.get("verdicts") or []:
-        if not isinstance(raw, dict):
-            continue
-        try:
-            verdict = Verdict.model_validate(raw)
-        except Exception:  # noqa: BLE001
-            continue
-        verdicts[verdict.finding_id] = verdict
-    return summary, verdicts
 
 
 def _summary(run: ReviewRun, prose: str) -> str:

@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer.checklist import ChecklistItem
 from roboviewer.models import Finding, Severity
-from roboviewer.pipeline import ReviewPipeline
-from roboviewer.prompts import DEFAULT_DIR, NAMES, PromptError, Prompts, language_name
+from roboviewer.review.checklist import ChecklistItem
+from roboviewer.review.pipeline import ReviewPipeline
+from roboviewer.review.prompts import DEFAULT_DIR, NAMES, PromptError, Prompts, language_name
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
@@ -100,7 +100,7 @@ def test_every_reviewer_prompt_forbids_checking_the_build() -> None:
     """Not a preference: a review that verifies compilability spends its turns
     on what the compiler reports anyway, and gets it wrong often enough to ship
     false blockers. Every system prompt a reviewer can run under says so."""
-    bundled = Path("roboviewer/prompts/default/item_system.md")
+    bundled = Path("roboviewer/review/prompts/default/item_system.md")
     checklist_owned = Path("roboviewer/checklists").glob("*/_system.md")
     for path in [bundled, *checklist_owned]:
         text = path.read_text(encoding="utf-8")

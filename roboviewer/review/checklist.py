@@ -9,6 +9,9 @@ File format:
     order: 10
     ---
     Task text for the agent...
+
+One file is one item, and one item is one reviewing agent. An optional
+`_system.md` beside them replaces the reviewer's system prompt for the set.
 """
 
 from __future__ import annotations
@@ -31,36 +34,6 @@ class ChecklistItem:
     # aspects into one agent needs it: the default system prompt says "exactly
     # one aspect, other reviewers cover the rest".
     system: str | None = None
-
-
-def _parse_frontmatter(raw: str) -> tuple[dict[str, str], str]:
-    if not raw.startswith("---"):
-        return {}, raw
-    lines = raw.splitlines()
-    end = None
-    for idx in range(1, len(lines)):
-        if lines[idx].strip() == "---":
-            end = idx
-            break
-    if end is None:
-        return {}, raw
-
-    meta: dict[str, str] = {}
-    for line in lines[1:end]:
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        key, sep, value = line.partition(":")
-        if not sep:
-            continue
-        meta[key.strip().lower()] = value.strip().strip("'\"")
-    return meta, "\n".join(lines[end + 1 :]).strip()
-
-
-def _as_bool(value: str | None, default: bool = True) -> bool:
-    if value is None:
-        return default
-    # "да" stays for checklists written before the bundled set moved to English
-    return value.strip().lower() in {"1", "true", "yes", "on", "да"}
 
 
 def load_checklist(directory: Path, only: list[str] | None = None) -> list[ChecklistItem]:
@@ -103,3 +76,33 @@ def load_checklist(directory: Path, only: list[str] | None = None) -> list[Check
         raise ValueError(f"No enabled checklist items in {directory}")
 
     return sorted(items, key=lambda i: (i.order, i.id))
+
+
+def _parse_frontmatter(raw: str) -> tuple[dict[str, str], str]:
+    if not raw.startswith("---"):
+        return {}, raw
+    lines = raw.splitlines()
+    end = None
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() == "---":
+            end = idx
+            break
+    if end is None:
+        return {}, raw
+
+    meta: dict[str, str] = {}
+    for line in lines[1:end]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key, sep, value = line.partition(":")
+        if not sep:
+            continue
+        meta[key.strip().lower()] = value.strip().strip("'\"")
+    return meta, "\n".join(lines[end + 1 :]).strip()
+
+
+def _as_bool(value: str | None, default: bool = True) -> bool:
+    if value is None:
+        return default
+    # "да" stays for checklists written before the bundled set moved to English
+    return value.strip().lower() in {"1", "true", "yes", "on", "да"}

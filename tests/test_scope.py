@@ -15,11 +15,11 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from roboviewer.checklist import ChecklistItem
 from roboviewer.models import Finding, Usage
-from roboviewer.pipeline import ReviewPipeline
 from roboviewer.provider import AgentOutcome
 from roboviewer.repo.diff import FileChanges
+from roboviewer.review.checklist import ChecklistItem
+from roboviewer.review.pipeline import ReviewPipeline
 from roboviewer.review.scope import in_scope
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome

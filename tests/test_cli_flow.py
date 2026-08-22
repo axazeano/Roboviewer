@@ -16,7 +16,7 @@ import pytest
 
 from roboviewer.cli import main
 from roboviewer.config import Config, overrides
-from roboviewer.prompts import PromptError, Prompts
+from roboviewer.review.prompts import PromptError, Prompts
 
 
 @pytest.fixture(autouse=True)

@@ -9,12 +9,12 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from roboviewer.checklist import ChecklistItem
 from roboviewer.config import ModelConfig
 from roboviewer.models import Finding, Severity, Usage
-from roboviewer.pipeline import ReviewPipeline
 from roboviewer.provider import AgentOutcome
 from roboviewer.provider.request import request_body
+from roboviewer.review.checklist import ChecklistItem
+from roboviewer.review.pipeline import ReviewPipeline
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 

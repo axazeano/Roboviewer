@@ -25,16 +25,17 @@ import pytest
 
 import research
 from research.cli import main as research_main
-from roboviewer.checklist import ChecklistItem
 from roboviewer.config import Config, ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import DiffStat, ItemResult, ReviewRun, Usage
 from roboviewer.observer import SILENT, RunObserver
-from roboviewer.pipeline import ReviewPipeline
-from roboviewer.prompts.tool_schemas import SUBMIT_FINDINGS_TOOL, tool_schemas
 from roboviewer.provider import AgentRequest
 from roboviewer.provider.openai_agent import OpenAIAgentRunner
 from roboviewer.repo.tools import dispatch
 from roboviewer.report import save
+from roboviewer.review.checklist import ChecklistItem
+from roboviewer.review.pipeline import ReviewPipeline
+from roboviewer.review.prompts.tool_schemas import SUBMIT_FINDINGS_TOOL, tool_schemas
+from roboviewer.review.prompts.turns import TURN_NOTES
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
@@ -375,6 +376,7 @@ def _drive(repo: Path, script: list[Any], handle: research.AgentRecorder) -> Non
                 tools=tool_schemas("HEAD"),
                 terminal_tool=SUBMIT_FINDINGS_TOOL,
                 settings=ModelConfig(model="m", max_turns=3),
+                notes=TURN_NOTES,
                 observer=handle,
             )
         )

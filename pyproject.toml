@@ -59,7 +59,12 @@ build-backend = "setuptools.build_meta"
 include = ["roboviewer*"]
 
 [tool.setuptools.package-data]
-roboviewer = ["checklists/**/*.md", "prompts/**/*.md", "templates/**/*.j2", "templates/**/*.md"]
+roboviewer = [
+    "checklists/**/*.md",
+    "review/prompts/**/*.md",
+    "templates/**/*.j2",
+    "templates/**/*.md",
+]
 
 [tool.ruff]
 line-length = 100

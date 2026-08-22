@@ -40,8 +40,8 @@ is the text to edit when severities come out miscalibrated.
 
 The `{context}` block — the MR header, the list of changed files, the files
 themselves with markup, and the legend for it — is assembled by the code
-(`prompts/__init__.py`) and is not edited here. It is assembly over diff fields
-rather than wording, and the legend has to match the markup `gitdiff.py`
+(`review/prompts/context.py`) and is not edited here. It is assembly over diff fields
+rather than wording, and the legend has to match the markup `repo/annotate.py`
 actually emits.
 
 ## Output language
@@ -49,7 +49,7 @@ actually emits.
 `run.output_language` in the config, or `--language`, asks the model to write
 its own prose — finding titles, rationales, suggestions, verdict reasons and the
 summary — in a given language. It takes an ISO code or a name (`ru`, `Russian`,
-`German`); anything the map in `prompts/__init__.py` does not recognise goes
+`German`); anything the map in `review/prompts/language.py` does not recognise goes
 into the prompt as written, so `Bahasa Indonesia` works too. Unset asks for
 nothing and the model answers in the language of these files.
 

@@ -16,7 +16,6 @@ import sys
 from pathlib import Path
 
 from . import gate
-from .checklist import ChecklistItem
 from .config import (
     Config,
     ModelConfig,
@@ -27,8 +26,9 @@ from .config import (
 )
 from .models import SEVERITY_LABEL, Finding, ItemResult, ReviewRun
 from .observer import AgentKind, AgentObserver, Observer
-from .prompts import PromptError, Prompts, language_name
 from .repo import ChangeSet
+from .review import ChecklistItem, PromptError, Prompts
+from .review.prompts import language_name
 
 
 class Console(Observer):

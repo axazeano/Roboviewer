@@ -10,7 +10,9 @@ budget: measured on a 64-file MR, raising max_turns from 15 to 25 left the same
 seven of eight agents cut off, at 67% more tokens — and their own summaries read
 as finished conclusions. They were not short of turns, they never stopped.
 
-Tolerance for custom-provider quirks:
+What the loop says to the agent about its turns — the budget note, the wrap-up
+warning, the nudge — arrives on the request as `TurnNotes`; the texts are the
+review's. Tolerance for custom-provider quirks:
   * the terminal tool may never get called — on the last turn we force tool_choice;
   * the model may return JSON as plain text — we try to parse it out of content;
   * parallel_tool_calls can be switched off for gateways that do not support it.
@@ -57,23 +59,6 @@ SERVICE_OVERLOADED = 503
 # to finish the check it is on and one to submit; the forced tool_choice on the
 # very last turn stays as the backstop for when it ignores all of this.
 WRAP_UP_MARGIN = 2
-
-# Appended to the system prompt. Protocol rather than review wording, which is
-# why it lives with the loop that enforces it and not in prompts/.
-BUDGET_NOTE = """
-
-# Turn budget
-
-You have {max_turns} turns. A turn is one reply from you, with or without tool
-calls. Plan for that: investigate what matters most first, and call `{terminal}`
-while turns remain. A review that is never submitted is a review nobody reads.
-"""
-
-WRAP_UP_NOTE = (
-    "{left} turn(s) left. Do not start anything new — finish the check you are "
-    "on and call `{terminal}` now with what you already have."
-)
-
 
 class OpenAIAgentRunner(Runner):
     name = "openai"
@@ -331,7 +316,7 @@ class _Transcript:
 
     @classmethod
     def open(cls, request: AgentRequest) -> _Transcript:
-        budget = BUDGET_NOTE.format(
+        budget = request.notes.budget.format(
             max_turns=request.settings.max_turns, terminal=request.terminal_name
         )
         return cls(
@@ -401,8 +386,9 @@ def _reply_without_tools(
 
     transcript.add_reply(content)
     transcript.say(
-        f"Keep going. {request.settings.max_turns - turn} turn(s) left, and "
-        f"you must call the {request.terminal_name} tool before they run out."
+        request.notes.nudge.format(
+            left=request.settings.max_turns - turn, terminal=request.terminal_name
+        )
     )
     return None
 
@@ -413,7 +399,7 @@ def _wrap_up(request: AgentRequest, transcript: _Transcript, turn: int, emit: Pr
     left = request.settings.max_turns - turn
     if 0 < left <= WRAP_UP_MARGIN:
         emit("wrap-up", f"{left} turn(s) left")
-        transcript.say(WRAP_UP_NOTE.format(left=left, terminal=request.terminal_name))
+        transcript.say(request.notes.wrap_up.format(left=left, terminal=request.terminal_name))
 
 
 async def _parsed(raw: Any) -> Any:
