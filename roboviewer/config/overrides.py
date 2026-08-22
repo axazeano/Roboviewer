@@ -6,19 +6,19 @@ checklist is also looked up next to the working directory, because `--checklist
 checklists/grouped` names one of the sets that ship with the tool — so they live
 here side by side rather than pretending to be one function.
 
-They were three rules in two files before, and `--show-config` had to know all
-of them to print where a run actually reads from.
+Only the directories are decided here. Loading what is in them is the business
+of the subsystem that reads them: `review.checklist`, `review.prompts`,
+`reports.renders`.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from .config import Config
-from .prompts import DEFAULT_DIR as PROMPTS_DEFAULT_DIR
-from .prompts import PromptError, Prompts
+from .settings import Config
 
-PACKAGE_DIR = Path(__file__).resolve().parent
+# The installed package: roboviewer/
+PACKAGE_DIR = Path(__file__).resolve().parent.parent
 
 
 def checklist_dir(cfg: Config, root: Path) -> Path:
@@ -43,25 +43,6 @@ def prompts_dir(cfg: Config, root: Path) -> Path | None:
 def templates_dir(cfg: Config, root: Path) -> Path | None:
     """None means the bundled templates."""
     return _override_dir(cfg.run.templates_dir, root, "templates")
-
-
-def load_prompts(cfg: Config, root: Path) -> Prompts:
-    directory = prompts_dir(cfg, root)
-    # A configured directory that does not exist is a typo, not a request for the
-    # defaults: the loader would fall back file by file and the run would quietly
-    # go out with prompts nobody chose.
-    if cfg.run.prompts_dir and (directory is None or not directory.is_dir()):
-        raise PromptError(f"Prompts directory not found: {directory}")
-    return Prompts.load(directory, cfg.run.output_language)
-
-
-def custom_prompts(prompts: Prompts) -> dict[str, str]:
-    """Only the texts a run did not take from the bundled set."""
-    return {
-        name: source
-        for name, source in prompts.sources.items()
-        if Path(source).parent != PROMPTS_DEFAULT_DIR
-    }
 
 
 def _override_dir(configured: str, root: Path, name: str) -> Path | None:

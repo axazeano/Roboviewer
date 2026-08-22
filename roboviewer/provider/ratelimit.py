@@ -37,7 +37,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from .config import RateLimits
+from ..config import RateLimits
 
 WINDOW_S = 60.0
 

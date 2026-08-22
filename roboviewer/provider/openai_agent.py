@@ -1,4 +1,4 @@
-"""Runner on top of an OpenAI-compatible API.
+"""The agent loop over an OpenAI-compatible chat-completions API.
 
 Our own tool-calling loop rather than someone else's CLI: base_url points at any
 gateway, schemas and retries stay under our control, and the reviewer only needs
@@ -30,12 +30,14 @@ from typing import Any
 
 from openai import APIError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
 
-from .. import ratelimit
 from ..config import ProviderConfig, RunConfig
 from ..models import Usage
-from ..ratelimit import RateLimiter
 from ..tools import dispatch, parse_arguments
-from .base import AgentOutcome, AgentRequest, ProgressHook, Runner
+from . import ratelimit
+from .ratelimit import RateLimiter
+from .request import request_body, request_headers, terminal_tool_choice
+from .runner import AgentOutcome, AgentRequest, ProgressHook, Runner
+from .usage import extract_usage
 
 _JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
@@ -86,7 +88,7 @@ class OpenAIAgentRunner(Runner):
             max_retries=0,  # we retry ourselves so attempts can be logged
         )
         # Auth headers go per-request: that is the only way to drop the Bearer header
-        self._headers = provider.request_headers()
+        self._headers = request_headers(provider)
         # One budget for the whole run. Every agent reserves from it, because
         # the provider counts the run as a whole and so must we.
         self._limiter = RateLimiter(provider.rate_limits)
@@ -148,7 +150,7 @@ class OpenAIAgentRunner(Runner):
             except Exception as exc:  # noqa: BLE001 — surfaced upward as the item status
                 return AgentOutcome(payload=None, usage=usage, turns=turns, error=_describe(exc))
 
-            turn_usage = _extract_usage(completion)
+            turn_usage = extract_usage(completion)
             usage = usage + turn_usage
             message = completion.choices[0].message
             tool_calls = list(message.tool_calls or [])
@@ -235,10 +237,10 @@ class OpenAIAgentRunner(Runner):
             "max_tokens": request.settings.max_tokens,
             "extra_headers": self._headers,
         }
-        if body := request.settings.request_body():
+        if body := request_body(request.settings):
             kwargs["extra_body"] = body
         if force_terminal:
-            kwargs["tool_choice"] = self._provider.terminal_tool_choice_value(request.terminal_name)
+            kwargs["tool_choice"] = terminal_tool_choice(self._provider, request.terminal_name)
         else:
             kwargs["tool_choice"] = "auto"
         if not self._provider.parallel_tool_calls:
@@ -305,7 +307,7 @@ class OpenAIAgentRunner(Runner):
 
         if adopted := self._limiter.observe(raw.headers):
             emit("limits", ", ".join(f"{name} {value}/min" for name, value in adopted.items()))
-        usage = _extract_usage(completion)
+        usage = extract_usage(completion)
         self._limiter.settle(
             reservation,
             prompt=usage.prompt_tokens,
@@ -446,45 +448,6 @@ def _describe(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
-def _field(obj: Any, name: str, default: int = 0) -> int:
-    """Gateways return usage either as objects or as plain dicts."""
-    if obj is None:
-        return default
-    value = obj.get(name, default) if isinstance(obj, dict) else getattr(obj, name, default)
-    try:
-        return int(value or default)
-    except (TypeError, ValueError):
-        return default
-
-
-def _present(obj: Any, name: str) -> bool:
-    """Whether the field is there at all, as opposed to being there and zero."""
-    if obj is None:
-        return False
-    value = obj.get(name) if isinstance(obj, dict) else getattr(obj, name, None)
-    return value is not None
-
-
-def _cached_tokens(raw: Any) -> tuple[int, bool]:
-    """(prefix-cache hits, whether the provider reported them at all).
-
-    A gateway that leaves prompt_tokens_details empty still caches prefixes —
-    the absence of the field means the count is unknown, not that it is zero.
-    The two are returned apart rather than folded together, because a zero is a
-    reason to go looking for an unstable prefix and silence is not.
-    """
-    details = raw.get("prompt_tokens_details") if isinstance(raw, dict) else getattr(
-        raw, "prompt_tokens_details", None
-    )
-    if _present(details, "cached_tokens"):
-        return _field(details, "cached_tokens"), True
-    # Anthropic-style shims and DeepSeek use their own field names
-    for alias in ("cache_read_input_tokens", "prompt_cache_hit_tokens"):
-        if _present(raw, alias):
-            return _field(raw, alias), True
-    return 0, False
-
-
 def _reasoning(message: Any) -> str:
     """What the model thought, for the providers that hand it back separately.
 
@@ -503,19 +466,6 @@ def _reasoning(message: Any) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return ""
-
-
-def _extract_usage(completion: Any) -> Usage:
-    raw = getattr(completion, "usage", None)
-    if raw is None:
-        return Usage()
-    cached, reported = _cached_tokens(raw)
-    return Usage(
-        prompt_tokens=_field(raw, "prompt_tokens"),
-        completion_tokens=_field(raw, "completion_tokens"),
-        cached_tokens=cached,
-        cache_reported=reported,
-    )
 
 
 def _payload_from_text(content: str | None) -> dict[str, Any] | None:

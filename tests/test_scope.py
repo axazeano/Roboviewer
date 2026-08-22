@@ -19,7 +19,7 @@ from roboviewer.checklist import ChecklistItem
 from roboviewer.gitdiff import FileChanges, in_scope
 from roboviewer.models import Finding, Usage
 from roboviewer.pipeline import ReviewPipeline
-from roboviewer.runners import AgentOutcome
+from roboviewer.provider import AgentOutcome
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 

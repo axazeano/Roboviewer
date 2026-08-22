@@ -22,7 +22,7 @@ from .judge import JudgeSettings, Passes, judge_for
 from .models import SEVERITY_ORDER, Finding, ItemResult, ReviewRun, Verdict
 from .observe import SILENT, RunObserver
 from .prompts import Prompts
-from .runners import AgentRequest, Runner
+from .provider import AgentRequest, Runner
 from .tools import SUBMIT_FINDINGS_TOOL, tool_schemas
 
 # --------------------------------------------------------------------------- merge

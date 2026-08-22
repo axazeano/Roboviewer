@@ -1,7 +1,8 @@
-"""Agent runner abstraction.
+"""What the review asks of a provider: run one agent, hand back what it submitted.
 
-The pipeline does not care who executes the agent: an OpenAI-compatible API, a
-local model, or someone else's CLI. All it needs is the terminal tool's payload.
+The pipeline does not care who executes the agent — an OpenAI-compatible API, a
+local model, someone else's CLI. All it needs is the terminal tool's payload,
+and `Runner` is that contract. `openai_agent` is the one implementation.
 """
 
 from __future__ import annotations

@@ -19,15 +19,15 @@ import pytest
 from openai import APIStatusError, RateLimitError
 
 from roboviewer.config import ProviderConfig, RateLimits, RunConfig
-from roboviewer.ratelimit import (
+from roboviewer.provider import openai_agent
+from roboviewer.provider.openai_agent import OpenAIAgentRunner
+from roboviewer.provider.ratelimit import (
     PROMPT,
     UNCACHED,
     RateLimiter,
     estimate_tokens,
     retry_after,
 )
-from roboviewer.runners import openai_agent
-from roboviewer.runners.openai_agent import OpenAIAgentRunner
 
 
 class Fake:

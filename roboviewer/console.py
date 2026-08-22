@@ -13,19 +13,20 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from . import gate, sources
+from . import gate
 from .checklist import ChecklistItem
 from .config import (
     Config,
     ModelConfig,
     RateLimits,
     home_config_path,
+    overrides,
     provider_config_path,
 )
 from .events import Event
 from .gitdiff import DiffBundle
 from .models import SEVERITY_LABEL, Finding, ReviewRun
-from .prompts import PromptError, language_name
+from .prompts import PromptError, Prompts, language_name
 
 
 def error(message: str, hint: str = "") -> None:
@@ -197,9 +198,9 @@ def _role(title: str, model: ModelConfig, follows: str = "") -> None:
 
 def _run(cfg: Config, root: Path) -> None:
     print("Run:")
-    print(f"  checklist_dir  {sources.checklist_dir(cfg, root)}")
+    print(f"  checklist_dir  {overrides.checklist_dir(cfg, root)}")
     _prompt_sources(cfg, root)
-    print(f"  templates      {sources.templates_dir(cfg, root) or 'bundled'}")
+    print(f"  templates      {overrides.templates_dir(cfg, root) or 'bundled'}")
     print(f"  reports        {', '.join(cfg.run.report_formats)}")
     language = language_name(cfg.run.output_language)
     print(f"  output lang    {language or 'not set (model answers in the prompt language)'}")
@@ -218,16 +219,16 @@ def _prompt_sources(cfg: Config, root: Path) -> None:
     """Only overridden templates are named — listing four bundled paths every
     time buries the one line that says the run is off the default texts."""
     try:
-        prompts = sources.load_prompts(cfg, root)
+        prompts = Prompts.for_run(cfg, root)
     except PromptError as exc:
         print(f"  prompts        error: {exc}")
         return
 
-    custom = sources.custom_prompts(prompts)
+    custom = prompts.overridden
     if not custom:
         print("  prompts        bundled")
         return
-    print(f"  prompts        {sources.prompts_dir(cfg, root)}, "
+    print(f"  prompts        {overrides.prompts_dir(cfg, root)}, "
           f"custom: {len(custom)} of {len(prompts.sources)}")
     for name, source in custom.items():
         print(f"    {name:<14} {source}")

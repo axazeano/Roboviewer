@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..checklist import ChecklistItem
+from ..config import Config, overrides
 from ..gitdiff import ANNOTATION_LEGEND, DiffBundle
 from ..models import Finding
 from ..resolve import ReferenceReport
@@ -195,6 +196,27 @@ class Prompts:
             texts[name] = path.read_text(encoding="utf-8").strip("\n")
             sources[name] = str(path)
         return cls(texts=texts, sources=sources, language=language)
+
+    @classmethod
+    def for_run(cls, cfg: Config, root: Path) -> Prompts:
+        """The set a run reads: the bundled texts, overridden file by file from
+        the directory the config names or `.roboviewer/prompts/` in the repository."""
+        directory = overrides.prompts_dir(cfg, root)
+        # A configured directory that does not exist is a typo, not a request for
+        # the defaults: the loader would fall back file by file and the run would
+        # quietly go out with prompts nobody chose.
+        if cfg.run.prompts_dir and (directory is None or not directory.is_dir()):
+            raise PromptError(f"Prompts directory not found: {directory}")
+        return cls.load(directory, cfg.run.output_language)
+
+    @property
+    def overridden(self) -> dict[str, str]:
+        """Only the texts this set did not take from the bundled one: name → file."""
+        return {
+            name: source
+            for name, source in self.sources.items()
+            if Path(source).parent != DEFAULT_DIR
+        }
 
     def validate(self, items: list[ChecklistItem], diff: DiffBundle) -> None:
         """Renders every template against the real diff before any tokens are

@@ -34,7 +34,7 @@ from .gitdiff import DiffBundle
 from .models import Finding, ReviewRun, Severity, Usage, Verdict
 from .observe import SILENT, RunObserver
 from .prompts import Prompts
-from .runners import AgentOutcome, AgentRequest, Runner
+from .provider import AgentOutcome, AgentRequest, Runner
 from .tools import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
 
 

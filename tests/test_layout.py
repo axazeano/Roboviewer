@@ -24,8 +24,8 @@ ENFORCED = [
     PACKAGE / "console.py",
     PACKAGE / "events.py",
     PACKAGE / "judge.py",
-    PACKAGE / "ratelimit.py",
-    PACKAGE / "sources.py",
+    *sorted((PACKAGE / "config").rglob("*.py")),
+    *sorted((PACKAGE / "provider").rglob("*.py")),
     # Written this way from the start, so the whole package is in — every
     # module of it, subpackages included, or the rule stops applying the day
     # one is added.

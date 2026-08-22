@@ -10,12 +10,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from roboviewer.models import ItemResult, ReviewRun, Usage
+from roboviewer.provider.usage import extract_usage
 from roboviewer.report import render_report
-from roboviewer.runners.openai_agent import _extract_usage
 
 
 def usage_from(raw: dict) -> Usage:
-    return _extract_usage(SimpleNamespace(usage=raw))
+    return extract_usage(SimpleNamespace(usage=raw))
 
 
 BASE = {"prompt_tokens": 100, "completion_tokens": 5}
@@ -44,7 +44,7 @@ def test_hits_are_read_from_details_and_from_aliases() -> None:
 
 
 def test_missing_usage_block_does_not_crash() -> None:
-    assert _extract_usage(SimpleNamespace(usage=None)) == Usage()
+    assert extract_usage(SimpleNamespace(usage=None)) == Usage()
 
 
 def test_sum_keeps_the_fact_that_someone_reported() -> None:

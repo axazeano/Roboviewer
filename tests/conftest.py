@@ -12,7 +12,7 @@ import pytest
 from roboviewer.config import Config
 from roboviewer.gitdiff import DiffBundle
 from roboviewer.models import DiffStat, Usage
-from roboviewer.runners import AgentOutcome, AgentRequest, ProgressHook, Runner
+from roboviewer.provider import AgentOutcome, AgentRequest, ProgressHook, Runner
 
 ANNOTATED = """\
 ### src/cart.py

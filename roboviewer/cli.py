@@ -3,7 +3,7 @@
 Each step below either produces its part of the run or raises `CLIError`, so
 `main` has one place that prints a failure and one that decides the exit code.
 What the steps produce is printed by `console`, and where their files come from
-is decided by `sources`.
+is decided by `config.overrides`.
 """
 
 from __future__ import annotations
@@ -14,14 +14,14 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import ci, console, gate, gitdiff, renders, sources
+from . import ci, console, gate, gitdiff, renders
 from .checklist import ChecklistItem, load_checklist
-from .config import Config, load_config
+from .config import Config, load_config, overrides
 from .observe import SILENT, RunObserver
 from .pipeline import ReviewPipeline, output_dir_for
 from .prompts import PromptError, Prompts
+from .provider import OpenAIAgentRunner, Runner
 from .report import save
-from .runners import OpenAIAgentRunner, Runner
 
 
 def report_formats(value: str) -> list[str]:
@@ -302,7 +302,7 @@ def _config(explicit: Path | None) -> Config:
 def _checklist(cfg: Config, root: Path, only: str | None) -> list[ChecklistItem]:
     try:
         return load_checklist(
-            sources.checklist_dir(cfg, root),
+            overrides.checklist_dir(cfg, root),
             only.split(",") if only else None,
         )
     except (FileNotFoundError, ValueError) as exc:
@@ -353,9 +353,9 @@ def _plan(
     here; found later it costs the whole token bill, with nowhere left to write
     the report.
     """
-    templates = sources.templates_dir(cfg, root)
+    templates = overrides.templates_dir(cfg, root)
     try:
-        prompts = sources.load_prompts(cfg, root)
+        prompts = Prompts.for_run(cfg, root)
         prompts.validate(items, diff)
     except PromptError as exc:
         raise CLIError(f"Prompt error: {exc}") from exc

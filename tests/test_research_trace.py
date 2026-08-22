@@ -30,9 +30,9 @@ from roboviewer.config import Config, ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import DiffStat, ItemResult, ReviewRun, Usage
 from roboviewer.observe import SILENT, RunObserver
 from roboviewer.pipeline import ReviewPipeline
+from roboviewer.provider import AgentRequest
+from roboviewer.provider.openai_agent import OpenAIAgentRunner
 from roboviewer.report import save
-from roboviewer.runners import AgentRequest
-from roboviewer.runners.openai_agent import OpenAIAgentRunner
 from roboviewer.tools import SUBMIT_FINDINGS_TOOL, dispatch, tool_schemas
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome

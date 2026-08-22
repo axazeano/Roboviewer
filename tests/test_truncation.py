@@ -18,9 +18,9 @@ from roboviewer.checklist import ChecklistItem
 from roboviewer.config import ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import ItemResult, Usage
 from roboviewer.pipeline import ReviewPipeline
+from roboviewer.provider import AgentOutcome
+from roboviewer.provider.openai_agent import OpenAIAgentRunner
 from roboviewer.report import render_report
-from roboviewer.runners import AgentOutcome
-from roboviewer.runners.openai_agent import OpenAIAgentRunner
 from roboviewer.tools import SUBMIT_FINDINGS_TOOL, tool_schemas
 from roboviewer.view import build_view
 
@@ -54,7 +54,7 @@ def _runner(tmp_path: Path) -> OpenAIAgentRunner:
 
 
 def _request(max_turns: int):
-    from roboviewer.runners import AgentRequest
+    from roboviewer.provider import AgentRequest
 
     return AgentRequest(
         system="s",

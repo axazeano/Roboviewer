@@ -14,10 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer import sources
 from roboviewer.cli import main
-from roboviewer.config import Config
-from roboviewer.prompts import PromptError
+from roboviewer.config import Config, overrides
+from roboviewer.prompts import PromptError, Prompts
 
 
 @pytest.fixture(autouse=True)
@@ -47,22 +46,22 @@ def repo(tmp_path: Path) -> Path:
 def test_a_checklist_in_the_repository_wins_over_the_bundled_one(repo: Path) -> None:
     (repo / "checklists" / "default").mkdir(parents=True)
 
-    assert sources.checklist_dir(Config(), repo) == repo / "checklists" / "default"
+    assert overrides.checklist_dir(Config(), repo) == repo / "checklists" / "default"
 
 
 def test_a_bundled_checklist_set_is_found_by_its_relative_name(tmp_path: Path) -> None:
     cfg = Config()
     cfg.run.checklist_dir = "checklists/grouped"
 
-    resolved = sources.checklist_dir(cfg, tmp_path)
+    resolved = overrides.checklist_dir(cfg, tmp_path)
 
-    assert resolved == sources.PACKAGE_DIR / "checklists" / "grouped"
+    assert resolved == overrides.PACKAGE_DIR / "checklists" / "grouped"
     assert resolved.is_dir()
 
 
 @pytest.mark.parametrize("name", ["prompts", "templates"])
 def test_an_override_directory_is_picked_up_only_when_it_exists(repo: Path, name: str) -> None:
-    resolve = getattr(sources, f"{name}_dir")
+    resolve = getattr(overrides, f"{name}_dir")
     assert resolve(Config(), repo) is None
 
     (repo / ".roboviewer" / name).mkdir(parents=True)
@@ -76,7 +75,7 @@ def test_a_configured_prompts_directory_that_is_missing_is_an_error(repo: Path) 
     cfg.run.prompts_dir = "prompts/mine"
 
     with pytest.raises(PromptError):
-        sources.load_prompts(cfg, repo)
+        Prompts.for_run(cfg, repo)
 
 
 # ------------------------------------------------------------------ how the run stops
