@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from roboviewer.renders._jinja import render_template
+from roboviewer.reports.renders import render_template
 
 from .records import PAGE
 from .view import TraceView, load

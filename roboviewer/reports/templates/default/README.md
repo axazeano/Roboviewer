@@ -9,11 +9,11 @@ A custom set is pointed at by `templates_dir` in the config, or picked up from
 `.roboviewer/templates/` inside the reviewed repository. Lookup is per file:
 what you do not provide comes from the bundle, so an overridden `report.md.j2`
 can still import the bundled `_finding.md.j2`. A document outside the tool works
-the same way — `research/templates/` carries its own page and takes
+the same way — `measure/trace/templates/` carries its own page and takes
 `_layout.html.j2` and `_styles.css.j2` from here.
 
 Which reports a run writes is `report_formats` in the config, or `--format
-md,html`. A format is a module in `roboviewer/renders/`, one file per format —
+md,html`. A format is a module in `roboviewer/reports/renders/`, one file per format —
 but a module is only required when the render is not template-based (SARIF and
 GitLab Code Quality are serialization, not documents). For a new templated
 document, drop in `report.<name>.j2` and call `--format <name>`.
@@ -45,7 +45,7 @@ ticket, so it has nowhere to fetch from.
 
 ## What reaches a template
 
-The model is assembled in `roboviewer/view.py`. It is a contract: fields get
+The model is assembled in `roboviewer/reports/view.py`. It is a contract: fields get
 added, renaming one breaks other people's templates.
 
 | Name | What is inside |

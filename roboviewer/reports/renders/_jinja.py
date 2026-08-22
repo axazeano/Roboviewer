@@ -3,7 +3,7 @@
 Not a render itself, hence the underscore — same convention as the partials in
 `templates/`.
 
-The templates live in `roboviewer/templates/` and are data, not code. A file is
+The templates live in `roboviewer/reports/templates/` and are data, not code. A file is
 named `<document>.<format>.j2`, and the extension before `.j2` decides escaping:
 markdown goes out as-is, HTML escapes every value, because a finding's title is
 model output quoted back.
@@ -27,7 +27,7 @@ from markdown_it import MarkdownIt
 from markupsafe import Markup
 from pydantic import BaseModel
 
-from ..models import SEVERITY_LABEL, Severity
+from ...models import SEVERITY_LABEL, Severity
 from ._errors import TemplateError
 
 DEFAULT_DIR = Path(__file__).resolve().parent.parent / "templates" / "default"

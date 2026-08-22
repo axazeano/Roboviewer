@@ -18,12 +18,12 @@ from roboviewer.config import ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import ItemResult, Usage
 from roboviewer.provider import AgentOutcome
 from roboviewer.provider.openai_agent import OpenAIAgentRunner
-from roboviewer.report import render_report
+from roboviewer.reports.save import render_report
+from roboviewer.reports.view import build_view
 from roboviewer.review.checklist import ChecklistItem
 from roboviewer.review.pipeline import ReviewPipeline
 from roboviewer.review.prompts.tool_schemas import SUBMIT_FINDINGS_TOOL, tool_schemas
 from roboviewer.review.prompts.turns import TURN_NOTES
-from roboviewer.view import build_view
 
 from .conftest import ScriptedRunner, make_bundle
 from .test_report import _run

@@ -14,11 +14,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import ci, console, gate, renders, repo
+from . import ci, console, gate, repo
 from .config import Config, load_config, overrides
 from .observer import SILENT, Broadcast, RunObserver
 from .provider import OpenAIAgentRunner, Runner
-from .report import save
+from .reports import renders, save
 from .review import (
     ChecklistItem,
     PromptError,

@@ -31,7 +31,7 @@ from roboviewer.observer import SILENT, RunObserver
 from roboviewer.provider import AgentRequest
 from roboviewer.provider.openai_agent import OpenAIAgentRunner
 from roboviewer.repo.tools import dispatch
-from roboviewer.report import save
+from roboviewer.reports.save import save
 from roboviewer.review.checklist import ChecklistItem
 from roboviewer.review.pipeline import ReviewPipeline
 from roboviewer.review.prompts.tool_schemas import SUBMIT_FINDINGS_TOOL, tool_schemas

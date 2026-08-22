@@ -1,4 +1,4 @@
-"""Persisting run results: rendered reports for humans, JSON for debugging.
+"""Writing a run to disk: the raw JSON for debugging, a rendered report per format.
 
 Nothing here knows what a report looks like. The numbers are counted once in
 `view`, each output format is a module in `renders`, and this file only decides
@@ -12,8 +12,8 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
+from ..models import ReviewRun
 from . import renders
-from .models import ReviewRun
 
 DEFAULT_FORMATS: tuple[str, ...] = ("md",)
 

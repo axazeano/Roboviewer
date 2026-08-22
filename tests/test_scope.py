@@ -142,7 +142,7 @@ def test_a_wider_margin_lets_more_of_the_file_back_in(tmp_path: Path, config) ->
 
 
 def test_the_report_lists_what_the_gate_set_aside(tmp_path: Path, config) -> None:
-    from roboviewer.renders.markdown import render as render_md
+    from roboviewer.reports.renders.markdown import render as render_md
 
     run, _ = _run(config, tmp_path, [_finding(41, "Off-by-one"), _finding(300, "Hardcoded string")])
     text = render_md(run)

@@ -62,8 +62,8 @@ include = ["roboviewer*"]
 roboviewer = [
     "checklists/**/*.md",
     "review/prompts/**/*.md",
-    "templates/**/*.j2",
-    "templates/**/*.md",
+    "reports/templates/**/*.j2",
+    "reports/templates/**/*.md",
 ]
 
 [tool.ruff]

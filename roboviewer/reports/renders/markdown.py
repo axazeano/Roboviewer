@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..models import ReviewRun
+from ...models import ReviewRun
 from ..view import build_view
 from ._jinja import render_template
 

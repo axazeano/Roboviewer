@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "roboviewer"
 
 ENFORCED = [
-    *sorted((PACKAGE / "renders").rglob("*.py")),
+    *sorted((PACKAGE / "reports").rglob("*.py")),
     PACKAGE / "observer.py",
     PACKAGE / "cli.py",
     PACKAGE / "console.py",

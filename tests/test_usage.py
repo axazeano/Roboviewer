@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from roboviewer.models import ItemResult, ReviewRun, Usage
 from roboviewer.provider.usage import extract_usage
-from roboviewer.report import render_report
+from roboviewer.reports.save import render_report
 
 
 def usage_from(raw: dict) -> Usage:

@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .. import __version__
-from ..models import ReviewRun, Severity
+from ... import __version__
+from ...models import ReviewRun, Severity
 from ..view import FindingView, ReviewView, build_view
 
 NAME = "sarif"

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from ..models import ReviewRun
+from ...models import ReviewRun
 from ..view import build_view
 from . import codequality, html, markdown, sarif
 from ._errors import RenderError, TemplateError

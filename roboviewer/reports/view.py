@@ -27,7 +27,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import (
+from ..models import (
     SEVERITY_ORDER,
     DiffStat,
     Finding,
@@ -154,6 +154,39 @@ class ReviewView(BaseModel):
     files: list[DiffStat]
 
 
+def build_view(run: ReviewRun) -> ReviewView:
+    # Over all findings at once: uniqueness has to hold across the report
+    prints = _fingerprints(run.findings + run.out_of_scope)
+    confirmed = [_finding(f, run, prints[f.id]) for f in run.confirmed()]
+    rejected = [_finding(f, run, prints[f.id]) for f in run.rejected()]
+    out_of_scope = [_finding(f, run, prints[f.id]) for f in run.out_of_scope]
+    counts = Counter(f.severity for f in confirmed)
+    items = [_item(i) for i in run.items]
+
+    return ReviewView(
+        meta=RunMeta.model_validate(run),
+        stats=RunStats(
+            files_changed=len(run.files),
+            added=sum(f.added for f in run.files),
+            removed=sum(f.removed for f in run.files),
+            total_tokens=run.total_usage.total_tokens,
+            by_severity=[
+                SeverityCount(severity=s, count=counts[s])
+                for s in sorted(counts, key=lambda s: SEVERITY_ORDER[s])
+            ],
+        ),
+        cache=_cache(run.total_usage),
+        judge_summary=run.judge_summary.strip(),
+        findings=confirmed,
+        rejected=rejected,
+        out_of_scope=out_of_scope,
+        items=items,
+        failed_items=[i for i in items if i.status == "failed"],
+        truncated_items=[i for i in items if i.status == "truncated"],
+        files=list(run.files),
+    )
+
+
 def _cache(usage: Usage) -> CacheView:
     if usage.cached_tokens:
         state = CacheState.HIT
@@ -227,37 +260,4 @@ def _item(item: ItemResult) -> ItemView:
         cache=_cache(item.usage),
         error=item.error,
         summary=_text(item.summary),
-    )
-
-
-def build_view(run: ReviewRun) -> ReviewView:
-    # Over all findings at once: uniqueness has to hold across the report
-    prints = _fingerprints(run.findings + run.out_of_scope)
-    confirmed = [_finding(f, run, prints[f.id]) for f in run.confirmed()]
-    rejected = [_finding(f, run, prints[f.id]) for f in run.rejected()]
-    out_of_scope = [_finding(f, run, prints[f.id]) for f in run.out_of_scope]
-    counts = Counter(f.severity for f in confirmed)
-    items = [_item(i) for i in run.items]
-
-    return ReviewView(
-        meta=RunMeta.model_validate(run),
-        stats=RunStats(
-            files_changed=len(run.files),
-            added=sum(f.added for f in run.files),
-            removed=sum(f.removed for f in run.files),
-            total_tokens=run.total_usage.total_tokens,
-            by_severity=[
-                SeverityCount(severity=s, count=counts[s])
-                for s in sorted(counts, key=lambda s: SEVERITY_ORDER[s])
-            ],
-        ),
-        cache=_cache(run.total_usage),
-        judge_summary=run.judge_summary.strip(),
-        findings=confirmed,
-        rejected=rejected,
-        out_of_scope=out_of_scope,
-        items=items,
-        failed_items=[i for i in items if i.status == "failed"],
-        truncated_items=[i for i in items if i.status == "truncated"],
-        files=list(run.files),
     )
