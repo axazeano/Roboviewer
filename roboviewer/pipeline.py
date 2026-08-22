@@ -17,13 +17,14 @@ from typing import Any
 from .checklist import ChecklistItem
 from .config import Config
 from .events import Event, EventSink, noop
-from .gitdiff import DiffBundle, in_scope
 from .judge import JudgeSettings, Passes, judge_for
 from .models import SEVERITY_ORDER, Finding, ItemResult, ReviewRun, Verdict
 from .observe import SILENT, RunObserver
 from .prompts import Prompts
+from .prompts.tool_schemas import SUBMIT_FINDINGS_TOOL, tool_schemas
 from .provider import AgentRequest, Runner
-from .tools import SUBMIT_FINDINGS_TOOL, tool_schemas
+from .repo import ChangeSet
+from .review.scope import in_scope
 
 # --------------------------------------------------------------------------- merge
 
@@ -74,7 +75,7 @@ def _by_file(findings: list[Finding]) -> dict[str, list[Finding]]:
     """
     groups: dict[str, list[Finding]] = {}
     for finding in findings:
-        groups.setdefault(finding.file.strip().lstrip("./"), []).append(finding)
+        groups.setdefault(finding.file, []).append(finding)
     return groups
 
 
@@ -178,19 +179,19 @@ class ReviewPipeline:
     def __init__(
         self,
         config: Config,
-        diff: DiffBundle,
+        changes: ChangeSet,
         items: list[ChecklistItem],
         runner: Runner,
         on_event: EventSink | None = None,
         prompts: Prompts | None = None,
     ) -> None:
         self._cfg = config
-        self._diff = diff
+        self._changes = changes
         self._items = items
         self._runner = runner
         self._emit = on_event or noop
         self._prompts = prompts or Prompts.load()
-        self._tools = tool_schemas(diff.base_sha)
+        self._tools = tool_schemas(changes.comparison.base_sha)
         # Whoever asked to watch this run, once it is running — see `execute`.
         self._observer: RunObserver = SILENT
 
@@ -204,7 +205,7 @@ class ReviewPipeline:
         """
         self._observer = observer
         run = self._start_run()
-        if not self._diff.files:
+        if not self._changes.files:
             return self._finish_run(run, "No changes relative to the target branch")
 
         run.items = await self._review_every_item()
@@ -220,25 +221,27 @@ class ReviewPipeline:
         """The record every step writes into, with a pending result per item."""
         run = ReviewRun(
             run_id=datetime.now().strftime("%Y%m%d-%H%M%S"),
-            repo_root=str(self._diff.root),
-            branch=self._diff.branch,
-            target=self._diff.target,
-            base_sha=self._diff.base_sha,
-            head_sha=self._diff.head,
+            repo_root=str(self._changes.comparison.root),
+            branch=self._changes.comparison.source,
+            target=self._changes.comparison.target,
+            base_sha=self._changes.comparison.base_sha,
+            head_sha=self._changes.comparison.head_sha,
             model=self._cfg.reviewer.model,
             started_at=datetime.now(UTC).isoformat(timespec="seconds"),
-            files=self._diff.files,
+            files=self._changes.files,
             items=[ItemResult(item_id=i.id, item_title=i.title) for i in self._items],
         )
         # The directory as well as the run: an observer that keeps something has
         # to know where the run's artifacts go without reading the config.
-        self._observer.opened(run, output_dir_for(self._cfg, self._diff.root, run.run_id))
+        self._observer.opened(
+            run, output_dir_for(self._cfg, self._changes.comparison.root, run.run_id)
+        )
         self._emit(
             Event(
                 "run_start",
-                f"{self._diff.branch} → {self._diff.target}: {len(self._diff.files)} files, "
-                f"{len(self._items)} checklist items",
-                data={"files": len(self._diff.files), "items": len(self._items)},
+                f"{self._changes.comparison.source} → {self._changes.comparison.target}: "
+                f"{len(self._changes.files)} files, {len(self._items)} checklist items",
+                data={"files": len(self._changes.files), "items": len(self._items)},
             )
         )
         return run
@@ -285,7 +288,7 @@ class ReviewPipeline:
         keep: list[Finding] = []
         drop: list[Finding] = []
         for finding in findings:
-            reachable = in_scope(self._diff.changes, finding.file, finding.line, margin)
+            reachable = in_scope(self._changes.lines, finding.file, finding.line, margin)
             (keep if reachable else drop).append(finding)
 
         for index, finding in enumerate(keep, start=1):
@@ -320,7 +323,7 @@ class ReviewPipeline:
                 concurrency=self._cfg.run.concurrency,
             ),
             prompts=self._prompts,
-            diff=self._diff,
+            changes=self._changes,
             runner=self._runner,
             tools=self._tools,
             emit=self._emit,
@@ -367,7 +370,7 @@ class ReviewPipeline:
 
         request = AgentRequest(
             system=self._prompts.system_for(item),
-            prompt=self._prompts.build_item_prompt(item, self._diff),
+            prompt=self._prompts.build_item_prompt(item, self._changes),
             tools=self._tools,
             terminal_tool=SUBMIT_FINDINGS_TOOL,
             settings=self._cfg.reviewer,

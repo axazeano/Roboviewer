@@ -17,8 +17,9 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer.gitdiff import MARKER_REMOVED, annotate_file, change_map
 from roboviewer.models import DiffStat
+from roboviewer.repo.annotate import MARKER_REMOVED, annotate_file
+from roboviewer.repo.diff import change_map
 
 
 @pytest.fixture

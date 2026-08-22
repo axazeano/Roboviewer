@@ -27,7 +27,7 @@ from corpus.cli import _entry_line, main
 from corpus.entries import Entry
 from corpus.github import GitHub, RateLimited, Response
 from corpus.store import Store, default_root
-from roboviewer import gitdiff
+from roboviewer import repo
 
 MISSING_SHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
@@ -184,11 +184,11 @@ def test_the_built_entry_is_a_repository_roboviewer_reviews(
     result = build(entry, store, anonymous)
 
     assert result.status == "built"
-    bundle = gitdiff.collect(
+    bundle = repo.collect(
         store.repo_dir(entry),
         entry.base,
         entry.head,
-        budget=gitdiff.DiffBudget(
+        budget=repo.ContextBudget(
             context_lines=3, max_chars=10_000, inline_max_lines=100,
             inline_max_total_chars=10_000,
         ),
@@ -199,7 +199,7 @@ def test_the_built_entry_is_a_repository_roboviewer_reviews(
     # The change under review, diffed from the branch point rather than from the
     # base commit — the same thing a reviewer on the pull request page saw
     assert [stat.file for stat in bundle.files] == ["cart.py"]
-    assert "two" in bundle.annotated
+    assert "two" in bundle.attachments.annotated
 
 
 def test_the_head_reviewers_saw_is_what_is_checked_out(

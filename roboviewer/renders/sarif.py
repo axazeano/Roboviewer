@@ -101,7 +101,7 @@ def _message(finding: FindingView) -> str:
 
 
 def _location(finding: FindingView) -> dict:
-    physical: dict = {"artifactLocation": {"uri": finding.file.strip().lstrip("./")}}
+    physical: dict = {"artifactLocation": {"uri": finding.file}}
     # A region without startLine is invalid, so a finding with no line stays
     # attached to the file rather than to an invented first line.
     if finding.line:

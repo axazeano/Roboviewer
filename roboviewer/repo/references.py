@@ -1,4 +1,4 @@
-"""Reference resolution: what the diff introduces, and whether it exists.
+"""The reference pre-pass: what the diff introduces, and whether it exists.
 
 Measured on a real branch, ten of eleven missed blockers were one question —
 does this reference resolve? A symbol with no declaration, a storyboard scene
@@ -28,10 +28,11 @@ the wrong thing to show a model and the right thing to search.
 from __future__ import annotations
 
 import re
-import subprocess
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .git import GitError, git
 
 # Identifiers that carry no information, plus the declaration keywords themselves.
 # A block rather than a list literal: the point is that a reader can see it.
@@ -146,7 +147,7 @@ def check(root: Path, base: str, head: str) -> ReferenceReport:
     """Everything the diff introduces that resolves to nothing."""
     try:
         added = _added_lines(root, base, head)
-    except (subprocess.SubprocessError, OSError) as exc:
+    except (GitError, OSError) as exc:
         return ReferenceReport(error=str(exc))
 
     if not added:
@@ -159,7 +160,7 @@ def check(root: Path, base: str, head: str) -> ReferenceReport:
         )
         report.resource_misses = _resource_misses(root, head, added)
         report.resource_misses += _unregistered_sources(root, base, head)
-    except (subprocess.SubprocessError, OSError) as exc:
+    except (GitError, OSError) as exc:
         return ReferenceReport(error=str(exc))
     return report
 
@@ -371,12 +372,7 @@ def _resolves(root: Path, head: str, rule: ResourceRule, value: str, tree: list[
 
 def _git(root: Path, args: list[str]) -> str:
     """git grep exits 1 on "no matches", which is an answer, not a failure."""
-    proc = subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, text=True, timeout=120
-    )
-    if proc.returncode not in (0, 1):
-        raise subprocess.SubprocessError(proc.stderr.strip()[:300] or f"git {args[0]} failed")
-    return proc.stdout
+    return git(root, *args, ok=(0, 1), timeout=120)
 
 
 def _tree(root: Path, head: str) -> list[str]:

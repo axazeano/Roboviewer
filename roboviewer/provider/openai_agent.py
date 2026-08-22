@@ -32,7 +32,7 @@ from openai import APIError, APIStatusError, APITimeoutError, AsyncOpenAI, RateL
 
 from ..config import ProviderConfig, RunConfig
 from ..models import Usage
-from ..tools import dispatch, parse_arguments
+from ..repo.tools import dispatch, parse_arguments
 from . import ratelimit
 from .ratelimit import RateLimiter
 from .request import request_body, request_headers, terminal_tool_choice

@@ -16,10 +16,11 @@ import asyncio
 from pathlib import Path
 
 from roboviewer.checklist import ChecklistItem
-from roboviewer.gitdiff import FileChanges, in_scope
 from roboviewer.models import Finding, Usage
 from roboviewer.pipeline import ReviewPipeline
 from roboviewer.provider import AgentOutcome
+from roboviewer.repo.diff import FileChanges
+from roboviewer.review.scope import in_scope
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
@@ -96,7 +97,7 @@ def _run(config, tmp_path: Path, findings: list[dict]):
             turns=1,
         ),
     )
-    bundle = make_bundle(tmp_path, changes=CHANGES)
+    bundle = make_bundle(tmp_path, lines=CHANGES)
     run = asyncio.run(ReviewPipeline(config, bundle, [ITEM], runner).execute())
     return run, runner
 

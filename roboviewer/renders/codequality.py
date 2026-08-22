@@ -43,7 +43,7 @@ def _entry(finding: FindingView) -> dict:
         "fingerprint": finding.fingerprint,
         "severity": SEVERITY[finding.severity],
         "location": {
-            "path": finding.file.strip().lstrip("./"),
+            "path": finding.file,
             # Required and numeric; without it GitLab drops the entry entirely.
             "lines": {"begin": finding.line or 1},
         },

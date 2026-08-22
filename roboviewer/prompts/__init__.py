@@ -6,8 +6,8 @@ verification and its final calibration — so they live in markdown rather than
 in string literals. `NAMES` below is the list that counts.
 
 The scaffolding below stays in code. The context block, the tail listing files
-that did not fit and the annotation legend are assembly over `DiffBundle`
-fields, and the legend has to match the markup `gitdiff.py` actually emits.
+that did not fit and the annotation legend are assembly over `ChangeSet`
+fields, and the legend has to match the markup `repo.annotate` actually emits.
 
 The output-language directive is assembly too, over a config value. Keeping it
 out of the templates means a custom prompt set gets the option for free instead
@@ -24,9 +24,10 @@ from pathlib import Path
 
 from ..checklist import ChecklistItem
 from ..config import Config, overrides
-from ..gitdiff import ANNOTATION_LEGEND, DiffBundle
 from ..models import Finding
-from ..resolve import ReferenceReport
+from ..repo import ChangeSet
+from ..repo.annotate import MARKER_ADDED, MARKER_CONTEXT, MARKER_REMOVED
+from ..repo.references import ReferenceReport
 
 DEFAULT_DIR = Path(__file__).resolve().parent / "default"
 
@@ -40,6 +41,16 @@ NAMES = (
     "judge_one_user",
     "judge_final_system",
     "judge_final_user",
+)
+
+# Goes into the prompt and must keep describing exactly what `repo.annotate`
+# emits — the agent reads line numbers off this markup.
+ANNOTATION_LEGEND = (
+    "Format: line number in the new version of the file, marker, code.\n"
+    f"   12{MARKER_CONTEXT}code   — line unchanged in this MR, shown for context\n"
+    f"   13{MARKER_ADDED}code   — line added or changed in this MR\n"
+    f"     {MARKER_REMOVED}code   — line removed in this MR "
+    "(absent from the new version, so it has no number)"
 )
 
 # Structure rather than wording — see the module docstring.
@@ -218,14 +229,14 @@ class Prompts:
             if Path(source).parent != DEFAULT_DIR
         }
 
-    def validate(self, items: list[ChecklistItem], diff: DiffBundle) -> None:
+    def validate(self, items: list[ChecklistItem], changes: ChangeSet) -> None:
         """Renders every template against the real diff before any tokens are
         spent, so a broken placeholder fails at startup, not eight agents deep."""
         for item in items:
-            self.build_item_prompt(item, diff)
-        self.build_judge_prompt([], diff)
-        self.build_judge_one_prompt(_PLACEHOLDER_FINDING, [], diff)
-        self.build_judge_final_prompt([], {}, diff)
+            self.build_item_prompt(item, changes)
+        self.build_judge_prompt([], changes)
+        self.build_judge_one_prompt(_PLACEHOLDER_FINDING, [], changes)
+        self.build_judge_final_prompt([], {}, changes)
 
     # ---------------------------------------------------------------- rendering
 
@@ -271,28 +282,28 @@ class Prompts:
                 f"{DEFAULT_DIR / 'README.md'}"
             ) from exc
 
-    def build_item_prompt(self, item: ChecklistItem, diff: DiffBundle) -> str:
+    def build_item_prompt(self, item: ChecklistItem, changes: ChangeSet) -> str:
         return self._with_reminder(
             self._fmt(
                 "item_user",
-                context=_context_block(diff),
+                context=_context_block(changes),
                 item_title=item.title,
                 item_body=item.body,
             )
         )
 
-    def build_judge_prompt(self, findings: list[Finding], diff: DiffBundle) -> str:
+    def build_judge_prompt(self, findings: list[Finding], changes: ChangeSet) -> str:
         return self._with_reminder(
             self._fmt(
                 "judge_user",
-                context=_context_block(diff),
+                context=_context_block(changes),
                 count=len(findings),
                 findings="\n\n".join(_render_finding(f) for f in findings),
             )
         )
 
     def build_judge_one_prompt(
-        self, finding: Finding, others: list[Finding], diff: DiffBundle
+        self, finding: Finding, others: list[Finding], changes: ChangeSet
     ) -> str:
         """The task for a judge that settles a single claim. `others` is every
         other finding in the run — a one-line roster, so `duplicate` survives the
@@ -300,14 +311,14 @@ class Prompts:
         return self._with_reminder(
             self._fmt(
                 "judge_one_user",
-                context=_context_block(diff),
+                context=_context_block(changes),
                 finding=_render_finding(finding),
                 roster=_render_roster(others),
             )
         )
 
     def build_judge_final_prompt(
-        self, findings: list[Finding], notes: dict[str, str], diff: DiffBundle
+        self, findings: list[Finding], notes: dict[str, str], changes: ChangeSet
     ) -> str:
         """The task for the pass that rules on findings which already passed
         verification. `notes` is what each finding's own pass reported checking,
@@ -316,7 +327,7 @@ class Prompts:
         return self._with_reminder(
             self._fmt(
                 "judge_final_user",
-                context=_context_block(diff),
+                context=_context_block(changes),
                 count=len(findings),
                 findings="\n\n".join(
                     _render_finding(f, notes.get(f.id)) for f in findings
@@ -325,23 +336,24 @@ class Prompts:
         )
 
 
-def _context_block(diff: DiffBundle) -> str:
+def _context_block(changes: ChangeSet) -> str:
+    shown = changes.attachments
     fallback = ""
-    if diff.fallback and diff.text:
-        fallback = FALLBACK_BLOCK.format(diff=diff.text)
-        if diff.truncated:
+    if shown.fallback and shown.hunks:
+        fallback = FALLBACK_BLOCK.format(diff=shown.hunks)
+        if shown.hunks_truncated:
             fallback += "\n> Fragments were truncated by size; read the rest with the tools.\n"
 
     return CONTEXT_BLOCK.format(
-        repo=diff.root.name,
-        branch=diff.branch,
-        target=diff.target,
-        base_sha=diff.base_sha[:12],
-        files=diff.summary_table(),
+        repo=changes.comparison.root.name,
+        branch=changes.comparison.source,
+        target=changes.comparison.target,
+        base_sha=changes.comparison.base_sha[:12],
+        files=changes.summary_table(),
         legend=ANNOTATION_LEGEND,
-        annotated=diff.annotated or "(no file was attached in full)",
+        annotated=shown.annotated or "(no file was attached in full)",
         fallback_block=fallback,
-        references_block=_references_block(diff.references),
+        references_block=_references_block(changes.references),
     )
 
 

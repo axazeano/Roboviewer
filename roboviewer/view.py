@@ -191,7 +191,7 @@ def _fingerprints(findings: list[Finding]) -> dict[str, str]:
     for finding in findings:
         material = " ".join(
             [
-                finding.file.strip().lstrip("./"),
+                finding.file,
                 finding.category.strip().casefold(),
                 " ".join(finding.title.split()).casefold(),
             ]

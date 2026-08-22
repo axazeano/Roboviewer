@@ -12,6 +12,17 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+def repo_path(value: str) -> str:
+    """A path as the tree names it — no surrounding whitespace, no leading `./`.
+
+    The one spelling every comparison uses: the scope gate looks a finding's
+    file up in the change map by it, the merge groups findings by it, and the
+    fingerprint and the machine formats print it. `Finding.file` is normalised
+    on the way in, so a reader of that field never has to do this again.
+    """
+    return value.strip().lstrip("./")
+
+
 # str + Enum rather than StrEnum: templates format a severity into text, and
 # the two spell that differently.
 class Severity(str, Enum):  # noqa: UP042
@@ -78,6 +89,11 @@ class Finding(BaseModel):
     confidence: float = 0.5
     # Ids of the checklist items that found it (several after deduplication)
     sources: list[str] = Field(default_factory=list)
+
+    @field_validator("file")
+    @classmethod
+    def _normalise_file(cls, v: str) -> str:
+        return repo_path(v)
 
     @field_validator("confidence")
     @classmethod

@@ -18,10 +18,10 @@ from roboviewer.checklist import ChecklistItem
 from roboviewer.config import ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import ItemResult, Usage
 from roboviewer.pipeline import ReviewPipeline
+from roboviewer.prompts.tool_schemas import SUBMIT_FINDINGS_TOOL, tool_schemas
 from roboviewer.provider import AgentOutcome
 from roboviewer.provider.openai_agent import OpenAIAgentRunner
 from roboviewer.report import render_report
-from roboviewer.tools import SUBMIT_FINDINGS_TOOL, tool_schemas
 from roboviewer.view import build_view
 
 from .conftest import ScriptedRunner, make_bundle

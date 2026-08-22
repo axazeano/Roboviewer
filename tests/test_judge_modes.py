@@ -25,8 +25,8 @@ from roboviewer.checklist import ChecklistItem
 from roboviewer.config import Config, ModelConfig, RunConfig
 from roboviewer.models import Finding, Severity, Usage
 from roboviewer.pipeline import ReviewPipeline
+from roboviewer.prompts.tool_schemas import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
 from roboviewer.provider import AgentOutcome, AgentRequest, ProgressHook, Runner
-from roboviewer.tools import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 

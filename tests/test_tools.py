@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer.tools import dispatch
+from roboviewer.repo.tools import dispatch
 
 
 @pytest.fixture

@@ -14,7 +14,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import ci, console, gate, gitdiff, renders
+from . import ci, console, gate, renders, repo
 from .checklist import ChecklistItem, load_checklist
 from .config import Config, load_config, overrides
 from .observe import SILENT, RunObserver
@@ -174,7 +174,7 @@ class RunPlan:
     """Everything the review needs, with every failure already surfaced."""
 
     cfg: Config
-    diff: gitdiff.DiffBundle
+    changes: repo.ChangeSet
     items: list[ChecklistItem]
     prompts: Prompts
     runner: Runner
@@ -246,18 +246,20 @@ def _execute(
     if not target:
         parser.error("no target branch given: roboviewer <target> [source]")
 
-    diff = _diff(cfg, root, target, args.source)
+    changes = _changes(cfg, root, target, args.source)
+    compared = changes.comparison
     if args.diff_only:
-        console.diff_summary(diff)
+        console.diff_summary(changes)
         return 0
-    if not diff.files:
-        console.notice(f"No changes in {diff.branch} relative to {diff.target}.")
+    if not changes.files:
+        console.notice(f"No changes in {compared.source} relative to {compared.target}.")
         return 0
 
-    plan = _plan(cfg, root, diff, items)
-    if diff.detached:
+    plan = _plan(cfg, root, changes, items)
+    if compared.detached:
         console.notice(
-            f"Reviewing branch {diff.branch} ({diff.head[:12]}); the working copy is untouched."
+            f"Reviewing branch {compared.source} ({compared.head_sha[:12]}); "
+            "the working copy is untouched."
         )
     return asyncio.run(_review(plan, args.verbose, observer))
 
@@ -281,8 +283,8 @@ def _target_from_ci() -> str | None:
 def _repo_root(requested: str, *, required: bool) -> Path:
     path = Path(requested).expanduser().resolve()
     try:
-        return gitdiff.repo_root(path)
-    except gitdiff.GitError as exc:
+        return repo.repo_root(path)
+    except repo.GitError as exc:
         if required:
             raise CLIError(
                 f"Error: {exc}",
@@ -309,13 +311,13 @@ def _checklist(cfg: Config, root: Path, only: str | None) -> list[ChecklistItem]
         raise CLIError(f"Checklist error: {exc}") from exc
 
 
-def _diff(cfg: Config, root: Path, target: str, source: str | None) -> gitdiff.DiffBundle:
+def _changes(cfg: Config, root: Path, target: str, source: str | None) -> repo.ChangeSet:
     try:
-        return gitdiff.collect(
+        return repo.collect(
             root,
             target,
             source,
-            budget=gitdiff.DiffBudget(
+            budget=repo.ContextBudget(
                 context_lines=cfg.run.diff_context_lines,
                 max_chars=cfg.run.diff_max_chars,
                 inline_max_lines=cfg.run.inline_max_lines,
@@ -324,7 +326,7 @@ def _diff(cfg: Config, root: Path, target: str, source: str | None) -> gitdiff.D
             excludes=cfg.run.exclude_globs,
             resolve_references=cfg.run.resolve_references,
         )
-    except gitdiff.GitError as exc:
+    except repo.GitError as exc:
         raise CLIError(f"Git error: {exc}", _depth_hint(root)) from exc
 
 
@@ -333,9 +335,9 @@ def _depth_hint(root: Path) -> str:
     looks like something else — a branch that does not exist, a diff with no
     branch point. Say it once, where the failure surfaces."""
     try:
-        if not gitdiff.is_shallow(root):
+        if not repo.is_shallow(root):
             return ""
-    except gitdiff.GitError:
+    except repo.GitError:
         return ""
     return (
         "This clone is shallow, so the branch point may simply be missing. "
@@ -345,7 +347,7 @@ def _depth_hint(root: Path) -> str:
 
 
 def _plan(
-    cfg: Config, root: Path, diff: gitdiff.DiffBundle, items: list[ChecklistItem]
+    cfg: Config, root: Path, changes: repo.ChangeSet, items: list[ChecklistItem]
 ) -> RunPlan:
     """Everything that can still fail, gathered before the first request.
 
@@ -356,7 +358,7 @@ def _plan(
     templates = overrides.templates_dir(cfg, root)
     try:
         prompts = Prompts.for_run(cfg, root)
-        prompts.validate(items, diff)
+        prompts.validate(items, changes)
     except PromptError as exc:
         raise CLIError(f"Prompt error: {exc}") from exc
 
@@ -366,13 +368,15 @@ def _plan(
         raise CLIError(f"Report error: {exc}") from exc
 
     try:
-        runner = OpenAIAgentRunner(cfg.provider, cfg.run, root, diff.base_sha, diff.source_ref)
+        runner = OpenAIAgentRunner(
+            cfg.provider, cfg.run, root, changes.comparison.base_sha, changes.comparison.source_ref
+        )
     except RuntimeError as exc:
         raise CLIError(f"Provider error: {exc}") from exc
 
     return RunPlan(
         cfg=cfg,
-        diff=diff,
+        changes=changes,
         items=items,
         prompts=prompts,
         runner=runner,
@@ -384,7 +388,7 @@ async def _review(plan: RunPlan, verbose: bool, observer: RunObserver = SILENT) 
     console.run_header(plan.cfg)
     pipeline = ReviewPipeline(
         plan.cfg,
-        plan.diff,
+        plan.changes,
         plan.items,
         plan.runner,
         lambda entry: console.event(entry, verbose),
@@ -395,7 +399,7 @@ async def _review(plan: RunPlan, verbose: bool, observer: RunObserver = SILENT) 
     finally:
         await plan.runner.aclose()
 
-    directory = output_dir_for(plan.cfg, plan.diff.root, run.run_id)
+    directory = output_dir_for(plan.cfg, plan.changes.comparison.root, run.run_id)
     try:
         reports = save(run, directory, plan.cfg.run.report_formats, plan.templates_dir)
     except renders.RenderError as exc:

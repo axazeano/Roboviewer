@@ -30,12 +30,12 @@ from typing import Any, Protocol
 
 from .config import ModelConfig
 from .events import Event, EventSink
-from .gitdiff import DiffBundle
 from .models import Finding, ReviewRun, Severity, Usage, Verdict
 from .observe import SILENT, RunObserver
 from .prompts import Prompts
+from .prompts.tool_schemas import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
 from .provider import AgentOutcome, AgentRequest, Runner
-from .tools import SUBMIT_VERDICT_TOOL, SUBMIT_VERDICTS_TOOL
+from .repo import ChangeSet
 
 
 class Judge(Protocol):
@@ -75,7 +75,7 @@ class Passes:
 
     settings: JudgeSettings
     prompts: Prompts
-    diff: DiffBundle
+    changes: ChangeSet
     runner: Runner
     tools: list[dict[str, Any]]
     emit: EventSink
@@ -134,7 +134,7 @@ class BatchJudge:
 
         outcome = await self.passes.ask(
             system=self.passes.prompts.judge_system,
-            prompt=self.passes.prompts.build_judge_prompt(run.findings, self.passes.diff),
+            prompt=self.passes.prompts.build_judge_prompt(run.findings, self.passes.changes),
             terminal_tool=SUBMIT_VERDICTS_TOOL,
             metadata={"stage": "judge"},
             label="judge",
@@ -201,7 +201,7 @@ class TwoStageJudge:
                 outcome = await self.passes.ask(
                     system=self.passes.prompts.judge_one_system,
                     prompt=self.passes.prompts.build_judge_one_prompt(
-                        finding, others, self.passes.diff
+                        finding, others, self.passes.changes
                     ),
                     terminal_tool=SUBMIT_VERDICT_TOOL,
                     metadata={"stage": "judge", "finding_id": finding.id},
@@ -266,7 +266,7 @@ class TwoStageJudge:
         outcome = await self.passes.ask(
             system=self.passes.prompts.judge_final_system,
             prompt=self.passes.prompts.build_judge_final_prompt(
-                survivors, notes, self.passes.diff
+                survivors, notes, self.passes.changes
             ),
             terminal_tool=SUBMIT_VERDICTS_TOOL,
             metadata={"stage": "judge", "pass": "final"},

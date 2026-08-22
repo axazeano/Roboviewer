@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from roboviewer.prompts import _references_block
-from roboviewer.resolve import MAX_SYMBOLS, ReferenceReport, check
+from roboviewer.repo.references import MAX_SYMBOLS, ReferenceReport, check
 
 
 def git(root: Path, *args: str) -> None:

@@ -26,6 +26,8 @@ ENFORCED = [
     PACKAGE / "judge.py",
     *sorted((PACKAGE / "config").rglob("*.py")),
     *sorted((PACKAGE / "provider").rglob("*.py")),
+    *sorted((PACKAGE / "repo").rglob("*.py")),
+    *sorted((PACKAGE / "review").rglob("*.py")),
     # Written this way from the start, so the whole package is in — every
     # module of it, subpackages included, or the rule stops applying the day
     # one is added.

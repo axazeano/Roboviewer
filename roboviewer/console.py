@@ -24,9 +24,9 @@ from .config import (
     provider_config_path,
 )
 from .events import Event
-from .gitdiff import DiffBundle
 from .models import SEVERITY_LABEL, Finding, ReviewRun
 from .prompts import PromptError, Prompts, language_name
+from .repo import ChangeSet
 
 
 def error(message: str, hint: str = "") -> None:
@@ -114,9 +114,10 @@ def checklist_items(items: list[ChecklistItem]) -> None:
         print(f"{item.id:<20} {item.title}")
 
 
-def diff_summary(diff: DiffBundle) -> None:
-    print(f"{diff.branch} → {diff.target} (merge-base {diff.base_sha[:12]})")
-    print(diff.summary_table())
+def diff_summary(changes: ChangeSet) -> None:
+    compared = changes.comparison
+    print(f"{compared.source} → {compared.target} (merge-base {compared.base_sha[:12]})")
+    print(changes.summary_table())
 
 
 def config(cfg: Config, root: Path) -> None:

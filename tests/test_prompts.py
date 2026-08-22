@@ -54,7 +54,7 @@ def test_item_prompt_contains_diff_and_checklist_body(tmp_path: Path) -> None:
     bundle = make_bundle(tmp_path)
     text = prompts.build_item_prompt(item(), bundle)
     assert "Find logic errors." in text
-    assert bundle.annotated in text
+    assert bundle.attachments.annotated in text
     assert "feature/x" in text
 
 
