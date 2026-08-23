@@ -1,7 +1,7 @@
 """Reading review comments off GitHub, without going near it.
 
 Every request goes through an injected transport, so what is tested here is the
-part that actually decides whether the corpus is any good: which line a comment
+part that actually decides whether the benchmark is any good: which line a comment
 is pinned to, whether the thread was resolved, and what the command says when it
 is the rate limit rather than the entry that stopped it.
 """

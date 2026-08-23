@@ -38,14 +38,17 @@ records from it, and the pipeline knows neither.
 | `roboviewer/review/prompts/` | Everything the model reads: the eight texts in `default/`, the context block (`context`), findings as a judge sees them (`findings`), the language directive (`language`), the tool descriptions (`tool_schemas`), what the runner says between turns (`turns`), and the loader and builders (`assembly`) | `default/README.md` |
 | `roboviewer/reports/` | The view a report is rendered from (`view`), one module per format (`renders/`), the Jinja templates (`templates/`), and writing the run to disk (`save`) | `view.py` |
 | `roboviewer/cli/` | The command: the flow (`main`), the flags (`arguments`), everything printed (`console`), the exit codes (`exit_codes`), the CI detection (`ci_env`), `--check-provider` (`check_provider`) | `main.py` |
+| `roboviewer/benchmark/` | The `benchmark` command, beside the review rather than on its path: the index (`items`), the references (`references`), where everything lives (`store`), one entry into a clone (`fetch`, `clone`), what GitHub knows (`github`, `candidates/`), the tool over every entry (`run`), the command (`cli`) | `__init__.py` |
 | `roboviewer/checklists/` | The bundled checklist sets — data, read by `review.checklist` and named on the command line (`--checklist checklists/grouped`), which is why they stay at the package root | `default/` |
-| `measure/` | The instruments beside the tool, outside the wheel: `corpus/` builds the corpus the baseline is measured on, `trace/` watches a run and renders what its agents did; `corpus.toml` and `truth.toml` are the data | `__init__.py` |
+| `benchmarks/` | The benchmark's data, at the repository root: `items.toml` the index of merge requests, `references/<id>.toml` what a good review of one finds — both committed; `repos/`, `comments/` and `runs/` are the cache the command fills | `items.toml` |
+| `measure/` | The instrument beside the tool, outside the wheel: `trace/` watches a run and renders what its agents did | `__init__.py` |
 
 ## The dependency rule
 
 Lower may not import higher. Within `roboviewer/`:
 
 ```
+benchmark
 cli
 reports
 review            (review/prompts inside it)
@@ -64,8 +67,11 @@ models
   the only one that knows what a prompt is.
 - `reports` reads `models` and nothing of the review's internals: `ReviewRun`
   is the whole contract.
-- `cli` imports everything and is imported by nothing but `__main__` and
-  `measure.trace.cli`.
+- `cli` imports everything and is imported by nothing but `__main__`,
+  `benchmark.cli` and `measure.trace.cli`.
+- `benchmark` sits beside `cli`, not under it: it runs the tool through
+  `cli.main`, reads `models` and `observer`, and nothing on the review path
+  imports it. It is the only package that talks to a forge.
 - `measure` imports `roboviewer` through public surfaces only (`models`,
   `observer`, `config`, `cli.main`, `reports.renders`). Nothing in
   `roboviewer` imports `measure`.
@@ -94,9 +100,10 @@ module offers first and how it does it after.
 
 ## What is deliberately not here
 
-- No forge client in the tool: `roboviewer` reads two git branches and never
-  talks to GitHub or GitLab. The only forge code is `measure.corpus`, outside
-  the wheel.
+- No forge client on the review path: `roboviewer` reads two git branches and
+  never talks to GitHub or GitLab. The only forge code is `roboviewer.benchmark`,
+  which reviews nothing itself — it fetches what the tool is measured on and
+  runs the tool over it.
 - No state between runs; every run starts from the diff.
 - No prompt text outside `review/prompts/`: the tool descriptions, the
   annotation legend, the turn budget notes and the context block are all

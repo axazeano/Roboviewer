@@ -4,7 +4,7 @@ A report says what a review found. This says what it did on the way: which
 prompt each agent got, what it said between turns, which files it opened and
 what it searched for.
 
-Not part of the wheel, like [the corpus builder](corpus.md) — run it from the
+Not part of the wheel — run it from the
 repository root.
 
 ## Commands

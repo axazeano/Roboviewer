@@ -14,7 +14,7 @@ Read [the caveats](#how-to-read-these-numbers) before quoting any of it.
 | Branch → target | `nextmcloud:nmc/albums_customisation` → `nextcloud:master` |
 | Merge base / HEAD | `3fe3a8d1432c` / `826f10c7ac32` |
 | Size | 35 files and +4227/−94 on GitHub; 32 files and +3816/−87 after `exclude_globs` drops storyboards, strings, asset catalogues and the pbxproj |
-| Truth | 31 defects in [`truth.toml`](../measure/truth.toml), plus 6 claims proven false |
+| Reference | 32 defects in [`references/ios-4091.toml`](../benchmarks/references/ios-4091.toml), plus 3 claims proven false — the benchmark entry `ios-4091` |
 
 Counting findings and counting defects are not the same thing, and the gap is
 large enough to change conclusions. The nemotron configuration ships 48
@@ -195,7 +195,7 @@ and printed into the prompt; the models do not act on it.
 - **Half the truth set is not independent.** Sixteen entries were established by
   hand before any of these runs; fifteen were added by verifying muse-glimmer's
   own output against the code. Any series compared on the second half is
-  compared on ground it helped define — `origin` in `truth.toml` marks which is
+  compared on ground it helped define — `origin` in the reference marks which is
   which, and the honest cross-model comparison uses the sixteen.
 - **Unlabelled findings are not false.** Between 2 and 15 findings per series
   have not been adjudicated. The false-positive bars show that as a range rather
