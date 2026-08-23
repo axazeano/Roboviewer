@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from roboviewer.diagnose import ProbeResult, _report_tool_modes
+from roboviewer.cli.check_provider import report_tool_modes
+from roboviewer.provider.probe import ProbeResult
 
 
 def _called() -> ProbeResult:
@@ -39,7 +40,7 @@ def _modes(**by_key: ProbeResult) -> dict[str, ProbeResult]:
 def test_no_tool_call_at_all_fails_and_names_the_way_out(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert _report_tool_modes(_modes()) == 1
+    assert report_tool_modes(_modes()) == 1
 
     out = capsys.readouterr().out
     assert "no real tool_call at all" in out
@@ -52,7 +53,7 @@ def test_a_legacy_function_call_is_told_apart_from_silence(
     legacy = _answered("")
     legacy.legacy_function_call = "pong"
 
-    assert _report_tool_modes(_modes(auto=legacy)) == 1
+    assert report_tool_modes(_modes(auto=legacy)) == 1
     assert "pre-June-2023 protocol" in capsys.readouterr().out
 
 
@@ -61,7 +62,7 @@ def test_a_call_retold_as_text_is_told_apart_from_silence(
 ) -> None:
     """The gateway does not parse tool_call, it narrates it — findings get lost
     in the text, which reads like a clean run."""
-    assert _report_tool_modes(_modes(auto=_answered('{"text": "pong"}'))) == 1
+    assert report_tool_modes(_modes(auto=_answered('{"text": "pong"}'))) == 1
     assert "retells it in words" in capsys.readouterr().out
 
 
@@ -70,19 +71,19 @@ def test_a_call_retold_as_text_is_told_apart_from_silence(
 
 def test_tool_calling_without_auto_is_not_enough(capsys: pytest.CaptureFixture[str]) -> None:
     """The reviewer runs on auto and forces a call only on the last turn."""
-    assert _report_tool_modes(_modes(required=_called(), forced=_called())) == 1
+    assert report_tool_modes(_modes(required=_called(), forced=_called())) == 1
     assert 'not with tool_choice = "auto"' in capsys.readouterr().out
 
 
 def test_no_forced_mode_prints_the_setting_to_use(capsys: pytest.CaptureFixture[str]) -> None:
-    assert _report_tool_modes(_modes(auto=_called(), required=_called())) == 0
+    assert report_tool_modes(_modes(auto=_called(), required=_called())) == 0
 
     out = capsys.readouterr().out
     assert 'terminal_tool_choice = "required"' in out
 
 
 def test_only_auto_warns_about_the_last_turn(capsys: pytest.CaptureFixture[str]) -> None:
-    assert _report_tool_modes(_modes(auto=_called())) == 0
+    assert report_tool_modes(_modes(auto=_called())) == 0
 
     out = capsys.readouterr().out
     assert 'terminal_tool_choice = "auto"' in out
@@ -95,7 +96,7 @@ def test_only_auto_warns_about_the_last_turn(capsys: pytest.CaptureFixture[str])
 def test_everything_working_keeps_the_default(capsys: pytest.CaptureFixture[str]) -> None:
     modes = _modes(auto=_called(), required=_called(), forced=_called())
 
-    assert _report_tool_modes(modes) == 0
+    assert report_tool_modes(modes) == 0
 
     out = capsys.readouterr().out
     assert "supports tool calling" in out
@@ -104,7 +105,7 @@ def test_everything_working_keeps_the_default(capsys: pytest.CaptureFixture[str]
 
 
 def test_every_mode_is_listed_whatever_the_verdict(capsys: pytest.CaptureFixture[str]) -> None:
-    _report_tool_modes(_modes(auto=_called()))
+    report_tool_modes(_modes(auto=_called()))
 
     out = capsys.readouterr().out
     for label in ('tool_choice = "auto"', 'tool_choice = "required"', "tool_choice = {function}"):

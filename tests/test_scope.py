@@ -15,11 +15,12 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from roboviewer.checklist import ChecklistItem
-from roboviewer.gitdiff import FileChanges, in_scope
 from roboviewer.models import Finding, Usage
-from roboviewer.pipeline import ReviewPipeline
-from roboviewer.runners import AgentOutcome
+from roboviewer.provider import AgentOutcome
+from roboviewer.repo.diff import FileChanges
+from roboviewer.review.checklist import ChecklistItem
+from roboviewer.review.pipeline import ReviewPipeline
+from roboviewer.review.scope import in_scope
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
@@ -96,7 +97,7 @@ def _run(config, tmp_path: Path, findings: list[dict]):
             turns=1,
         ),
     )
-    bundle = make_bundle(tmp_path, changes=CHANGES)
+    bundle = make_bundle(tmp_path, lines=CHANGES)
     run = asyncio.run(ReviewPipeline(config, bundle, [ITEM], runner).execute())
     return run, runner
 
@@ -141,7 +142,7 @@ def test_a_wider_margin_lets_more_of_the_file_back_in(tmp_path: Path, config) ->
 
 
 def test_the_report_lists_what_the_gate_set_aside(tmp_path: Path, config) -> None:
-    from roboviewer.renders.markdown import render as render_md
+    from roboviewer.reports.renders.markdown import render as render_md
 
     run, _ = _run(config, tmp_path, [_finding(41, "Off-by-one"), _finding(300, "Hardcoded string")])
     text = render_md(run)

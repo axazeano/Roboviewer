@@ -10,10 +10,10 @@ import json
 
 import pytest
 
-from roboviewer import renders
 from roboviewer.models import Finding, Severity
-from roboviewer.report import render_report
-from roboviewer.view import build_view
+from roboviewer.reports import renders
+from roboviewer.reports.save import render_report
+from roboviewer.reports.view import build_view
 
 from .test_report import empty_run, full_run
 

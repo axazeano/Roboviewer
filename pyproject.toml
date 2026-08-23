@@ -59,7 +59,12 @@ build-backend = "setuptools.build_meta"
 include = ["roboviewer*"]
 
 [tool.setuptools.package-data]
-roboviewer = ["checklists/**/*.md", "prompts/**/*.md", "templates/**/*.j2", "templates/**/*.md"]
+roboviewer = [
+    "checklists/**/*.md",
+    "review/prompts/**/*.md",
+    "reports/templates/**/*.j2",
+    "reports/templates/**/*.md",
+]
 
 [tool.ruff]
 line-length = 100
@@ -95,10 +100,10 @@ max-args = 6
 
 [tool.mypy]
 python_version = "3.11"
-# `corpus` and `research` are not part of the wheel — one builds the measurement
-# corpus beside the tool, the other watches what a run did — but both are held
-# to the same types as the tool they are pointed at.
-files = ["roboviewer", "corpus", "research"]
+# `measure` is not part of the wheel — it builds the measurement corpus beside
+# the tool and watches what a run did — but it is held to the same types as the
+# tool it is pointed at.
+files = ["roboviewer", "measure"]
 plugins = ["pydantic.mypy"]
 warn_redundant_casts = true
 warn_unused_ignores = true

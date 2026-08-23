@@ -11,7 +11,7 @@ import argparse
 
 import pytest
 
-from roboviewer.cli import _apply_overrides, build_parser, report_formats
+from roboviewer.cli.arguments import apply_overrides, build_parser, report_formats
 from roboviewer.config import Config
 
 
@@ -40,13 +40,13 @@ def test_config_value_survives_when_the_flag_is_absent() -> None:
     cfg = Config()
     cfg.run.report_formats = ["html"]
 
-    assert _apply_overrides(cfg, parse()).run.report_formats == ["html"]
+    assert apply_overrides(cfg, parse()).run.report_formats == ["html"]
 
 
 def test_flag_replaces_the_configured_list_entirely() -> None:
     cfg = Config()
     cfg.run.report_formats = ["md", "html"]
 
-    result = _apply_overrides(cfg, parse("--format", "md"))
+    result = apply_overrides(cfg, parse("--format", "md"))
 
     assert result.run.report_formats == ["md"]

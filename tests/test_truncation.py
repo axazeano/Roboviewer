@@ -14,15 +14,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from roboviewer.checklist import ChecklistItem
 from roboviewer.config import ModelConfig, ProviderConfig, RunConfig
 from roboviewer.models import ItemResult, Usage
-from roboviewer.pipeline import ReviewPipeline
-from roboviewer.report import render_report
-from roboviewer.runners import AgentOutcome
-from roboviewer.runners.openai_agent import OpenAIAgentRunner
-from roboviewer.tools import SUBMIT_FINDINGS_TOOL, tool_schemas
-from roboviewer.view import build_view
+from roboviewer.provider import AgentOutcome
+from roboviewer.provider.openai_agent import OpenAIAgentRunner
+from roboviewer.reports.save import render_report
+from roboviewer.reports.view import build_view
+from roboviewer.review.checklist import ChecklistItem
+from roboviewer.review.pipeline import ReviewPipeline
+from roboviewer.review.prompts.tool_schemas import SUBMIT_FINDINGS_TOOL, tool_schemas
+from roboviewer.review.prompts.turns import TURN_NOTES
 
 from .conftest import ScriptedRunner, make_bundle
 from .test_report import _run
@@ -54,7 +55,7 @@ def _runner(tmp_path: Path) -> OpenAIAgentRunner:
 
 
 def _request(max_turns: int):
-    from roboviewer.runners import AgentRequest
+    from roboviewer.provider import AgentRequest
 
     return AgentRequest(
         system="s",
@@ -62,6 +63,7 @@ def _request(max_turns: int):
         tools=tool_schemas("base"),
         terminal_tool=SUBMIT_FINDINGS_TOOL,
         settings=ModelConfig(model="m", max_turns=max_turns),
+        notes=TURN_NOTES,
     )
 
 

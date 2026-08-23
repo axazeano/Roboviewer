@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer.checklist import ChecklistItem
 from roboviewer.models import Finding, Severity
-from roboviewer.pipeline import ReviewPipeline
-from roboviewer.prompts import DEFAULT_DIR, NAMES, PromptError, Prompts, language_name
+from roboviewer.review.checklist import ChecklistItem
+from roboviewer.review.pipeline import ReviewPipeline
+from roboviewer.review.prompts import DEFAULT_DIR, NAMES, PromptError, Prompts, language_name
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
@@ -54,7 +54,7 @@ def test_item_prompt_contains_diff_and_checklist_body(tmp_path: Path) -> None:
     bundle = make_bundle(tmp_path)
     text = prompts.build_item_prompt(item(), bundle)
     assert "Find logic errors." in text
-    assert bundle.annotated in text
+    assert bundle.attachments.annotated in text
     assert "feature/x" in text
 
 
@@ -100,7 +100,7 @@ def test_every_reviewer_prompt_forbids_checking_the_build() -> None:
     """Not a preference: a review that verifies compilability spends its turns
     on what the compiler reports anyway, and gets it wrong often enough to ship
     false blockers. Every system prompt a reviewer can run under says so."""
-    bundled = Path("roboviewer/prompts/default/item_system.md")
+    bundled = Path("roboviewer/review/prompts/default/item_system.md")
     checklist_owned = Path("roboviewer/checklists").glob("*/_system.md")
     for path in [bundled, *checklist_owned]:
         text = path.read_text(encoding="utf-8")

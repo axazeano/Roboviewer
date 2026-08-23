@@ -9,11 +9,12 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from roboviewer.checklist import ChecklistItem
 from roboviewer.config import ModelConfig
 from roboviewer.models import Finding, Severity, Usage
-from roboviewer.pipeline import ReviewPipeline
-from roboviewer.runners import AgentOutcome
+from roboviewer.provider import AgentOutcome
+from roboviewer.provider.request import request_body
+from roboviewer.review.checklist import ChecklistItem
+from roboviewer.review.pipeline import ReviewPipeline
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
@@ -24,11 +25,11 @@ ITEM = ChecklistItem(id="correctness", title="Correctness", body="Find logic err
 
 
 def test_unset_sends_nothing() -> None:
-    assert ModelConfig().request_body() == {}
+    assert request_body(ModelConfig()) == {}
 
 
 def test_off_goes_out_as_chat_template_kwargs() -> None:
-    body = ModelConfig(enable_thinking=False).request_body()
+    body = request_body(ModelConfig(enable_thinking=False))
     assert body == {"chat_template_kwargs": {"enable_thinking": False}}
 
 
@@ -37,7 +38,7 @@ def test_extra_body_is_merged_and_the_knob_wins() -> None:
         enable_thinking=False,
         extra_body={"top_k": 20, "chat_template_kwargs": {"foo": 1, "enable_thinking": True}},
     )
-    body = role.request_body()
+    body = request_body(role)
     assert body["top_k"] == 20
     assert body["chat_template_kwargs"] == {"foo": 1, "enable_thinking": False}
     # The config must not be mutated: the body is rebuilt for every request

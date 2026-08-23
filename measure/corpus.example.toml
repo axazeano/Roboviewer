@@ -1,0 +1,48 @@
+# The corpus the review baseline is measured on: one [[entry]] per pull request.
+#
+# This is the shape of the file, not the corpus itself — the SHAs below are
+# placeholders and no repository has them, so building this file fails on
+# purpose. The real list is chosen against written criteria (TASK-18) and
+# committed; this one is here so the format has somewhere to live.
+#
+# Build it with:
+#   python -m measure.corpus measure/corpus.toml
+#
+# See docs/corpus.md for what each field is for and how a rebuild works.
+
+[[entry]]
+# Names the directory under the corpus root. Keep it stable: renaming it
+# rebuilds the entry from scratch.
+id = "requests-6800"
+url = "https://github.com/psf/requests/pull/6800"
+
+# The two commits the review is run between. Full SHAs, because a branch name
+# moves and a short SHA is ambiguous — and `head` is the commit reviewers were
+# looking at, not the merged result, where everything they found is already
+# fixed.
+base = "1111111111111111111111111111111111111111"
+head = "2222222222222222222222222222222222222222"
+
+# Everything below is read by people rather than by the fetcher: it is how a
+# later reader judges whether an entry earns its place, and how the corpus is
+# checked for leaning towards one language, one domain or one size.
+language = "Python"
+domain = "HTTP client library"
+found = "Retries reused a consumed request body, so the second attempt sent nothing."
+license = "Apache-2.0"
+files = 3
+added = 74
+removed = 12
+
+[[entry]]
+id = "example-second-entry"
+url = "https://github.com/owner/repo/pull/42"
+base = "3333333333333333333333333333333333333333"
+head = "4444444444444444444444444444444444444444"
+language = "Go"
+domain = "scheduler"
+found = "A worker leaked on the error path, so a failing job silently halved throughput."
+license = "MIT"
+files = 11
+added = 320
+removed = 96

@@ -13,11 +13,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from corpus.candidates import entry_toml, on_github
-from corpus.candidates.candidate import Candidate
-from corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Filters
-from corpus.cli import main
-from corpus.github import GitHub, Response
+from measure.corpus.candidates import entry_toml, on_github
+from measure.corpus.candidates.candidate import Candidate
+from measure.corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Filters
+from measure.corpus.cli import main
+from measure.corpus.github import GitHub, Response
 
 
 def node(
@@ -297,8 +297,8 @@ def test_an_unreachable_head_is_reported_as_disqualifying_not_as_homework(
         page(node(7, files=30)),
         graphql_threads(("", "2026-05-01T10:00:00Z", "this races")),
     )
-    monkeypatch.setattr("corpus.cli.resolve_token", lambda: "t")
-    monkeypatch.setattr("corpus.cli.GitHub", lambda token: github)  # noqa: ARG005
+    monkeypatch.setattr("measure.corpus.cli.resolve_token", lambda: "t")
+    monkeypatch.setattr("measure.corpus.cli.GitHub", lambda token: github)  # noqa: ARG005
 
     assert main(["find", "q", "--min-files", "30", "--heads"]) == 0
 
@@ -320,7 +320,7 @@ def test_the_draft_carries_the_facts_and_leaves_the_judgement_blank() -> None:
 def test_the_draft_parses_as_the_entry_the_fetcher_already_loads() -> None:
     import tomllib
 
-    from corpus.entries import Entry
+    from measure.corpus.entries import Entry
 
     raw = tomllib.loads(entry_toml.from_candidate(CANDIDATE, "e" * 40))
 
@@ -336,7 +336,7 @@ def test_find_needs_a_token_and_says_so_instead_of_failing_at_the_wire(monkeypat
     """The resolver is patched rather than the environment: a token also comes
     from whatever `gh` is logged in as, and clearing the environment alone left
     this test making real requests."""
-    monkeypatch.setattr("corpus.cli.resolve_token", lambda: None)
+    monkeypatch.setattr("measure.corpus.cli.resolve_token", lambda: None)
 
     assert main(["find", "is:pr"]) == 2
 

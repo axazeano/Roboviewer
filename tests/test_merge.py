@@ -9,7 +9,7 @@ that, the window around a line, and which of two versions survives.
 from __future__ import annotations
 
 from roboviewer.models import Finding, ItemResult, Severity
-from roboviewer.pipeline import merge_findings
+from roboviewer.review.merge import merge_findings
 
 
 def _finding(**overrides: object) -> Finding:

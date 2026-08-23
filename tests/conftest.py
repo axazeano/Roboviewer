@@ -10,9 +10,9 @@ from typing import Any
 import pytest
 
 from roboviewer.config import Config
-from roboviewer.gitdiff import DiffBundle
 from roboviewer.models import DiffStat, Usage
-from roboviewer.runners import AgentOutcome, AgentRequest, ProgressHook, Runner
+from roboviewer.provider import AgentOutcome, AgentRequest, Runner
+from roboviewer.repo import Attachments, ChangeSet, Comparison
 
 ANNOTATED = """\
 ### src/cart.py
@@ -36,29 +36,40 @@ def _no_ambient_github_token(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("GITHUB_TOKEN", "GH_TOKEN"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(
-        "corpus.github._run_gh",
+        "measure.corpus.github._run_gh",
         lambda command: subprocess.CompletedProcess(command, 1, stdout="", stderr=""),
     )
 
 
-def make_bundle(root: Path, **overrides: Any) -> DiffBundle:
+def make_bundle(root: Path, **overrides: Any) -> ChangeSet:
+    """A change set that never touched git. Overrides name `ChangeSet` fields
+    (`files`, `lines`, `references`) or `Attachments` ones (`annotated`, ...)."""
+    attachments = Attachments(
+        annotated=ANNOTATED, inlined=["src/cart.py"], fallback=[], hunks="", hunks_truncated=False
+    )
     fields: dict[str, Any] = {
-        "root": root,
-        "branch": "feature/x",
-        "source_ref": "feature/x",
-        "target": "develop",
-        "base_sha": "abcdef1234567890",
-        "head": "1234567890abcdef",
-        "detached": False,
         "files": [DiffStat(file="src/cart.py", status="M", added=1, removed=0)],
-        "annotated": ANNOTATED,
-        "inlined": ["src/cart.py"],
-        "fallback": [],
-        "text": "",
-        "truncated": False,
+        "lines": {},
+        "references": None,
     }
-    fields.update(overrides)
-    return DiffBundle(**fields)
+    for name, value in overrides.items():
+        if hasattr(attachments, name):
+            setattr(attachments, name, value)
+        else:
+            fields[name] = value
+    return ChangeSet(
+        comparison=Comparison(
+            root=root,
+            source="feature/x",
+            source_ref="feature/x",
+            target="develop",
+            base_sha="abcdef1234567890",
+            head_sha="1234567890abcdef",
+            detached=False,
+        ),
+        attachments=attachments,
+        **fields,
+    )
 
 
 def ok_outcome(**payload: Any) -> AgentOutcome:
@@ -77,11 +88,7 @@ class ScriptedRunner(Runner):
         self._outcomes = list(outcomes)
         self.requests: list[AgentRequest] = []
 
-    async def run(
-        self,
-        request: AgentRequest,
-        on_progress: ProgressHook | None = None,  # noqa: ARG002 — the Runner signature
-    ) -> AgentOutcome:
+    async def run(self, request: AgentRequest) -> AgentOutcome:
         self.requests.append(request)
         if len(self._outcomes) > 1:
             return self._outcomes.pop(0)

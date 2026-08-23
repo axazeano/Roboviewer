@@ -11,7 +11,7 @@ pull request is therefore a step *beside* the tool: a separate command, in a
 package that is not part of the wheel.
 
 ```bash
-python -m corpus corpus.toml
+python -m measure.corpus measure/corpus.toml
 ```
 
 Run it from the repository root: the package ships with the source and is
@@ -50,7 +50,7 @@ page was looking at.
 
 ## The list
 
-One committed TOML file describes the corpus — [`corpus.toml`](../corpus.toml)
+One committed TOML file describes the corpus — [`measure/corpus.toml`](../measure/corpus.toml)
 in the repository root. It is the whole input: delete the clones, run the command
 again, and the same corpus comes back. Nobody has to remember which commit was
 the right head.
@@ -121,7 +121,7 @@ GraphQL, so the filter runs on this side — one request per fifty candidates
 instead of one per candidate.
 
 ```bash
-python -m corpus find "is:pr is:merged language:Go review:changes_requested" \
+python -m measure.corpus find "is:pr is:merged language:Go review:changes_requested" \
   --min-files 30 --min-stars 500
 ```
 
@@ -233,9 +233,9 @@ the comments are on disk. Checking that costs no network at all, so a rerun over
 a finished corpus is instant and works offline.
 
 ```bash
-python -m corpus corpus.toml                     # fill in what is missing
-python -m corpus corpus.toml --only django-17421 # one entry
-python -m corpus corpus.toml --refresh           # fetch again anyway
+python -m measure.corpus measure/corpus.toml                     # fill in what is missing
+python -m measure.corpus measure/corpus.toml --only django-17421 # one entry
+python -m measure.corpus measure/corpus.toml --refresh           # fetch again anyway
 ```
 
 `--refresh` reuses the clone that is already there — it costs one fetch, not

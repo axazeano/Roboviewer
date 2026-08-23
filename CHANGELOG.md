@@ -11,6 +11,25 @@ disagree, and then puts the wheel on [PyPI][pypi] and the image on
 [docker]: https://hub.docker.com/r/axazeano/roboviewer
 [semver]: https://semver.org
 
+## Unreleased
+
+The code is laid out by subsystem, so that a person opening any file knows
+where they are. Nothing a run does, writes or prints changed.
+
+- **One package per subsystem** inside `roboviewer/`: `config`, `repo` (all of
+  git), `provider` (the model's gateway), `review` (the pipeline and everything
+  the model reads, under `review/prompts/`), `reports`, `cli`; the shared
+  vocabulary in `models.py` and the one observer protocol in `observer.py` at
+  the root. [docs/architecture.md](docs/architecture.md) is the map.
+- **The measuring instruments live under `measure/`**: `measure.corpus` builds
+  the corpus (`python -m measure.corpus measure/corpus.toml`) and
+  `measure.trace`, formerly `research`, watches a run
+  (`python -m measure.trace review develop`). `corpus.toml` and `truth.toml`
+  moved there with them, and the truth file is in English.
+- Import paths changed throughout; nothing outside the repository imported
+  them. The CLI, the config files, the report formats and the prompt texts are
+  exactly what 0.2.0 shipped.
+
 ## 0.2.0 — 2026-08-20
 
 The provider moves into a file of its own, so the file you copy cannot carry a

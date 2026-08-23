@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer import renders
 from roboviewer.models import (
     DiffStat,
     Finding,
@@ -22,10 +21,11 @@ from roboviewer.models import (
     Usage,
     Verdict,
 )
-from roboviewer.renders import _jinja
-from roboviewer.renders._jinja import DEFAULT_DIR, TemplateError
-from roboviewer.report import render_report, save
-from roboviewer.view import CacheState, build_view
+from roboviewer.reports import renders
+from roboviewer.reports.renders import _jinja
+from roboviewer.reports.renders._jinja import DEFAULT_DIR, TemplateError
+from roboviewer.reports.save import render_report, save
+from roboviewer.reports.view import CacheState, build_view
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 

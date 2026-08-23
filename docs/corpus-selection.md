@@ -5,7 +5,7 @@ would make every later number an argument about the list, so the bar is written
 down first and each entry is admitted against it. Adding one later is a matter
 of checking, not of persuading.
 
-The list itself is [`corpus.toml`](../corpus.toml); how it is built into
+The list itself is [`measure/corpus.toml`](../measure/corpus.toml); how it is built into
 directories is [corpus.md](corpus.md).
 
 ## What qualifies
@@ -95,7 +95,7 @@ Eleven entries, four languages, eight domains, from 28 to 1703 changed lines.
 | `ansible-87266` | Python | IT automation | 3 files, +77/−4 | GPL-3.0 |
 | `home-assistant-178506` | Python | home automation | 15 files, +1575/−128 | Apache-2.0 |
 
-What each review found is one line per entry in `corpus.toml`.
+What each review found is one line per entry in `measure/corpus.toml`.
 
 **On the licences.** Every entry is cloned and read locally and nothing derived
 from it is distributed, which is why GPL-3.0 sits here beside MIT and Apache-2.0
@@ -141,7 +141,7 @@ well it reviews.
 
 ## Adding an entry
 
-1. Search for candidates with `python -m corpus find` — see
+1. Search for candidates with `python -m measure.corpus find` — see
    [finding candidates](corpus.md#finding-candidates). It drops what no human
    reviewed, what is too small to measure and what carries a licence nobody has
    read, and prints the review threads that survive, so the next step rarely

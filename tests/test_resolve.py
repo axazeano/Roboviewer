@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from roboviewer.prompts import _references_block
-from roboviewer.resolve import MAX_SYMBOLS, ReferenceReport, check
+from roboviewer.repo.references import MAX_SYMBOLS, ReferenceReport, check
+from roboviewer.review.prompts import references_block
 
 
 def git(root: Path, *args: str) -> None:
@@ -195,12 +195,12 @@ def test_without_a_manifest_nothing_is_claimed_about_membership(repo) -> None:
 def test_nothing_found_renders_no_section() -> None:
     """An empty section reads as "checked, all clean" — a different claim from
     "there was nothing to say", and a much stronger one."""
-    assert _references_block(None) == ""
-    assert _references_block(ReferenceReport()) == ""
+    assert references_block(None) == ""
+    assert references_block(ReferenceReport()) == ""
 
 
 def test_a_failed_pass_renders_no_section_either() -> None:
-    assert _references_block(ReferenceReport(error="git exploded")) == ""
+    assert references_block(ReferenceReport(error="git exploded")) == ""
 
 
 def test_repeated_questions_are_grouped_by_file() -> None:
@@ -211,35 +211,35 @@ def test_repeated_questions_are_grouped_by_file() -> None:
             ("localization", "key missing", "_c_", "Other.swift"),
         ]
     )
-    block = _references_block(report)
+    block = references_block(report)
     assert block.count("key missing") == 2  # two files, not three keys
     assert "`_a_`, `_b_`" in block
     assert "(3)" in block
 
 
 def test_the_symbol_section_warns_that_it_cannot_see_dependencies() -> None:
-    block = _references_block(ReferenceReport(unresolved_symbols={"AnyPublisher": ["a.swift"]}))
+    block = references_block(ReferenceReport(unresolved_symbols={"AnyPublisher": ["a.swift"]}))
     assert "NOT problems" in block
 
 
 def test_the_symbol_census_is_offered_as_context_not_as_findings() -> None:
     """A name that resolves nowhere is the build's to report. Inviting the agent
     to chase one costs turns for a finding it is not allowed to make."""
-    block = _references_block(ReferenceReport(unresolved_symbols={"nowhere": ["a.swift"]}))
+    block = references_block(ReferenceReport(unresolved_symbols={"nowhere": ["a.swift"]}))
     assert "Context, not a list of findings" in block
 
 
 def test_resource_misses_stay_reportable() -> None:
     """No compiler looks at a storyboard name or a localization key, so this
     half of the pre-pass is a finding rather than context."""
-    block = _references_block(
+    block = references_block(
         ReferenceReport(resource_misses=[("storyboard", "storyboard missing", "X", "a.swift")])
     )
     assert "No compiler looks at any of them" in block
 
 
 def test_a_truncated_symbol_list_says_what_it_dropped() -> None:
-    block = _references_block(
+    block = references_block(
         ReferenceReport(unresolved_symbols={"a": ["x.swift"]}, symbols_truncated=7)
     )
     assert "7 more, not listed" in block

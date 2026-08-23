@@ -23,12 +23,12 @@ git says nothing when it does.
 What a run *did* — the prompt each agent was given, what it opened, where its
 turns went — is not written here and is not written by a review at all. It is a
 question for tuning rather than for reading a report, and the instrument that
-answers it lives beside the tool: [Watching a run](research.md).
+answers it lives beside the tool: [Watching a run](trace.md).
 
 ## Formats
 
 `--format` picks what a run writes. One file per format in
-`roboviewer/renders/`:
+`roboviewer/reports/renders/`:
 
 | Format | File | For |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ answers it lives beside the tool: [Watching a run](research.md).
 | `sarif` | `report.sarif` | SARIF 2.1.0: GitHub Code Scanning, the VS Code viewer, SonarQube |
 | `codequality` | `gl-code-quality-report.json` | The Code Quality widget in a GitLab merge request |
 
-`md` and `html` are Jinja templates in `roboviewer/templates/default/`; drop a
+`md` and `html` are Jinja templates in `roboviewer/reports/templates/default/`; drop a
 changed copy into `.roboviewer/templates/` to override one file by file, or add
 a new `report.<name>.j2` and `--format <name>` picks it up without touching
 Python. `sarif` and `codequality` are serialization rather than documents, so

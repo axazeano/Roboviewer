@@ -20,7 +20,7 @@ built-in map goes into the prompt as written, so `Bahasa Indonesia` works too.
 This covers the text the model writes: finding titles, rationales, suggestions,
 verdict reasons and the judge's summary. Report headings, tables and severity
 labels come from the templates and stay English — change those in
-`roboviewer/templates/default/`.
+`roboviewer/reports/templates/default/`.
 
 The directive is appended by the code, so it survives a custom prompt set and a
 checklist that brings its own `_system.md`.
