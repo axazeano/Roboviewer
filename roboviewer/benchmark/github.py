@@ -1,4 +1,4 @@
-"""What reviewers said, read from GitHub.
+"""What GitHub knows about a pull request: its facts, and what reviewers said.
 
 Two APIs, because thread resolution exists in only one of them. GraphQL knows
 whether a thread was marked resolved and needs a token for every request; REST
@@ -23,7 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from .entries import PullRequest
+from .items import PullRequest
 
 API_URL = "https://api.github.com"
 # In the order the GitHub CLI reads them, so a machine already set up for `gh`
@@ -33,7 +33,7 @@ TOKEN_VARS = ("GITHUB_TOKEN", "GH_TOKEN")
 GH_TOKEN_COMMAND = ("gh", "auth", "token")
 GH_TIMEOUT_S = 5.0
 PAGE_SIZE = 100
-# A stop for the paging loops. Nothing in the corpus is near it; a pull request
+# A stop for the paging loops. Nothing in the benchmark is near it; a pull request
 # that is would be a discussion, not a review.
 MAX_PAGES = 20
 TIMEOUT_S = 30.0
@@ -95,6 +95,25 @@ class Thread:
     commit: str = ""
 
 
+@dataclass(frozen=True)
+class Facts:
+    """The pull request as the REST API describes it: the two branch tips, the
+    size, and what the repository is. `head` is the tip of the branch, which is
+    not the commit reviewers saw whenever the author pushed fixes afterwards —
+    see `candidates.on_github.propose_head` for the one that is."""
+
+    url: str
+    number: int
+    base: str
+    head: str
+    files: int
+    added: int
+    removed: int
+    stars: int
+    language: str
+    license: str
+
+
 class GitHubError(RuntimeError):
     """A request that did not produce review comments, in the user's terms."""
 
@@ -115,7 +134,7 @@ class GitHub:
     def resolution_known(self) -> bool:
         """Whether this client can say if a thread was resolved. Recorded next
         to the comments, so a later reader is not left guessing why the field
-        is null on half the corpus."""
+        is null on half the benchmark."""
         return self.token is not None
 
     def graphql(self, query: str, variables: dict[str, Any]) -> Any:
@@ -123,6 +142,27 @@ class GitHub:
         threads. Errors surface the same way they do everywhere else here."""
         body = json.dumps({"query": query, "variables": variables}).encode()
         return self._call(f"{self.api_url}/graphql", body=body)
+
+    def pull_request(self, pull: PullRequest) -> Facts:
+        """The facts of one pull request. REST, because it answers without a
+        token and carries everything the index records."""
+        url = f"{self.api_url}/repos/{pull.owner}/{pull.repo}/pulls/{pull.number}"
+        raw = self._call(url)
+        if not isinstance(raw, dict) or "base" not in raw or "head" not in raw:
+            raise GitHubError(f"{pull.slug}#{pull.number}: unexpected answer from {url}")
+        repository = (raw.get("base") or {}).get("repo") or {}
+        return Facts(
+            url=raw.get("html_url") or f"https://github.com/{pull.slug}/pull/{pull.number}",
+            number=int(raw.get("number") or pull.number),
+            base=str((raw.get("base") or {}).get("sha") or ""),
+            head=str((raw.get("head") or {}).get("sha") or ""),
+            files=int(raw.get("changed_files") or 0),
+            added=int(raw.get("additions") or 0),
+            removed=int(raw.get("deletions") or 0),
+            stars=int(repository.get("stargazers_count") or 0),
+            language=str(repository.get("language") or ""),
+            license=str((repository.get("license") or {}).get("spdx_id") or ""),
+        )
 
     def review_threads(self, pull: PullRequest) -> list[Thread]:
         if self.token:
@@ -176,7 +216,7 @@ class GitHub:
     def _headers(self, sending_body: bool) -> dict[str, str]:
         headers = {
             "Accept": "application/vnd.github+json",
-            "User-Agent": "roboviewer-corpus",
+            "User-Agent": "roboviewer-benchmark",
             "X-GitHub-Api-Version": "2022-11-28",
         }
         if self.token:
@@ -199,7 +239,7 @@ def token_from_env(environ: dict[str, str] | None = None) -> str | None:
 def token_from_gh(runner: Runner | None = None) -> str | None:
     """The login `gh` is already holding, or None if it is not there to ask.
 
-    Most machines that have a reason to build a corpus have `gh` set up, and its
+    Most machines that have a reason to build a benchmark have `gh` set up, and its
     token lives in a keyring rather than in the environment — so without this,
     the answer to "you need a token" is to copy one out of `gh` and paste it into
     a shell profile, which is a worse place for it than where it already is.

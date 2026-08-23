@@ -1,7 +1,7 @@
 """Reading review comments off GitHub, without going near it.
 
 Every request goes through an injected transport, so what is tested here is the
-part that actually decides whether the corpus is any good: which line a comment
+part that actually decides whether the benchmark is any good: which line a comment
 is pinned to, whether the thread was resolved, and what the command says when it
 is the rate limit rather than the entry that stopped it.
 """
@@ -14,8 +14,7 @@ from typing import Any
 
 import pytest
 
-from measure.corpus.entries import parse_pull_url
-from measure.corpus.github import (
+from roboviewer.benchmark.github import (
     GitHub,
     GitHubError,
     RateLimited,
@@ -24,6 +23,7 @@ from measure.corpus.github import (
     token_from_env,
     token_from_gh,
 )
+from roboviewer.benchmark.items import parse_pull_url
 
 PULL = parse_pull_url("https://github.com/psf/requests/pull/6800")
 

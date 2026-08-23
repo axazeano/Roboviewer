@@ -129,8 +129,9 @@ above is drawn per defect rather than per finding.
 Three things this does not say. It is one merge request, so `n = 1` at the
 repository level. Fifteen of the 31 defects entered the truth set by verifying
 one model's output, so that model is being graded partly on ground it defined —
-`measure/truth.toml` marks which entries are independent. And Opus ran without the judge,
-as a ceiling to aim at rather than a configuration of this tool.
+`origin` in `benchmarks/references/ios-4091.toml` marks which entries are
+independent. And Opus ran without the judge, as a ceiling to aim at rather
+than a configuration of this tool.
 
 ## Requirements
 
@@ -229,9 +230,10 @@ would be reviewed without spending tokens. Every flag:
 | [Tuning](docs/tuning.md) | Prompts, how many agents, thinking, the turn limit |
 | [Measurements](docs/measurements.md) | What it finds and gets wrong, per model and checklist size |
 | [Watching a run](docs/trace.md) | What the agents did with the context: the log, the page, the command |
+| [The benchmark](docs/benchmark.md) | `benchmark list|run`: real merge requests, reviewed with one command |
 
 [docs/](docs/) also carries the [map of the code](docs/architecture.md), the
-tooling baseline and how the measurement corpus is built.
+tooling baseline and how the benchmark is built and run.
 
 ## What it doesn't do
 

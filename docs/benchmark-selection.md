@@ -1,12 +1,12 @@
-# Choosing what the baseline is measured on
+# Choosing what the benchmark is made of
 
-The corpus decides what the baseline number means. A list assembled by taste
+The benchmark decides what the baseline number means. A list assembled by taste
 would make every later number an argument about the list, so the bar is written
 down first and each entry is admitted against it. Adding one later is a matter
 of checking, not of persuading.
 
-The list itself is [`measure/corpus.toml`](../measure/corpus.toml); how it is built into
-directories is [corpus.md](corpus.md).
+The list itself is [`benchmarks/items.toml`](../benchmarks/items.toml); how it is
+built into clones and run is [benchmark.md](benchmark.md).
 
 ## What qualifies
 
@@ -67,14 +67,14 @@ measure one stack, one team's habits, or one size of change. So, over the list
 as a whole:
 
 - **At least three languages, and more than one domain.** The stated direction
-  is a general-purpose tool; a Swift-only corpus would measure iOS tuning.
+  is a general-purpose tool; a Swift-only benchmark would measure iOS tuning.
 - **No more than three entries from one repository**, so no single project's
   review culture sets the tone.
 - **Sizes spread rather than clustered**: small changes and large ones, because
   a reviewer that does well on a one-file diff and drowns in a fifteen-file one
   is a different tool from one that does the reverse.
 
-`tests/test_corpus_list.py` checks these against the committed file, so the
+`tests/test_benchmark_items.py` checks these against the committed file, so the
 frame is enforced rather than remembered.
 
 ## The list as it stands
@@ -95,7 +95,7 @@ Eleven entries, four languages, eight domains, from 28 to 1703 changed lines.
 | `ansible-87266` | Python | IT automation | 3 files, +77/−4 | GPL-3.0 |
 | `home-assistant-178506` | Python | home automation | 15 files, +1575/−128 | Apache-2.0 |
 
-What each review found is one line per entry in `measure/corpus.toml`.
+What each review found is one line per entry in `benchmarks/items.toml`.
 
 **On the licences.** Every entry is cloned and read locally and nothing derived
 from it is distributed, which is why GPL-3.0 sits here beside MIT and Apache-2.0
@@ -103,7 +103,7 @@ without difficulty: copyleft constrains distribution, and there is none. What
 would disqualify a repository is a licence restricting use or copying at all —
 source-available terms such as BUSL or SSPL. `grafana` and `terraform` were
 passed over for that reason rather than for anything about their reviews.
-`corpus find` applies this the other way round, admitting only the licences on a
+`benchmark search` applies this the other way round, admitting only the licences on a
 listed set, because what is safe is a closed set and what is unsafe keeps
 growing.
 
@@ -127,7 +127,7 @@ share of line-anchored, defect-shaped review comments now come from an AI
 reviewer rather than a person. Rust and TypeScript entries were the casualties —
 the human reviews found in those repositories in this pass were design
 discussions, and the defect-finding was the bot's. The list is four languages
-rather than six for that reason, and worth revisiting when the corpus grows.
+rather than six for that reason, and worth revisiting when the benchmark grows.
 
 ## The three iOS merge requests
 
@@ -141,24 +141,24 @@ well it reviews.
 
 ## Adding an entry
 
-1. Search for candidates with `python -m measure.corpus find` — see
-   [finding candidates](corpus.md#finding-candidates). It drops what no human
+1. Search for candidates with `benchmark search` — see
+   [finding candidates](benchmark.md#finding-candidates). It drops what no human
    reviewed, what is too small to measure and what carries a licence nobody has
    read, and prints the review threads that survive, so the next step rarely
    needs the pull request opened.
 2. Decide against the criteria above. This is the part no query does: a review
    made of naming notes has the same thread count as one that caught a race, and
    only reading the threads tells them apart.
-3. Take the fields with `--heads --toml`, which prints the `[[entry]]` ready to
-   paste: `base` is the pull request's `base.sha`, `head` the commit the earliest
-   review thread was written against, and the diff size is measured at that head
-   rather than at the merged one. Confirm the head against the thread that found
-   the defect — the earliest thread is the tool's proposal, and a first round of
-   naming notes would make it the wrong commit.
+3. `benchmark list add <url>` writes the entry and clones it: `base` is the
+   pull request's `base.sha`, `head` the commit the earliest review thread was
+   written against. Confirm the head against the thread that found the defect —
+   the earliest thread is the tool's proposal, and a first round of naming
+   notes would make it the wrong commit; edit `head` in the index if so, and
+   the next `fetch` repositions the clone.
 4. Write the one line saying what the review found, fill in `domain`, and run
-   `pytest tests/test_corpus_list.py` — it will refuse a list that has drifted
-   out of the frame.
+   `pytest tests/test_benchmark_items.py` — it will refuse an index that has
+   drifted out of the frame.
 
 A token is needed throughout, and the search step will not run without one at
 all: it is GraphQL, and GraphQL refuses anonymous requests. `gh auth login` is
-enough — see [the token](corpus.md#the-token).
+enough — see [the token](benchmark.md#the-token).

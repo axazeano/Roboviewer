@@ -14,6 +14,11 @@ build/
 # Review output; the rest of .roboviewer/ is input and meant to be committed
 .roboviewer/runs/
 
+# The benchmark's clones, comments and runs; items.toml and references/ are committed
+benchmarks/repos/
+benchmarks/comments/
+benchmarks/runs/
+
 # Local tooling settings
 .claude/settings.local.json
 

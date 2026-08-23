@@ -28,5 +28,6 @@ that is here.
 | [Architecture](architecture.md) | The map of the code: what each package is for, what depends on what, where to start reading |
 | [Measurements](measurements.md) | Recall and false positives per model, checklist size and sampling, with the settings behind each run |
 | [Baseline](baseline.md) | Tool counts before and after the simplification work |
-| [Building the corpus](corpus.md) | Fetching real merge requests to measure the review against |
+| [The benchmark](benchmark.md) | The `benchmark` command: a fixed list of real merge requests, cloned at the reviewed commits and reviewed with one command |
+| [Choosing the benchmark](benchmark-selection.md) | Which merge requests belong in it, and what disqualifies one |
 | [Watching a run](trace.md) | What the agents did with the context: the log, the page, the command that keeps both |

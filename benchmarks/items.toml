@@ -1,11 +1,12 @@
-# The corpus the review baseline is measured on.
+# The merge requests the benchmark reviews: one [[entry]] per pull request.
 #
-# Eleven public pull requests whose review found real defects, chosen against
-# the criteria in docs/corpus-selection.md. `head` is the commit reviewers were
+# Public pull requests whose review found real defects, chosen against the
+# criteria in docs/benchmark-selection.md. `head` is the commit reviewers were
 # looking at — not the merged one, where what they found is already fixed.
 #
-# Build it with:
-#   python -m measure.corpus measure/corpus.toml
+#   benchmark list add <url>   appends an entry and clones it
+#   benchmark fetch            clones whatever is listed and not on disk
+#   benchmark run              reviews every entry with roboviewer
 #
 # `id`, `url`, `base` and `head` are read by the fetcher. Everything else is
 # read by people deciding whether an entry still earns its place.
@@ -152,3 +153,16 @@ license = "Apache-2.0"
 files = 15
 added = 1575
 removed = 128
+
+[[entry]]
+id = "ios-4091"
+url = "https://github.com/nextcloud/ios/pull/4091"
+base = "3fe3a8d1432c4845f585d2e692cea12132b79e7d"
+head = "826f10c7ac32dbe0836b86ed4c15fba1aeb7bedd"
+language = "Swift"
+domain = "iOS client of a cloud storage"
+found = "Hand-established reference of 32 defects (13 of the compiler's class) and 3 refuted claims — references/ios-4091.toml; the merge request docs/measurements.md was run on."
+license = "GPL-3.0"
+files = 35
+added = 4227
+removed = 94

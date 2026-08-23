@@ -1,10 +1,11 @@
-"""Finding candidates on GitHub: everything only GitHub can answer.
+"""Finding and describing candidates on GitHub: everything only GitHub can answer.
 
-Two questions, and they are together because one thing replaces both — another
-forge, whose search and whose reviews would have to be asked differently. What
-a candidate has to be is `criteria.py` and stays true whoever is asked.
+Three questions, and they are together because one thing replaces all of them —
+another forge, whose search, whose pull requests and whose reviews would have to
+be asked differently. What a candidate has to be is `criteria.py` and stays
+true whoever is asked.
 
-Search is the only part of the corpus commands that must be GraphQL: the size
+Search is the only part of the benchmark commands that must be GraphQL: the size
 of a pull request is not a search qualifier, but it comes back as a field, so
 asking for it with the results is what makes filtering here affordable.
 
@@ -19,8 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..entries import parse_pull_url
 from ..github import GitHub, GitHubError, Thread
+from ..items import Entry, PullRequest
 from .candidate import Candidate
 from .criteria import Filters, Reason
 
@@ -32,7 +33,7 @@ from .criteria import Filters, Reason
 # fall over when it is busy. 50 has not been seen to fail.
 PAGE_SIZE = 50
 # Search never returns more than this, however far the cursor is walked. Hitting
-# it means the query was too wide, not that the corpus ran out of candidates.
+# it means the query was too wide, not that GitHub ran out of candidates.
 SEARCH_CEILING = 1000
 MAX_PAGES = 20
 
@@ -61,6 +62,26 @@ query($q: String!, $size: Int!, $cursor: String) {
   }
 }
 """
+
+
+@dataclass(frozen=True)
+class Described:
+    """A pull request named by URL, as an entry of the index.
+
+    `branch_head` is the tip of the branch; the entry's head is the commit
+    reviewers saw when the review names one, and the tip when it does not.
+    `reviewed` says whether any thread was written against the entry's head —
+    an entry at a head nobody commented on reviews a state the reviewers never
+    looked at, which is worth saying before it is cloned.
+    """
+
+    entry: Entry
+    threads: list[Thread]
+    branch_head: str
+
+    @property
+    def reviewed(self) -> bool:
+        return any(thread.commit == self.entry.head for thread in self.threads)
 
 
 @dataclass(frozen=True)
@@ -128,7 +149,27 @@ def search(
     return Search(candidates=found, matched=matched, scanned=scanned, rejected=rejected)
 
 
-def propose_head(github: GitHub, candidate: Candidate) -> tuple[str, list[Thread]]:
+def describe(github: GitHub, pull: PullRequest) -> Described:
+    """The entry for one pull request, with the head reviewers saw where the
+    review names one and the branch tip where it does not. Two requests: the
+    pull request, and its review threads."""
+    facts = github.pull_request(pull)
+    head, threads = propose_head(github, pull)
+    entry = Entry(
+        id=pull.entry_id,
+        url=facts.url,
+        base=facts.base,
+        head=head or facts.head,
+        language=facts.language,
+        license=facts.license,
+        files=facts.files,
+        added=facts.added,
+        removed=facts.removed,
+    )
+    return Described(entry=entry, threads=threads, branch_head=facts.head)
+
+
+def propose_head(github: GitHub, pull: PullRequest) -> tuple[str, list[Thread]]:
     """(the commit the earliest review thread was written against, every thread).
 
     Not the merged head, and not the base: the state reviewers were looking at
@@ -147,7 +188,7 @@ def propose_head(github: GitHub, candidate: Candidate) -> tuple[str, list[Thread
     The threads come back either way: they are what the defect-or-preference
     judgement is made on.
     """
-    threads = github.review_threads(parse_pull_url(candidate.url))
+    threads = github.review_threads(pull)
     anchored = [thread for thread in threads if thread.commit and thread.comments]
     if not anchored:
         return "", threads

@@ -50,6 +50,7 @@ dev = [
 
 [project.scripts]
 roboviewer = "roboviewer.cli:main"
+benchmark = "roboviewer.benchmark.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -100,9 +101,8 @@ max-args = 6
 
 [tool.mypy]
 python_version = "3.11"
-# `measure` is not part of the wheel — it builds the measurement corpus beside
-# the tool and watches what a run did — but it is held to the same types as the
-# tool it is pointed at.
+# `measure` is not part of the wheel — it watches what a run did, beside the
+# tool — but it is held to the same types as the tool it is pointed at.
 files = ["roboviewer", "measure"]
 plugins = ["pydantic.mypy"]
 warn_redundant_casts = true

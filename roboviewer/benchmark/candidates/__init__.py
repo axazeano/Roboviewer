@@ -1,6 +1,6 @@
-"""Candidates for the corpus, and the part of choosing one a machine can do.
+"""Candidates for the benchmark, and the part of choosing one a machine can do.
 
-Growing the corpus means finding pull requests of a certain size whose review
+Growing the benchmark means finding pull requests of a certain size whose review
 found something, and GitHub search cannot express the first half: there is no
 `files:` qualifier and no `additions:`. What search does return, through
 GraphQL, is `changedFiles` on every pull request it yields — so the filter runs
@@ -18,9 +18,9 @@ reasons:
   because a different forge is what replaces it, and both questions go at once.
 - `entry_toml` — the half-written `[[entry]]` to paste, which outlives both.
 
-What is deliberately absent is the judgement `docs/corpus-selection.md` asks
+What is deliberately absent is the judgement `docs/benchmark-selection.md` asks
 for: whether a thread found a defect or a naming preference. That decides
 whether an entry earns its place, no query expresses it, and a command that
-guessed at it would fill the corpus with reviews about whitespace. The threads
+guessed at it would fill the benchmark with reviews about whitespace. The threads
 come back with the head so a person can read them and decide.
 """

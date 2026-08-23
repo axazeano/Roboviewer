@@ -14,18 +14,32 @@ disagree, and then puts the wheel on [PyPI][pypi] and the image on
 ## Unreleased
 
 The code is laid out by subsystem, so that a person opening any file knows
-where they are. Nothing a run does, writes or prints changed.
+where they are, and the corpus becomes a benchmark with a command of its own.
+Nothing a review does, writes or prints changed.
+
+- **`benchmark`, a second console script**, shaped like git: `benchmark list
+  add <pull-request>` records a merge request in `benchmarks/items.toml` and
+  clones it at the commit reviewers saw, `list show` and `list remove` keep the
+  index, `benchmark run [roboviewer flags]` reviews every entry with the tool —
+  one run per entry, the flags passed through unchanged — and writes a
+  `summary.json` per run, `fetch` clones what is listed, `search` finds
+  candidates on GitHub. The package is `roboviewer.benchmark`, the data lives
+  under `benchmarks/` at the repository root: the index and the references
+  committed, the clones, comments and runs ignored.
+- **The references**: `measure/truth.toml` is now
+  `benchmarks/references/ios-4091.toml`, one `[[finding]]` per checked claim
+  with a `verdict` — `expected` for a defect the review has to find, `false` for
+  a claim that was checked and refuted — and the merge request it describes is
+  an entry of the index.
 
 - **One package per subsystem** inside `roboviewer/`: `config`, `repo` (all of
   git), `provider` (the model's gateway), `review` (the pipeline and everything
   the model reads, under `review/prompts/`), `reports`, `cli`; the shared
   vocabulary in `models.py` and the one observer protocol in `observer.py` at
   the root. [docs/architecture.md](docs/architecture.md) is the map.
-- **The measuring instruments live under `measure/`**: `measure.corpus` builds
-  the corpus (`python -m measure.corpus measure/corpus.toml`) and
-  `measure.trace`, formerly `research`, watches a run
-  (`python -m measure.trace review develop`). `corpus.toml` and `truth.toml`
-  moved there with them, and the truth file is in English.
+- **The run tracer lives under `measure/`**: `measure.trace`, formerly
+  `research`, watches a run (`python -m measure.trace review develop`), outside
+  the wheel. `measure.corpus` existed briefly on the way to `benchmark`.
 - Import paths changed throughout; nothing outside the repository imported
   them. The CLI, the config files, the report formats and the prompt texts are
   exactly what 0.2.0 shipped.
