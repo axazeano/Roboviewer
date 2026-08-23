@@ -1,11 +1,11 @@
-"""Sieving GitHub for corpus candidates, without going near GitHub.
+"""Sieving GitHub for benchmark candidates, without going near GitHub.
 
 What matters here is what a wrong answer would cost. A size filter that leaks
 puts a two-file change in a list meant to measure large ones. A head taken from
 the wrong end of the review puts the entry at the commit where every defect is
 already fixed, and then no run can ever hit it — the mistake TASK-18 wrote down.
 And a truncated search that says nothing reads as "GitHub has no more", which is
-how a corpus quietly ends up drawn from one week of one year.
+how a benchmark quietly ends up drawn from one week of one year.
 """
 
 from __future__ import annotations
@@ -13,11 +13,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from measure.corpus.candidates import entry_toml, on_github
-from measure.corpus.candidates.candidate import Candidate
-from measure.corpus.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Filters
-from measure.corpus.cli import main
-from measure.corpus.github import GitHub, Response
+from roboviewer.benchmark.candidates import entry_toml, on_github
+from roboviewer.benchmark.candidates.candidate import Candidate
+from roboviewer.benchmark.candidates.criteria import LICENCE, NO_REVIEW, TOO_SMALL, Filters
+from roboviewer.benchmark.cli import main
+from roboviewer.benchmark.github import GitHub, Response
+from roboviewer.benchmark.items import parse_pull_url
 
 
 def node(
@@ -259,6 +260,7 @@ CANDIDATE = Candidate(
     license="MIT",
     base="b" * 40,
 )
+PULL = parse_pull_url(CANDIDATE.url)
 
 
 def test_the_head_is_the_commit_the_earliest_thread_was_written_against() -> None:
@@ -271,7 +273,7 @@ def test_the_head_is_the_commit_the_earliest_thread_was_written_against() -> Non
         )
     )
 
-    head, threads = on_github.propose_head(github, CANDIDATE)
+    head, threads = on_github.propose_head(github, PULL)
 
     assert head == "e" * 40
     assert len(threads) == 2
@@ -280,7 +282,7 @@ def test_the_head_is_the_commit_the_earliest_thread_was_written_against() -> Non
 def test_a_review_with_no_commit_recorded_gives_no_head_rather_than_a_guess() -> None:
     github, _ = client(graphql_threads(("", "2026-05-01T10:00:00Z", "naming")))
 
-    head, threads = on_github.propose_head(github, CANDIDATE)
+    head, threads = on_github.propose_head(github, PULL)
 
     assert head == ""
     assert len(threads) == 1, "the threads still come back: they are what a person judges"
@@ -297,10 +299,10 @@ def test_an_unreachable_head_is_reported_as_disqualifying_not_as_homework(
         page(node(7, files=30)),
         graphql_threads(("", "2026-05-01T10:00:00Z", "this races")),
     )
-    monkeypatch.setattr("measure.corpus.cli.resolve_token", lambda: "t")
-    monkeypatch.setattr("measure.corpus.cli.GitHub", lambda token: github)  # noqa: ARG005
+    monkeypatch.setattr("roboviewer.benchmark.cli.resolve_token", lambda: "t")
+    monkeypatch.setattr("roboviewer.benchmark.cli.GitHub", lambda token: github)  # noqa: ARG005
 
-    assert main(["find", "q", "--min-files", "30", "--heads"]) == 0
+    assert main(["search", "q", "--min-files", "30", "--heads"]) == 0
 
     said = capsys.readouterr()
     assert "disqualifies it" in said.err
@@ -320,7 +322,7 @@ def test_the_draft_carries_the_facts_and_leaves_the_judgement_blank() -> None:
 def test_the_draft_parses_as_the_entry_the_fetcher_already_loads() -> None:
     import tomllib
 
-    from measure.corpus.entries import Entry
+    from roboviewer.benchmark.items import Entry
 
     raw = tomllib.loads(entry_toml.from_candidate(CANDIDATE, "e" * 40))
 
@@ -332,26 +334,18 @@ def test_the_draft_parses_as_the_entry_the_fetcher_already_loads() -> None:
 # ------------------------------------------------------------------ the command
 
 
-def test_find_needs_a_token_and_says_so_instead_of_failing_at_the_wire(monkeypatch) -> None:
+def test_search_needs_a_token_and_says_so_instead_of_failing_at_the_wire(monkeypatch) -> None:
     """The resolver is patched rather than the environment: a token also comes
     from whatever `gh` is logged in as, and clearing the environment alone left
     this test making real requests."""
-    monkeypatch.setattr("measure.corpus.cli.resolve_token", lambda: None)
+    monkeypatch.setattr("roboviewer.benchmark.cli.resolve_token", lambda: None)
 
-    assert main(["find", "is:pr"]) == 2
-
-
-def test_the_build_command_is_untouched_by_the_new_one(tmp_path, capsys) -> None:
-    """`find` is recognised by that word alone; a path first still builds."""
-    missing = tmp_path / "no-such-list.toml"
-
-    assert main([str(missing)]) == 2
-    assert "Corpus list error" in capsys.readouterr().err
+    assert main(["search", "is:pr"]) == 2
 
 
 def test_a_run_that_finds_nothing_says_which_filter_took_everything() -> None:
     """On a broad query nearly every merged pull request is a bot or a solo
-    merge, and a bare count of zero looks like the corpus has run out of GitHub.
+    merge, and a bare count of zero looks like GitHub has run out of candidates.
     The dominant reason is what names the fix."""
     github, _ = client(page(*[node(n, threads=0) for n in range(5)]))
 

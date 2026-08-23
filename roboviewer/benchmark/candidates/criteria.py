@@ -5,7 +5,7 @@ bar, `Reason` is the answer when it is missed. Which makes this the one file to
 read to find out what the command keeps, and the one to change to keep something
 else.
 
-The prose version is `docs/corpus-selection.md`, and most of it stays prose on
+The prose version is `docs/benchmark-selection.md`, and most of it stays prose on
 purpose: whether a review found a defect or argued about naming is judgement,
 and this is only the part of the bar a machine can apply.
 """

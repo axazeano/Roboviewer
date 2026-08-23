@@ -1,9 +1,9 @@
-"""Turning one entry into a directory the reviewer can be pointed at.
+"""Turning one entry of the index into a clone the reviewer can be pointed at.
 
 The order matters more than any of the steps: nothing is written where a later
 run would find it until both halves — the clone and the comments — are there.
 A failure anywhere leaves the entry either as it was or absent, never partly
-rebuilt, so the corpus can be trusted after an interrupted run.
+rebuilt, so the benchmark can be trusted after an interrupted run.
 
 Rate limiting is the one failure that is not about the entry: every entry after
 it would fail the same way, so it is raised rather than reported and the caller
@@ -19,8 +19,8 @@ from typing import Literal
 
 from . import store as store_module
 from .clone import CloneError, prepare
-from .entries import Entry
 from .github import GitHub, GitHubError, RateLimited, Thread
+from .items import Entry
 from .store import Store
 
 Status = Literal["cached", "built", "failed"]
@@ -45,7 +45,7 @@ class Result:
         return self.status != "failed"
 
 
-def build(entry: Entry, store: Store, github: GitHub, *, refresh: bool = False) -> Result:
+def fetch(entry: Entry, store: Store, github: GitHub, *, refresh: bool = False) -> Result:
     """Fetch what is missing and publish the entry, or say why it could not be.
 
     Raises `RateLimited`, which is the caller's signal to stop rather than to
@@ -56,7 +56,7 @@ def build(entry: Entry, store: Store, github: GitHub, *, refresh: bool = False) 
             entry=entry,
             status="cached",
             detail="already built",
-            path=store.entry_dir(entry),
+            path=store.repo_dir(entry),
             resolution=store.resolution_of(entry),
         )
 
@@ -64,7 +64,7 @@ def build(entry: Entry, store: Store, github: GitHub, *, refresh: bool = False) 
     building = store.open_build(entry)
     try:
         prepare(
-            building / store_module.REPO,
+            building,
             entry.pull.clone_url,
             entry.base,
             entry.head,

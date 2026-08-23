@@ -5,13 +5,13 @@ That head is often not reachable from any branch any more — a pull request get
 force-pushed, or merged and the branch deleted — so the fetch asks for the SHAs
 themselves first and falls back to `refs/pull/<n>/head`, which GitHub keeps.
 
-Whatever arrives is pinned under `refs/corpus/`. A commit fetched by SHA is
+Whatever arrives is pinned under `refs/benchmark/`. A commit fetched by SHA is
 referenced by nothing, and the first `git gc` in that repository would collect
-the very thing the corpus exists to preserve.
+the very thing the benchmark exists to preserve.
 
 No `--filter=blob:none`. A partial clone would look complete and then go to the
 network for file contents in the middle of a review, which is exactly what the
-corpus is built to avoid.
+benchmark is built to avoid.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
-BASE_REF = "refs/corpus/base"
-HEAD_REF = "refs/corpus/head"
+BASE_REF = "refs/benchmark/base"
+HEAD_REF = "refs/benchmark/head"
 
 
 class CloneError(RuntimeError):
@@ -39,7 +39,7 @@ def prepare(
 
     The checkout is what makes `git rev-parse HEAD` answer, which the diff
     collector asks in order to tell a review of the working copy from a review
-    of some other ref — and it lets a person open the corpus and read the code
+    of some other ref — and it lets a person open the clone and read the code
     reviewers were reading.
     """
     _init(repo_dir, remote)
@@ -75,7 +75,7 @@ def _fetch_commits(
     head: str,
     fallback_refs: Sequence[str],
 ) -> None:
-    attempts = [[base, head], *([f"+{ref}:refs/corpus/fetched/{i}"] for i, ref in
+    attempts = [[base, head], *([f"+{ref}:refs/benchmark/fetched/{i}"] for i, ref in
                                 enumerate(fallback_refs))]
     failures: list[str] = []
     for refspecs in attempts:

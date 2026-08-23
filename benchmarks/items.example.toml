@@ -1,17 +1,16 @@
-# The corpus the review baseline is measured on: one [[entry]] per pull request.
+# The index of the benchmark: one [[entry]] per pull request.
 #
-# This is the shape of the file, not the corpus itself — the SHAs below are
-# placeholders and no repository has them, so building this file fails on
-# purpose. The real list is chosen against written criteria (TASK-18) and
-# committed; this one is here so the format has somewhere to live.
+# This is the shape of the file, not the index itself — the SHAs below are
+# placeholders and no repository has them, so fetching this file fails on
+# purpose. The real index is benchmarks/items.toml, chosen against the criteria
+# in docs/benchmark-selection.md; this one is here so the format has somewhere
+# to live with every field explained. `benchmark list add <url>` writes entries
+# of this shape.
 #
-# Build it with:
-#   python -m measure.corpus measure/corpus.toml
-#
-# See docs/corpus.md for what each field is for and how a rebuild works.
+# See docs/benchmark.md for what each field is for and how a rebuild works.
 
 [[entry]]
-# Names the directory under the corpus root. Keep it stable: renaming it
+# Names the clone under benchmarks/repos/. Keep it stable: renaming it
 # rebuilds the entry from scratch.
 id = "requests-6800"
 url = "https://github.com/psf/requests/pull/6800"
@@ -24,7 +23,7 @@ base = "1111111111111111111111111111111111111111"
 head = "2222222222222222222222222222222222222222"
 
 # Everything below is read by people rather than by the fetcher: it is how a
-# later reader judges whether an entry earns its place, and how the corpus is
+# later reader judges whether an entry earns its place, and how the index is
 # checked for leaning towards one language, one domain or one size.
 language = "Python"
 domain = "HTTP client library"

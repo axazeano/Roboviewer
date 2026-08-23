@@ -10,13 +10,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..items import parse_pull_url
+
 
 @dataclass(frozen=True)
 class Candidate:
     """One pull request a search yielded, with the facts the criteria ask about.
 
     `base` comes back with the search; `head` does not, because deriving it
-    costs a request of its own — see `proposal.propose_head`.
+    costs a request of its own — see `on_github.propose_head`.
     """
 
     url: str
@@ -34,5 +36,5 @@ class Candidate:
     @property
     def id(self) -> str:
         """The directory name this entry would build into: repo and number, the
-        shape the committed list already uses."""
-        return f"{self.slug.split('/')[-1].lower()}-{self.number}"
+        shape the index already uses."""
+        return parse_pull_url(self.url).entry_id

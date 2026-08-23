@@ -1,6 +1,6 @@
 """Building an entry, on local repositories and a transport that never connects.
 
-The claim being tested is the one the corpus rests on: after the command runs,
+The claim being tested is the one the benchmark rests on: after the command runs,
 `roboviewer <base> <head>` in the built directory reviews the code reviewers
 were looking at. So the check is not that files appeared — it is that the tool's
 own diff collector, pointed at the result, sees the change the pull request made.
@@ -20,14 +20,14 @@ from typing import Any
 
 import pytest
 
-from measure.corpus import clone
-from measure.corpus import github as github_module
-from measure.corpus.build import build
-from measure.corpus.cli import _entry_line, main
-from measure.corpus.entries import Entry
-from measure.corpus.github import GitHub, RateLimited, Response
-from measure.corpus.store import Store, default_root
 from roboviewer import repo
+from roboviewer.benchmark import clone
+from roboviewer.benchmark import github as github_module
+from roboviewer.benchmark.cli import _entry_line, main
+from roboviewer.benchmark.fetch import fetch
+from roboviewer.benchmark.github import GitHub, RateLimited, Response
+from roboviewer.benchmark.items import Entry
+from roboviewer.benchmark.store import Store, default_root
 
 MISSING_SHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
@@ -156,7 +156,7 @@ def origin(tmp_path: Path) -> Origin:
 
 @pytest.fixture
 def store(tmp_path: Path) -> Store:
-    return Store(tmp_path / "corpus")
+    return Store(tmp_path / "benchmarks")
 
 
 @pytest.fixture
@@ -167,7 +167,7 @@ def anonymous() -> GitHub:
 def pointing_at(origin: Origin, monkeypatch: pytest.MonkeyPatch) -> None:
     """Send the clone URL derived from the pull request URL to a local path."""
     monkeypatch.setattr(
-        "measure.corpus.entries.PullRequest.clone_url",
+        "roboviewer.benchmark.items.PullRequest.clone_url",
         property(lambda self: str(origin.path)),  # noqa: ARG005 — the property signature
     )
 
@@ -181,7 +181,7 @@ def test_the_built_entry_is_a_repository_roboviewer_reviews(
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin)
 
-    result = build(entry, store, anonymous)
+    result = fetch(entry, store, anonymous)
 
     assert result.status == "built"
     bundle = repo.collect(
@@ -208,7 +208,7 @@ def test_the_head_reviewers_saw_is_what_is_checked_out(
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin)
 
-    build(entry, store, anonymous)
+    fetch(entry, store, anonymous)
 
     repo = store.repo_dir(entry)
     assert git(repo, "rev-parse", "HEAD") == origin.head
@@ -225,9 +225,9 @@ def test_the_comments_are_saved_with_file_line_author_body_and_resolution(
     entry = entry_for(origin)
     with_token = GitHub(token="t", transport=transport_for(GRAPHQL_THREADS))
 
-    build(entry, store, with_token)
+    fetch(entry, store, with_token)
 
-    saved = json.loads((store.entry_dir(entry) / "comments.json").read_text(encoding="utf-8"))
+    saved = json.loads(store.comments_path(entry).read_text(encoding="utf-8"))
     assert saved["resolution"] == "known"
     thread = saved["threads"][0]
     assert thread["file"] == "cart.py"
@@ -248,9 +248,9 @@ def test_the_commit_a_thread_was_written_against_is_saved(
     entry = entry_for(origin)
     github = GitHub(transport=transport_for(rest_comment_on(origin.head)))
 
-    build(entry, store, github)
+    fetch(entry, store, github)
 
-    saved = json.loads((store.entry_dir(entry) / "comments.json").read_text(encoding="utf-8"))
+    saved = json.loads(store.comments_path(entry).read_text(encoding="utf-8"))
     assert saved["threads"][0]["commit"] == origin.head
 
 
@@ -261,7 +261,7 @@ def test_a_head_the_review_was_written_against_raises_nothing(
     entry = entry_for(origin)
     github = GitHub(transport=transport_for(rest_comment_on(origin.head)))
 
-    assert build(entry, store, github).reviewed_head == ""
+    assert fetch(entry, store, github).reviewed_head == ""
 
 
 def test_a_head_past_the_review_is_named_rather_than_built_quietly(
@@ -274,7 +274,7 @@ def test_a_head_past_the_review_is_named_rather_than_built_quietly(
     entry = entry_for(origin)
     github = GitHub(transport=transport_for(rest_comment_on(MISSING_SHA)))
 
-    result = build(entry, store, github)
+    result = fetch(entry, store, github)
 
     assert result.status == "built"
     assert result.reviewed_head == MISSING_SHA
@@ -296,7 +296,7 @@ def test_a_review_spanning_rounds_keeps_a_head_from_any_of_them(
         {**REST_COMMENTS[0], "id": 3, "original_commit_id": MISSING_SHA},
     ]
 
-    assert build(entry, store, GitHub(transport=transport_for(rounds))).reviewed_head == ""
+    assert fetch(entry, store, GitHub(transport=transport_for(rounds))).reviewed_head == ""
 
 
 def test_comments_fetched_without_a_token_say_resolution_is_unknown(
@@ -305,9 +305,9 @@ def test_comments_fetched_without_a_token_say_resolution_is_unknown(
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin)
 
-    build(entry, store, anonymous)
+    fetch(entry, store, anonymous)
 
-    saved = json.loads((store.entry_dir(entry) / "comments.json").read_text(encoding="utf-8"))
+    saved = json.loads(store.comments_path(entry).read_text(encoding="utf-8"))
     assert saved["resolution"] == "unknown"
     assert saved["threads"][0]["resolved"] is None
 
@@ -320,12 +320,12 @@ def test_a_rerun_on_an_unchanged_entry_does_no_network_work(
 ) -> None:
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin)
-    build(entry, store, anonymous)
+    fetch(entry, store, anonymous)
 
     # Both doors shut: the transport fails the test if it is called, and the
     # repository the clone came from is gone
     shutil.rmtree(origin.path)
-    result = build(entry, store, GitHub(token=None, transport=offline))
+    result = fetch(entry, store, GitHub(token=None, transport=offline))
 
     assert result.status == "cached"
 
@@ -334,13 +334,13 @@ def test_an_entry_whose_head_changed_in_the_list_is_built_again(
     origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     pointing_at(origin, monkeypatch)
-    build(entry_for(origin), store, anonymous)
+    fetch(entry_for(origin), store, anonymous)
 
     # The same id, a different head: the marker is what notices
     corrected = entry_for(origin, head=git(origin.path, "rev-parse", "main"))
     assert store.is_built(corrected) is False
 
-    assert build(corrected, store, anonymous).status == "built"
+    assert fetch(corrected, store, anonymous).status == "built"
 
 
 def test_a_clone_deleted_by_hand_is_rebuilt_rather_than_trusted(
@@ -348,11 +348,11 @@ def test_a_clone_deleted_by_hand_is_rebuilt_rather_than_trusted(
 ) -> None:
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin)
-    build(entry, store, anonymous)
+    fetch(entry, store, anonymous)
     shutil.rmtree(store.repo_dir(entry))
 
     assert store.is_built(entry) is False
-    assert build(entry, store, anonymous).status == "built"
+    assert fetch(entry, store, anonymous).status == "built"
 
 
 # ------------------------------------------------------------------ when an entry cannot be built
@@ -364,7 +364,7 @@ def test_a_head_the_repository_does_not_have_names_it(
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin, head=MISSING_SHA)
 
-    result = build(entry, store, anonymous)
+    result = fetch(entry, store, anonymous)
 
     assert result.status == "failed"
     assert MISSING_SHA in result.detail
@@ -377,10 +377,10 @@ def test_a_failed_entry_leaves_nothing_behind(
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin, head=MISSING_SHA)
 
-    build(entry, store, anonymous)
+    fetch(entry, store, anonymous)
 
-    assert not store.entry_dir(entry).exists()
-    assert list((store.root / ".building").iterdir()) == []
+    assert not store.repo_dir(entry).exists()
+    assert list((store.root / "repos" / ".building").iterdir()) == []
 
 
 def test_a_refresh_that_is_rate_limited_keeps_what_was_already_built(
@@ -388,10 +388,10 @@ def test_a_refresh_that_is_rate_limited_keeps_what_was_already_built(
 ) -> None:
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin)
-    build(entry, store, anonymous)
+    fetch(entry, store, anonymous)
 
     with pytest.raises(RateLimited):
-        build(entry, store, GitHub(token=None, transport=rate_limited), refresh=True)
+        fetch(entry, store, GitHub(token=None, transport=rate_limited), refresh=True)
 
     # The promise the rate-limit message makes: what is already fetched is kept
     assert store.is_built(entry)
@@ -421,64 +421,74 @@ def test_the_fetched_commits_survive_a_garbage_collection(
 ) -> None:
     pointing_at(origin, monkeypatch)
     entry = entry_for(origin)
-    build(entry, store, anonymous)
+    fetch(entry, store, anonymous)
 
     git(store.repo_dir(entry), "gc", "--prune=now", "--quiet")
 
     assert clone.has_commits(store.repo_dir(entry), entry.base, entry.head)
 
 
-# ------------------------------------------------------------------ where the corpus lives
+# ------------------------------------------------------------------ where the benchmarks live
 
 
-def test_the_corpus_defaults_outside_any_repository(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv("ROBOVIEWER_CORPUS", raising=False)
-    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+def test_the_root_is_benchmarks_where_the_command_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ROBOVIEWER_BENCHMARKS", raising=False)
 
-    root = default_root()
-
-    assert root == tmp_path / "home" / ".cache" / "roboviewer" / "corpus"
-    assert Path.cwd() not in root.parents
+    assert default_root() == Path("benchmarks")
 
 
-def test_the_environment_moves_the_corpus(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ROBOVIEWER_CORPUS", str(tmp_path / "elsewhere"))
+def test_the_environment_moves_the_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ROBOVIEWER_BENCHMARKS", str(tmp_path / "elsewhere"))
 
     assert default_root() == tmp_path / "elsewhere"
+
+
+def test_a_clone_is_the_entry_s_directory_and_the_marker_hides_in_its_git_dir(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+
+    fetch(entry, store, anonymous)
+
+    assert store.repo_dir(entry) == store.root / "repos" / "sample-42"
+    assert (store.repo_dir(entry) / ".git" / "benchmark.json").is_file()
+    assert git(store.repo_dir(entry), "status", "--porcelain") == ""
+    assert store.comments_path(entry) == store.root / "comments" / "sample-42.json"
 
 
 # ------------------------------------------------------------------ the command
 
 
-def list_file(tmp_path: Path, origin: Origin, **overrides: Any) -> Path:
+def root_with(tmp_path: Path, origin: Origin, **overrides: Any) -> Path:
+    """A benchmarks directory whose index names the origin."""
     entry = entry_for(origin, **overrides)
-    path = tmp_path / "corpus.toml"
+    root = tmp_path / "benchmarks"
+    root.mkdir()
+    path = root / "items.toml"
     path.write_text(
         f'[[entry]]\nid = "{entry.id}"\nurl = "{entry.url}"\n'
         f'base = "{entry.base}"\nhead = "{entry.head}"\n',
         encoding="utf-8",
     )
-    return path
+    return root
 
 
-def test_the_command_builds_the_list_and_says_where_it_went(
+def test_the_command_fetches_the_index_and_says_where_it_went(
     tmp_path: Path, origin: Origin, monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     pointing_at(origin, monkeypatch)
     monkeypatch.setattr(github_module, "_urllib_transport", transport_for(REST_COMMENTS))
-    corpus = tmp_path / "corpus"
+    root = root_with(tmp_path, origin)
 
-    code = main([str(list_file(tmp_path, origin)), "--corpus", str(corpus)])
+    code = main(["--root", str(root), "fetch"])
 
     assert code == 0
     out = capsys.readouterr().out
-    assert str(corpus) in out
+    assert str(root) in out
     assert "roboviewer" in out  # the line telling you how to review what was built
-    assert (corpus / "sample-42" / "comments.json").is_file()
+    assert (root / "comments" / "sample-42.json").is_file()
 
 
 def test_the_command_exits_non_zero_when_an_entry_could_not_be_built(
@@ -488,8 +498,7 @@ def test_the_command_exits_non_zero_when_an_entry_could_not_be_built(
     pointing_at(origin, monkeypatch)
     monkeypatch.setattr(github_module, "_urllib_transport", transport_for(REST_COMMENTS))
 
-    code = main([str(list_file(tmp_path, origin, head=MISSING_SHA)),
-                 "--corpus", str(tmp_path / "corpus")])
+    code = main(["--root", str(root_with(tmp_path, origin, head=MISSING_SHA)), "fetch"])
 
     assert code == 1
     assert MISSING_SHA in capsys.readouterr().err
@@ -502,7 +511,7 @@ def test_the_command_stops_on_the_rate_limit_and_says_that_is_why(
     pointing_at(origin, monkeypatch)
     monkeypatch.setattr(github_module, "_urllib_transport", rate_limited)
 
-    code = main([str(list_file(tmp_path, origin)), "--corpus", str(tmp_path / "corpus")])
+    code = main(["--root", str(root_with(tmp_path, origin)), "fetch"])
 
     assert code == 1
     err = capsys.readouterr().err
@@ -513,24 +522,25 @@ def test_the_command_stops_on_the_rate_limit_and_says_that_is_why(
 def test_a_list_that_does_not_parse_stops_the_command_before_anything_is_fetched(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    path = tmp_path / "corpus.toml"
-    path.write_text('[[entry]]\nid = "x"\n', encoding="utf-8")
+    root = tmp_path / "benchmarks"
+    root.mkdir()
+    (root / "items.toml").write_text('[[entry]]\nid = "x"\n', encoding="utf-8")
 
     # 2 is "the tool could not run", the same code roboviewer uses
-    assert main([str(path), "--corpus", str(tmp_path / "corpus")]) == 2
-    assert "Corpus list error" in capsys.readouterr().err
+    assert main(["--root", str(root), "fetch"]) == 2
+    assert "Index error" in capsys.readouterr().err
 
 
-def test_only_builds_the_named_entry(
+def test_entries_fetches_only_the_named_entry(
     tmp_path: Path, origin: Origin, monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     pointing_at(origin, monkeypatch)
     monkeypatch.setattr(github_module, "_urllib_transport", transport_for(REST_COMMENTS))
-    corpus = tmp_path / "corpus"
+    root = root_with(tmp_path, origin)
 
-    code = main([str(list_file(tmp_path, origin)), "--corpus", str(corpus), "--only", "sample-42"])
+    code = main(["--root", str(root), "fetch", "--entries", "sample-42"])
 
     assert code == 0
     capsys.readouterr()
-    assert (corpus / "sample-42").is_dir()
+    assert (root / "repos" / "sample-42" / ".git").is_dir()
