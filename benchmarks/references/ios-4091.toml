@@ -1,33 +1,30 @@
-# The hand-established truth for one merge request.
+# What a good review of nextcloud/ios#4091 finds — the reference the benchmark
+# entry `ios-4091` is scored against.
 #
-# Format: [[expected]] — a defect the review has to find; [[forbidden]] — a
-# claim the review produced and that was checked and proven false. Both halves
-# are needed: without forbidden, high recall can be bought with noise.
+# Format: one [[finding]] per claim that was checked against the code at the
+# entry's head. `verdict = "expected"` is a defect the review has to find;
+# `verdict = "false"` is a claim the review produced that was checked and
+# proven wrong, with `why_false` saying why. Both are needed: without the false
+# ones, high recall can be bought with noise — a match with one of them counts
+# against precision, not towards recall.
 #
-# How the truth is established: every entry was checked against the code at the
-# named commit and carries in `evidence` exactly what it was checked with. An
-# entry without evidence is an opinion, not truth — those do not go in here.
+# Every finding carries in `evidence` exactly what it was checked with. One
+# without evidence is an opinion, not a reference — those do not go in here.
+# `origin` says where the claim came from: "manual", collected by reading the
+# code independently of any run, or "verified-from-run", taken from a run's
+# output and then verified. The commits, size and language of the merge request
+# are in items.toml, not repeated here.
 
 [meta]
-repo = "next-cloude-ios"
 url = "https://github.com/nextcloud/ios/pull/4091"
-branch = "nmc/albums_customisation"
-target = "master"
-base = "3fe3a8d1432c"
-head = "826f10c7ac32"
-language = "Swift"
-domain = "iOS client of a cloud storage"
-files = 32
-added = 3816
-removed = 87
-established = "2026-08-04"    # entries 1-16, manual review
-extended = "2026-08-20"       # entries 17-31, from muse-glimmer's output, verified
-extended_2 = "2026-08-21"     # entry 32, from the muse-3-low-nobuild series
+established = "2026-08-04"    # findings 1-16, manual review
+extended = "2026-08-20"       # findings 17-31, from muse-glimmer's output, verified
+extended_2 = "2026-08-21"     # finding 32, from the muse-3-low-nobuild series
 note = """
-Careful when comparing models: entries 1-16 were collected independently of
-any run, entries 17-32 come from muse-glimmer's output verified against the
-code. The model that produced half of the truth set has an advantage on it; an
-honest comparison of models uses entries 1-16 only (`origin = "manual"`).
+Careful when comparing models: findings 1-16 were collected independently of
+any run, findings 17-32 come from muse-glimmer's output verified against the
+code. The model that produced half of the reference has an advantage on it; an
+honest comparison of models uses findings 1-16 only (`origin = "manual"`).
 """
 
 # ---------------------------------------------------------------------------
@@ -36,8 +33,9 @@ honest comparison of models uses entries 1-16 only (`origin = "manual"`).
 # reviewer.
 # ---------------------------------------------------------------------------
 
-[[expected]]
+[[finding]]
 id = "unresolved-searchMediaForAlbumUI"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -46,8 +44,9 @@ line = 44
 what = "media.searchMediaForAlbumUI() is called; the method is declared nowhere"
 evidence = "grep -rn 'searchMediaForAlbumUI' *.swift yields a single occurrence — the call itself"
 
-[[expected]]
+[[finding]]
 id = "dismissSelect-lost-controller"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -56,8 +55,9 @@ line = 552
 what = "dismissSelect lost its controller: parameter, so NCSelectDelegate is no longer satisfied"
 evidence = "the signature in the protocol against the signature of the implementation"
 
-[[expected]]
+[[finding]]
 id = "getLayoutForView-wrong-label"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -66,8 +66,9 @@ line = 167
 what = "getLayoutForView is called with the label layout:, and declared with layoutType:"
 evidence = "the declaration is NCManageDatabase+LayoutForView.swift:92, label layoutType:"
 
-[[expected]]
+[[finding]]
 id = "unresolved-fileExistsQueue"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -75,8 +76,9 @@ file = "iOSClient/Media/NCMedia.swift"
 what = "fileExistsQueue does not resolve"
 evidence = "roboviewer pre-pass: no declaration in the repository"
 
-[[expected]]
+[[finding]]
 id = "unresolved-analytics"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -84,8 +86,9 @@ file = "iOSClient/Media/NCMedia.swift"
 what = "AnalyticsHelper and MoEngageAnalytics are used and absent from the tree"
 evidence = "roboviewer pre-pass; a grep over the repository is empty"
 
-[[expected]]
+[[finding]]
 id = "unresolved-updateRightBarButtonItems"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -94,8 +97,9 @@ line = 179
 what = "NCMainNavigationController has no updateRightBarButtonItems"
 evidence = "a grep for the declaration over the repository is empty"
 
-[[expected]]
+[[finding]]
 id = "unresolved-viewer-album-props"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -104,8 +108,9 @@ line = 121
 what = "NCViewerMediaPage is configured through the properties albumName / albumServerUrl / albumPhoto / metadatas, which it does not have"
 evidence = "the declaration of NCViewerMediaPage carries none of these properties"
 
-[[expected]]
+[[finding]]
 id = "unresolved-popupFromNavigationStack"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -114,8 +119,9 @@ line = 195
 what = "popupFromNavigationStack is not declared, and is called on a freshly created UINavigationController()"
 evidence = "the code: UINavigationController().popupFromNavigationStack(context:); no declaration"
 
-[[expected]]
+[[finding]]
 id = "mediahost-not-in-pbxproj"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "build"
@@ -124,8 +130,9 @@ line = 1
 what = "The file is added, but no build manifest mentions it"
 evidence = "grep -c NCMediaHost *.xcodeproj/project.pbxproj == 0"
 
-[[expected]]
+[[finding]]
 id = "more-scene-missing-storyboard"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "runtime-crash"
@@ -134,8 +141,9 @@ line = 94
 what = "The More scene refers to NCMore.storyboard, which is not in the tree"
 evidence = "roboviewer pre-pass: storyboard named here but no such file"
 
-[[expected]]
+[[finding]]
 id = "ncmedia-outlets-not-connected"
+verdict = "expected"
 origin = "manual"
 severity = "blocker"
 kind = "runtime-crash"
@@ -144,8 +152,9 @@ line = 209
 what = "@IBOutlet titleConstraint and gradientViewHeightContsraint are added and absent from NCMedia.storyboard; viewDidLoad unconditionally writes titleConstraint.constant"
 evidence = "NCMedia.storyboard is unchanged on the branch and carries neither name"
 
-[[expected]]
+[[finding]]
 id = "localization-keys-missing"
+verdict = "expected"
 origin = "manual"
 severity = "major"
 kind = "resources"
@@ -153,8 +162,9 @@ file = "iOSClient/Albums/Presentation"
 what = "About 25 localization keys are used, none added to the strings files"
 evidence = "roboviewer pre-pass: localization key used but defined in no strings file"
 
-[[expected]]
+[[finding]]
 id = "assets-missing"
+verdict = "expected"
 origin = "manual"
 severity = "major"
 kind = "resources"
@@ -163,8 +173,9 @@ line = 53
 what = "The tab bar and the empty states refer to image names that are not in the asset catalogue"
 evidence = "the names are found in no .xcassets"
 
-[[expected]]
+[[finding]]
 id = "copy-success-on-403-404"
+verdict = "expected"
 origin = "manual"
 severity = "major"
 kind = "error-handling"
@@ -173,8 +184,9 @@ line = 453
 what = "copyPhotoToAlbum returns success on statuses 403 and 404"
 evidence = "the status-handling branch in the method body"
 
-[[expected]]
+[[finding]]
 id = "dead-deletePhotosFromAlbum-notification"
+verdict = "expected"
 origin = "manual"
 severity = "minor"
 kind = "dead-code"
@@ -183,8 +195,9 @@ line = 49
 what = "An observer for the deletePhotosFromAlbum notification is registered, and nobody posts it"
 evidence = "grep 'deletePhotosFromAlbum' — only addObserver, not a single post"
 
-[[expected]]
+[[finding]]
 id = "double-push-sheet-ondismiss"
+verdict = "expected"
 origin = "manual"
 severity = "major"
 kind = "correctness"
@@ -198,8 +211,9 @@ evidence = "manual review 2026-08-04"
 # code. Use for comparing models with care — see meta.note.
 # ---------------------------------------------------------------------------
 
-[[expected]]
+[[finding]]
 id = "album-date-fallback-today"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "minor"
 kind = "correctness"
@@ -208,8 +222,9 @@ line = 55
 what = "When decoding dateRange fails, startDate and endDate are set to Date() — broken data looks like \"today\""
 evidence = "Album.swift:50-59, the else branch with let now = Date()"
 
-[[expected]]
+[[finding]]
 id = "environment-in-uikit-controller"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "minor"
 kind = "correctness"
@@ -218,8 +233,9 @@ line = 14
 what = "@Environment(\\.localAccount) is declared in a UIViewController — a SwiftUI wrapper outside SwiftUI is never populated"
 evidence = "the class inherits UIViewController; viewDidLoad actually takes session.account"
 
-[[expected]]
+[[finding]]
 id = "deletePhotos-early-return"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "major"
 kind = "correctness"
@@ -228,8 +244,9 @@ line = 175
 what = "guard ... else { return } inside a for loop leaves the whole function: the remaining photos are not deleted"
 evidence = "AlbumDetailsViewModel.swift:171-199, return instead of continue, and the same return on the first error"
 
-[[expected]]
+[[finding]]
 id = "deletePhotos-sequential-ui-churn"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "minor"
 kind = "performance"
@@ -238,8 +255,9 @@ line = 171
 what = "Deletion goes one photo at a time, toggling isLoadingPopupVisible on every iteration"
 evidence = "a loop with await deletePhotoFromAlbum and MainActor.run per element"
 
-[[expected]]
+[[finding]]
 id = "deletePhotos-linear-search"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "minor"
 kind = "performance"
@@ -248,8 +266,9 @@ line = 173
 what = "photos.first(where:) inside the loop over metadatas — O(n*m)"
 evidence = "AlbumDetailsViewModel.swift:173"
 
-[[expected]]
+[[finding]]
 id = "multiadd-spinner-hidden-early"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "major"
 kind = "correctness"
@@ -258,8 +277,9 @@ line = 292
 what = "isLoadingPopupVisible is set to true once, and every completed copy unconditionally sets it to false — the spinner goes away after the first of N"
 evidence = "AlbumDetailsViewModel.swift:292 and :306"
 
-[[expected]]
+[[finding]]
 id = "notification-observer-leak"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "major"
 kind = "lifecycle"
@@ -268,8 +288,9 @@ line = 49
 what = "addObserver(forName:object:queue:using:) without keeping the token and without deinit — the block observer is never removed"
 evidence = "the file has neither deinit nor removeObserver"
 
-[[expected]]
+[[finding]]
 id = "throwaway-navigation-controller"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "minor"
 kind = "correctness"
@@ -278,8 +299,9 @@ line = 195
 what = "UINavigationController() is created on the spot and a method is called on it — it has nothing to do with the screen's stack"
 evidence = "AlbumDetailsViewModel.swift:195"
 
-[[expected]]
+[[finding]]
 id = "debug-print-file-name"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "nit"
 kind = "logging"
@@ -288,8 +310,9 @@ line = 205
 what = "print(\"DEBUG: Attempting to remove: ...\") with the name of a user's file, in production"
 evidence = "AlbumDetailsViewModel.swift:205"
 
-[[expected]]
+[[finding]]
 id = "unused-setup-navigation"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "nit"
 kind = "dead-code"
@@ -298,8 +321,9 @@ line = 108
 what = "The view builder setupNavigation is declared and used nowhere"
 evidence = "the only occurrence of the name in the file"
 
-[[expected]]
+[[finding]]
 id = "unused-showmedia-state"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "nit"
 kind = "dead-code"
@@ -308,8 +332,9 @@ line = 15
 what = "@State showMedia is assigned and never read"
 evidence = "two occurrences in the file: the declaration and the assignment"
 
-[[expected]]
+[[finding]]
 id = "window-polling-loop"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "major"
 kind = "lifecycle"
@@ -318,8 +343,9 @@ line = 39
 what = "while media.view.window == nil polled every 50 ms; the Task is kept nowhere, so nobody can cancel it"
 evidence = "NCMediaViewRepresentable.swift:32-45"
 
-[[expected]]
+[[finding]]
 id = "metadata-stub-db-write-from-view"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "major"
 kind = "architecture"
@@ -328,8 +354,9 @@ line = 64
 what = "On every tap the full list is assembled and NCManageDatabase.shared.addMetadata writes stubs into the shared Realm straight from the view"
 evidence = "PhotosGridView.swift:64-78"
 
-[[expected]]
+[[finding]]
 id = "repeated-sort-in-body"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "minor"
 kind = "performance"
@@ -338,8 +365,9 @@ line = 29
 what = "photos.keys are sorted in body on every evaluation, and once more in openPhotoViewer"
 evidence = "PhotosGridView.swift:29 and :56"
 
-[[expected]]
+[[finding]]
 id = "no-tests-for-albums"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "minor"
 kind = "tests"
@@ -349,8 +377,9 @@ evidence = "no file with test in its path mentions AlbumsListViewModel / AlbumsM
 
 # Added 2026-08-21 from the muse-3-low-nobuild series (run 3), verified against the code.
 
-[[expected]]
+[[finding]]
 id = "copy-ocid-source-path"
+verdict = "expected"
 origin = "verified-from-run"
 severity = "major"
 kind = "correctness"
@@ -366,16 +395,18 @@ evidence = "AlbumDetailsViewModel.swift:294-302 — a line above, photo is passe
 
 # ---------------------------------------------------------------------------
 # False claims: the tool produced them, the judge confirmed them, verification
-# refuted them. Every match with one of these in a run counts against precision,
+# refuted them. A match with one of these in a run counts against precision,
 # not towards recall.
 # ---------------------------------------------------------------------------
 
-[[forbidden]]
+[[finding]]
 id = "setuppasscodeview-requires-controller"
-severity_claimed = "blocker"
+verdict = "false"
+origin = "verified-from-run"
+severity = "blocker"
 file = "iOSClient/Main/NCMainTabBarController.swift"
 line = 154
-claim = "SetupPasscodeView is created without its required controller argument — it does not compile"
+what = "SetupPasscodeView is created without its required controller argument — it does not compile"
 why_false = """
 SetupPasscodeView is a struct with no explicit init. `weak var controller: T?`
 is an optional var property, and the synthesised memberwise initialiser gives
@@ -383,21 +414,25 @@ it a default of nil. The call compiles.
 """
 evidence = "swiftc -typecheck on a minimal reproduction, exit 0"
 
-[[forbidden]]
+[[finding]]
 id = "mediahost-scene-identifier-wrong"
-severity_claimed = "blocker"
+verdict = "false"
+origin = "verified-from-run"
+severity = "blocker"
 file = "iOSClient/Media/NCMediaHost.swift"
 line = 44
-claim = "sceneIdentifier defaults to the storyboard's name, and instantiateViewController will hit fatalError"
+what = "sceneIdentifier defaults to the storyboard's name, and instantiateViewController will hit fatalError"
 why_false = "iOSClient/Media/NCMedia.storyboard has storyboardIdentifier=\"NCMedia.storyboard\". The identifier is oddly named, but it exists."
 evidence = "grep -o 'storyboardIdentifier=\"[^\"]*\"' iOSClient/Media/NCMedia.storyboard"
 
-[[forbidden]]
+[[finding]]
 id = "album-name-path-traversal"
-severity_claimed = "major"
+verdict = "false"
+origin = "verified-from-run"
+severity = "major"
 file = "iOSClient/Albums/API/Albums+WebDAV.swift"
 line = 163
-claim = "The album name is substituted into a WebDAV path; traversal through .. or encoded separators is possible"
+what = "The album name is substituted into a WebDAV path; traversal through .. or encoded separators is possible"
 why_false = """
 Validation strips / and \\, so .. cannot climb the tree; urlPath.encodedToUrl
 percent-encodes the rest, so %2F becomes a literal.
