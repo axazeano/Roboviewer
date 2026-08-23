@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .. import repo
-from ..config import Config, load_config, overrides
+from ..config import Config, load_config, overrides, provider_config_path
 from ..observer import SILENT, Broadcast, RunObserver
 from ..provider import OpenAIAgentRunner, Runner
 from ..reports import renders, save
@@ -200,6 +200,17 @@ def _depth_hint(root: Path) -> str:
     )
 
 
+def _provider_hint(cfg: Config) -> str:
+    """Which file the provider came from — or the one that does not exist yet,
+    which on a fresh machine is the whole of the problem."""
+    if cfg.provider_source:
+        return f"The provider is configured in {cfg.provider_source}."
+    return (
+        f"There is no provider file yet: copy provider.example.toml to "
+        f"{provider_config_path()} and set base_url, the model and the key there."
+    )
+
+
 def _plan(
     cfg: Config, root: Path, changes: repo.ChangeSet, items: list[ChecklistItem]
 ) -> RunPlan:
@@ -226,7 +237,7 @@ def _plan(
             cfg.provider, cfg.run, root, changes.comparison.base_sha, changes.comparison.source_ref
         )
     except RuntimeError as exc:
-        raise CLIError(f"Provider error: {exc}") from exc
+        raise CLIError(f"Provider error: {exc}", _provider_hint(cfg)) from exc
 
     return RunPlan(
         cfg=cfg,

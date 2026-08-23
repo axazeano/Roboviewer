@@ -100,6 +100,7 @@ def test_add_writes_the_entry_and_clones_it(
     assert (root / "comments" / "repo-42.json").is_file()
     out = capsys.readouterr().out
     assert "added to" in out
+    assert "cloning" in out  # said before the silence of a real clone
     assert "roboviewer" in out  # how to review it by hand
 
 
