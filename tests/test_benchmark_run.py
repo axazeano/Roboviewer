@@ -17,7 +17,7 @@ from roboviewer.benchmark import run as running
 from roboviewer.benchmark.cli import main
 from roboviewer.benchmark.github import GitHub
 from roboviewer.benchmark.store import Store
-from roboviewer.models import Finding, ReviewRun, Verdict
+from roboviewer.models import Finding, ItemResult, ReviewRun, Usage, Verdict
 from roboviewer.observer import RunObserver
 
 from .test_benchmark_fetch import (
@@ -52,11 +52,20 @@ class FakeReview:
             head_sha=argv[1],
             model="stub",
             started_at="2026-08-23T10:00:00Z",
+            items=[
+                ItemResult(
+                    item_id="i1",
+                    item_title="item",
+                    status="ok",
+                    usage=Usage(prompt_tokens=100, completion_tokens=10, cached_tokens=40),
+                )
+            ],
             findings=[
                 Finding(id="f1", file="cart.py", line=2, title="Drops a line", rationale="."),
                 Finding(id="f2", file="cart.py", line=1, title="Nothing", rationale="."),
             ],
             verdicts={"f2": Verdict(finding_id="f2", verdict="false_positive")},
+            judge_usage=Usage(prompt_tokens=50, completion_tokens=5, cached_tokens=20),
         )
         observer.run_started(run, output / root.name / run.run_id)
         observer.run_finished(run, "done")
@@ -173,6 +182,105 @@ def test_the_summary_says_what_each_review_came_to(
     assert "1 of 1 reviewed" in page
 
 
+# ------------------------------------------------------------------ repeats
+
+
+def test_reviewing_an_entry_again_is_the_next_attempt(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+    review = FakeReview()
+    benchmark = running.start(store, [], repeats=2, stamp="stamp")
+
+    first = running.review_entry(benchmark, entry, store, anonymous, review=review)
+    second = running.review_entry(benchmark, entry, store, anonymous, review=review)
+
+    assert (first.attempt, second.attempt) == (1, 2)
+    assert len(review.calls) == 2
+
+
+def test_zero_repeats_are_refused_before_anything_runs(store: Store) -> None:
+    with pytest.raises(ValueError, match="at least once"):
+        running.start(store, [], repeats=0, stamp="stamp")
+    assert not store.runs.exists()
+
+
+def test_the_summary_reports_statistics_over_the_repeats(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+    review = FakeReview()
+    benchmark = running.start(store, [], repeats=2, stamp="stamp")
+    running.review_entry(benchmark, entry, store, anonymous, review=review)
+    running.review_entry(benchmark, entry, store, anonymous, review=review)
+
+    summary = running.write_summary(benchmark)
+
+    saved = json.loads(summary.read_text(encoding="utf-8"))
+    assert saved["repeats"] == 2
+    assert [row["attempt"] for row in saved["entries"]] == [1, 2]
+    [row, _] = saved["entries"]
+    assert row["runner"] == {"prompt_tokens": 100, "completion_tokens": 10, "cached_tokens": 40}
+    assert row["judge"] == {"prompt_tokens": 50, "completion_tokens": 5, "cached_tokens": 20}
+    [entry_stats] = saved["stats"]["entries"]
+    assert entry_stats["title"] == "sample-42"
+    assert entry_stats["reviews"] == 2
+    assert entry_stats["runner"]["prompt_tokens"] == 200
+    assert entry_stats["runner"]["per_review"] == {"mean": 110, "p50": 110, "p90": 110, "max": 110}
+    assert entry_stats["judge"]["cached_tokens"] == 40
+    # The two repeats confirm the same finding at the same place
+    assert entry_stats["consistency"]["all"] == 1.0
+    assert entry_stats["consistency"]["by_severity"]["minor"] == 1.0
+    assert entry_stats["consistency"]["by_severity"]["blocker"] is None
+    assert saved["stats"]["run"]["reviews"] == 2
+
+
+def test_the_page_shows_one_table_per_entry_and_one_for_the_whole_run(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+    review = FakeReview()
+    benchmark = running.start(store, [], repeats=2, stamp="stamp")
+    running.review_entry(benchmark, entry, store, anonymous, review=review)
+    running.review_entry(benchmark, entry, store, anonymous, review=review)
+
+    running.write_summary(benchmark)
+
+    page = (store.runs / "stamp" / "summary.md").read_text(encoding="utf-8")
+    assert "Repeats: 2 per entry" in page
+    assert "| sample-42 #1 |" in page
+    assert "| sample-42 #2 |" in page
+    assert "## Statistics" in page
+    assert "### sample-42 — 2 review(s)" in page
+    assert "### Whole run — 2 review(s)" in page
+    assert "| Runner prompt tokens | 200 | | | | |" in page
+    assert "| Runner cached tokens | 80 | | | | |" in page
+    assert "| Runner tokens per review | | 110 | 110 | 110 | 110 |" in page
+    assert "| Judge completion tokens | 10 | | | | |" in page
+    assert "| Self-consistency | 1.00 | | | | |" in page
+    assert "| Self-consistency, minor | 1.00 | | | | |" in page
+    assert "| Self-consistency, blocker | — | | | | |" in page
+
+
+def test_a_single_review_leaves_the_page_unmarked_and_consistency_unscored(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pointing_at(origin, monkeypatch)
+    benchmark = running.start(store, [], stamp="stamp")
+    running.review_entry(benchmark, entry_for(origin), store, anonymous, review=FakeReview())
+
+    running.write_summary(benchmark)
+
+    page = (store.runs / "stamp" / "summary.md").read_text(encoding="utf-8")
+    assert "#1" not in page
+    assert "Repeats:" not in page
+    assert "Self-consistency needs at least two repeats" in page
+    assert "| Self-consistency | — | | | | |" in page
+
+
 # ------------------------------------------------------------------ the command
 
 
@@ -258,6 +366,70 @@ def test_the_command_exits_non_zero_when_an_entry_was_not_reviewed(
     said = capsys.readouterr()
     assert "not fetched" in said.err
     assert "0 reviewed, 1 not" in said.out
+
+
+def test_the_command_repeats_every_entry_and_counts_the_attempts(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    review = FakeReview()
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(
+        store,
+        entry_for(origin),
+        entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43"),
+    )
+
+    code = main(["--root", str(store.root), "run", "--repeats", "2"])
+
+    assert code == 0
+    assert len(review.calls) == 4
+    out = capsys.readouterr().out
+    assert "2 entr(ies) x 2" in out
+    assert "── sample-42  1/2" in out
+    assert "── sample-42  2/2" in out
+    [stamp] = list(store.runs.iterdir())
+    saved = json.loads((stamp / "summary.json").read_text(encoding="utf-8"))
+    assert [(row["id"], row["attempt"]) for row in saved["entries"]] == [
+        ("sample-42", 1), ("sample-42", 2), ("other-43", 1), ("other-43", 2),
+    ]
+
+
+def test_an_entry_that_cannot_be_fetched_is_not_asked_again_by_the_repeats(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", FakeReview())
+    index_with(store, entry_for(origin, head=MISSING_SHA))
+
+    code = main(["--root", str(store.root), "run", "--repeats", "3"])
+
+    assert code == 1
+    assert capsys.readouterr().err.count("not fetched") == 1
+    [stamp] = list(store.runs.iterdir())
+    saved = json.loads((stamp / "summary.json").read_text(encoding="utf-8"))
+    assert [row["status"] for row in saved["entries"]] == ["not_fetched"]
+
+
+def test_the_command_refuses_zero_repeats(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    review = FakeReview()
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(store, entry_for(origin))
+
+    assert main(["--root", str(store.root), "run", "--repeats", "0"]) == 2
+    assert review.calls == []
+    assert "at least once" in capsys.readouterr().err
 
 
 def test_a_repository_flag_is_refused_before_anything_runs(

@@ -70,6 +70,7 @@ is on disk.
 benchmark run                       # every entry, the tool's defaults
 benchmark run --no-judge -v         # the flags are roboviewer's own
 benchmark run --entries cli-13946   # one entry
+benchmark run --repeats 5           # every entry five times, with statistics
 benchmark run --refresh             # fetch again first
 ```
 
@@ -97,13 +98,40 @@ Summary: benchmarks/runs/2026-08-23-141502/summary.json
 One run is one directory under `benchmarks/runs/`, named for the minute it
 started. The tool's own output for each entry is underneath — `run.json`,
 `findings.json`, the reports — and beside them `summary.json`, one row per
-entry: status, exit code, run id, model, findings, confirmed, out of scope,
+review: status, exit code, run id, model, findings, confirmed, out of scope,
 tokens, seconds, the directory; and `summary.md`, the same as a table. The
 summary is what two runs are compared on; the run directories are the sizable
 raw material and are not meant for git.
 
 The command exits 0 when every entry was reviewed — the tool's own 0 and 1
 both count as a finished review — and 1 otherwise; 2 when it could not start.
+
+## Repeats and statistics
+
+```bash
+benchmark run --repeats 5
+```
+
+`--repeats N` reviews every entry N times — the clone is fetched once and the
+repeats run in it, each keeping its own report directory and its own row of the
+summary. The summary page then ends with a statistics section: one table per
+repository and one for the whole run, each reporting
+
+- the runner's prompt, completion and cached token totals, and the mean, p50,
+  p90 and max of its tokens per review;
+- the same four lines for the judge;
+- the mean and percentiles of review time;
+- the self-consistency of the repeats, overall and per severity level.
+
+Self-consistency is the mean pairwise Jaccard index over the confirmed findings
+of the repeats, matched by file and line — both commits are fixed, so a
+location is stable where the model's wording of a title is not. 1.00 means
+every repeat confirmed the same findings, 0.00 that no two repeats agreed on
+one; two repeats that both found nothing agree completely, and a severity level
+no repeat found anything of shows `—` rather than a score. The whole-run table
+pools tokens and time over every review but averages consistency over the
+entries, because repeats of different entries are not comparable to each other.
+The same numbers are in `summary.json` under `stats`.
 
 ## What an entry says
 
