@@ -443,3 +443,52 @@ def test_a_repository_flag_is_refused_before_anything_runs(
     assert main(["--root", str(store.root), "run", "-C", "/elsewhere"]) == 2
     assert review.calls == []
     assert "not a benchmark flag" in capsys.readouterr().err
+
+
+def test_a_setup_failure_stops_the_run_instead_of_failing_every_entry(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Exit 2 is "the tool could not start" — a missing key, a broken config.
+    That is about the machine, not the entry, and without the stop each of a
+    dozen entries would be cloned and then refused identically."""
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    review = FakeReview(code=2)
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(
+        store,
+        entry_for(origin),
+        entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43"),
+    )
+
+    code = main(["--root", str(store.root), "run"])
+
+    assert code == 1
+    assert len(review.calls) == 1, "the second entry was never cloned or reviewed"
+    said = capsys.readouterr()
+    assert "could not start" in said.err
+    assert "--entries sample-42" in said.err
+    assert "0 reviewed, 1 not" in said.out
+
+
+def test_the_run_says_it_is_cloning_before_the_silence(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", FakeReview())
+    index_with(store, entry_for(origin))
+
+    main(["--root", str(store.root), "run"])
+    first = capsys.readouterr().out
+    main(["--root", str(store.root), "run"])
+    second = capsys.readouterr().out
+
+    assert "cloning" in first
+    assert "cloning" not in second, "the clone is already there; nothing to warn about"

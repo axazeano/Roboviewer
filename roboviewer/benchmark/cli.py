@@ -22,6 +22,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from ..cli import exit_codes as roboviewer_exit
 from ..cli import main as review_main
 from . import items
 from . import run as running
@@ -285,6 +286,7 @@ def _add(args: argparse.Namespace, store: Store) -> int:
     print("  `domain` and `found` are blank; fill them in before committing the index.")
     if args.no_fetch:
         return OK
+    _say_cloning(entry)
     try:
         result = fetch(entry, store, github)
     except RateLimited as exc:
@@ -311,37 +313,61 @@ def _run(args: argparse.Namespace, store: Store, review_args: list[str]) -> int:
     if flags:
         print(f"  roboviewer {' '.join(flags)}")
 
-    limited = False
     for entry in entries:
-        if limited:
+        if not _review_repeats(benchmark, entry, store, github, args):
             break
-        for attempt in range(1, benchmark.repeats + 1):
-            counter = f"  {attempt}/{benchmark.repeats}" if benchmark.repeats > 1 else ""
-            print(f"── {entry.id}{counter}  {entry.url}")
-            try:
-                outcome = running.review_entry(
-                    benchmark,
-                    entry,
-                    store,
-                    github,
-                    # The clone is fetched once; the repeats review the same one
-                    refresh=args.refresh and attempt == 1,
-                    review=review_main,
-                )
-            except RateLimited as exc:
-                # Every entry still to fetch would be refused the same way
-                print(f"✗ {entry.id}: {exc}", file=sys.stderr)
-                limited = True
-                break
-            _outcome_line(outcome)
-            if outcome.status == "not_fetched":
-                # The other attempts would be refused the same clone the same way
-                break
 
     summary = running.write_summary(benchmark)
     _run_summary(benchmark, summary)
     expected = len(entries) * benchmark.repeats
     return OK if benchmark.ok and len(benchmark.outcomes) == expected else INCOMPLETE
+
+
+def _review_repeats(
+    benchmark: running.Benchmark,
+    entry: Entry,
+    store: Store,
+    github: GitHub,
+    args: argparse.Namespace,
+) -> bool:
+    """Every attempt of one entry. False when the whole run must stop — a rate
+    limit, or a tool that could not start and would refuse every entry alike."""
+    for attempt in range(1, benchmark.repeats + 1):
+        counter = f"  {attempt}/{benchmark.repeats}" if benchmark.repeats > 1 else ""
+        print(f"── {entry.id}{counter}  {entry.url}")
+        refresh = args.refresh and attempt == 1
+        if refresh or not store.is_built(entry):
+            _say_cloning(entry)
+        try:
+            outcome = running.review_entry(
+                benchmark,
+                entry,
+                store,
+                github,
+                # The clone is fetched once; the repeats review the same one
+                refresh=refresh,
+                review=review_main,
+            )
+        except RateLimited as exc:
+            # Every entry still to fetch would be refused the same way
+            print(f"✗ {entry.id}: {exc}", file=sys.stderr)
+            return False
+        _outcome_line(outcome)
+        if outcome.code == roboviewer_exit.SETUP:
+            # Exit 2 is "the tool could not start" — a missing key, a broken
+            # config. That is about the machine, not the entry, and the next
+            # entry would only fail the same way after another clone.
+            print(
+                "Stopping: roboviewer could not start, and the remaining entries "
+                "would fail the same way. If it really is about this entry, rerun "
+                f"it alone: benchmark run --entries {entry.id}",
+                file=sys.stderr,
+            )
+            return False
+        if outcome.status == "not_fetched":
+            # The other attempts would be refused the same clone the same way
+            return True
+    return True
 
 
 def _review_flags(remainder: list[str]) -> list[str]:
@@ -476,6 +502,12 @@ def _fetch_summary(results: list[Result], store: Store) -> None:
             f"Review one: roboviewer {example.entry.base[:12]} {example.entry.head[:12]} "
             f"-C {store.repo_dir(example.entry)}"
         )
+
+
+def _say_cloning(entry: Entry) -> None:
+    """Said before the silence: a full-history clone of a real repository can
+    run for minutes, and nothing else is printed until it is done."""
+    print(f"  cloning {entry.pull.clone_url} — full history, this can take a while")
 
 
 def _outcome_line(outcome: running.Outcome) -> None:
