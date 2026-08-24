@@ -144,7 +144,8 @@ def review_entry(
 
     argv = [entry.base, entry.head, "-C", str(store.repo_dir(entry))]
     if not _names_output(benchmark.flags):
-        argv += ["-o", str(benchmark.directory)]
+        # Absolute, or the tool resolves it against the clone -C points it at
+        argv += ["-o", str(benchmark.directory.absolute())]
     argv += benchmark.flags
 
     watcher = _Collector()
