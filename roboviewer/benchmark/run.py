@@ -12,7 +12,9 @@ step, and a flag that works on the tool works here.
 An entry that is not on disk yet is fetched first; one that cannot be is
 reported and skipped, and the others still run. The tool's exit code per entry
 is kept as it was: 0 and 1 are a review that finished, anything else is one
-that did not.
+that did not. A tool that raises instead of exiting is that one entry's
+failure too — recorded with -1 for the exit code it never gave, and the run
+moves on.
 
 A run can review every entry several times — `repeats` — and then the summary
 carries statistics over the repeats, computed in `stats`: tokens, time, and how
@@ -77,6 +79,11 @@ class Outcome:
     def ok(self) -> bool:
         return self.status == "reviewed"
 
+    @property
+    def crashed(self) -> bool:
+        """The tool raised instead of exiting — the same review would raise again."""
+        return self.status == "stopped" and self.code < 0
+
 
 @dataclass
 class Benchmark:
@@ -121,6 +128,8 @@ def review_entry(
     """Fetch the entry if it is not there, review it, and record the outcome.
     Reviewing the same entry again is the next attempt of it. Every recorded
     outcome rewrites the summary, so an interrupted run keeps what it finished.
+    A tool that raises instead of exiting is recorded the same way a bad exit
+    code is, so one entry's crash does not take the rest of the run with it.
 
     Raises `RateLimited` from the fetch, which is the caller's signal to stop
     asking rather than to fail every remaining entry the same way.
@@ -149,13 +158,18 @@ def review_entry(
     argv += benchmark.flags
 
     watcher = _Collector()
-    code = review(argv, watcher)
+    try:
+        code = review(argv, watcher)
+        detail = "" if code in (0, 1) else f"roboviewer exited with {code}"
+    except Exception as exc:  # noqa: BLE001 — one entry's crash, not the run's
+        code = -1
+        detail = f"roboviewer raised {type(exc).__name__}: {exc}"
     outcome = Outcome(
         entry=entry,
         status="reviewed" if code in (0, 1) else "stopped",
         code=code,
         seconds=time.monotonic() - started,
-        detail="" if code in (0, 1) else f"roboviewer exited with {code}",
+        detail=detail,
         run=watcher.run,
         directory=watcher.directory,
         attempt=attempt,
