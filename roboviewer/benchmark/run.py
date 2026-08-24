@@ -103,8 +103,7 @@ def start(
     if repeats < 1:
         raise ValueError(f"--repeats {repeats}: a run reviews every entry at least once")
     stamp = stamp or datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
-    directory = store.runs / stamp
-    directory.mkdir(parents=True, exist_ok=False)
+    directory = _fresh(store.runs, stamp)
     return Benchmark(directory=directory, flags=list(flags), repeats=repeats)
 
 
@@ -178,6 +177,19 @@ def write_summary(benchmark: Benchmark) -> Path:
     )
     (benchmark.directory / SUMMARY_PAGE).write_text(_page(benchmark), encoding="utf-8")
     return benchmark.directory / SUMMARY
+
+
+def _fresh(runs: Path, stamp: str) -> Path:
+    """`runs/<stamp>`, or `<stamp>-2` and so on when two runs start within one
+    second — a run must never write into another run's directory."""
+    for attempt in range(1, 100):
+        directory = runs / (stamp if attempt == 1 else f"{stamp}-{attempt}")
+        try:
+            directory.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        return directory
+    raise FileExistsError(f"{runs / stamp}: no free run directory after 99 tries")
 
 
 class _Collector(Observer):
