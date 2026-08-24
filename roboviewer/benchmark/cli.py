@@ -419,8 +419,9 @@ def _review_repeats(
                 file=sys.stderr,
             )
             return False
-        if outcome.status == "not_fetched":
-            # The other attempts would be refused the same clone the same way
+        if outcome.status == "not_fetched" or outcome.crashed:
+            # The other attempts would be refused the same clone, or crash on
+            # the same review, the same way
             return True
     return True
 
