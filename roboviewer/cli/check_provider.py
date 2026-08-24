@@ -17,13 +17,16 @@ def check_provider(provider: ProviderConfig, model: str, source: str | None = No
     """The model is passed in rather than read off the provider: reaching the
     gateway and choosing what to ask it are two settings now, and the probe
     needs one name out of the second."""
-    key, source = provider.api_key_source()
+    key, key_source = provider.api_key_source()
 
     print("Provider")
-    print(f"  from           {source or provider_config_path()} [no file — on defaults]")
+    if source:
+        print(f"  from           {source}")
+    else:
+        print(f"  from           {provider_config_path()} [no file — on defaults]")
     print(f"  base_url       {provider.base_url}")
     print(f"  model          {model}")
-    print(f"  key            {source}")
+    print(f"  key            {key_source}")
     print(f"  auth           {provider.auth_header}: "
           f"{(provider.auth_scheme + ' ') if provider.auth_scheme else ''}<key>")
     print(f"  submission     terminal_tool_choice = \"{provider.terminal_tool_choice}\"")
