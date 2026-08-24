@@ -11,6 +11,10 @@ An entry that is not on disk yet is fetched first; one that cannot be is
 reported and skipped, and the others still run. The tool's exit code per entry
 is kept as it was: 0 and 1 are a review that finished, anything else is one
 that did not.
+
+A run can review every entry several times — `repeats` — and then the summary
+carries statistics over the repeats, computed in `stats`: tokens, time, and how
+much the repeats agree with each other.
 """
 
 from __future__ import annotations
@@ -23,9 +27,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from ..models import ReviewRun
+from ..models import SEVERITY_LABEL, ReviewRun, Usage
 from ..observer import Observer, RunObserver
 from . import fetch as fetching
+from . import stats
 from .github import GitHub
 from .items import Entry
 from .store import Store
@@ -52,6 +57,7 @@ class Outcome:
     detail: str = ""
     run: ReviewRun | None = None
     directory: Path | None = None
+    attempt: int = 1
 
     @property
     def findings(self) -> int:
@@ -76,6 +82,7 @@ class Benchmark:
 
     directory: Path
     flags: list[str]
+    repeats: int = 1
     outcomes: list[Outcome] = field(default_factory=list)
 
     @property
@@ -83,7 +90,9 @@ class Benchmark:
         return bool(self.outcomes) and all(outcome.ok for outcome in self.outcomes)
 
 
-def start(store: Store, flags: list[str], *, stamp: str | None = None) -> Benchmark:
+def start(
+    store: Store, flags: list[str], *, repeats: int = 1, stamp: str | None = None
+) -> Benchmark:
     """A directory for this run. `stamp` is injectable for the suite; a real
     run is named for the minute it began."""
     for flag in flags:
@@ -91,10 +100,12 @@ def start(store: Store, flags: list[str], *, stamp: str | None = None) -> Benchm
             raise ValueError(
                 f"{flag} is not a benchmark flag: each entry is reviewed in its own clone"
             )
+    if repeats < 1:
+        raise ValueError(f"--repeats {repeats}: a run reviews every entry at least once")
     stamp = stamp or datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
     directory = store.runs / stamp
     directory.mkdir(parents=True, exist_ok=False)
-    return Benchmark(directory=directory, flags=list(flags))
+    return Benchmark(directory=directory, flags=list(flags), repeats=repeats)
 
 
 def review_entry(
@@ -107,11 +118,13 @@ def review_entry(
     review: Review,
 ) -> Outcome:
     """Fetch the entry if it is not there, review it, and record the outcome.
+    Reviewing the same entry again is the next attempt of it.
 
     Raises `RateLimited` from the fetch, which is the caller's signal to stop
     asking rather than to fail every remaining entry the same way.
     """
     started = time.monotonic()
+    attempt = 1 + sum(1 for outcome in benchmark.outcomes if outcome.entry.id == entry.id)
     if refresh or not store.is_built(entry):
         fetched = fetching.fetch(entry, store, github, refresh=refresh)
         if not fetched.ok:
@@ -121,6 +134,7 @@ def review_entry(
                 code=-1,
                 seconds=time.monotonic() - started,
                 detail=fetched.detail,
+                attempt=attempt,
             )
             benchmark.outcomes.append(outcome)
             return outcome
@@ -140,6 +154,7 @@ def review_entry(
         detail="" if code in (0, 1) else f"roboviewer exited with {code}",
         run=watcher.run,
         directory=watcher.directory,
+        attempt=attempt,
     )
     benchmark.outcomes.append(outcome)
     return outcome
@@ -147,10 +162,16 @@ def review_entry(
 
 def write_summary(benchmark: Benchmark) -> Path:
     """The machine-readable summary and the page beside it."""
+    groups, run_group = _statistics(benchmark)
     payload = {
         "format": 1,
         "flags": benchmark.flags,
+        "repeats": benchmark.repeats,
         "entries": [_row(outcome) for outcome in benchmark.outcomes],
+        "stats": {
+            "entries": [stats.payload(group) for group in groups],
+            "run": stats.payload(run_group),
+        },
     }
     (benchmark.directory / SUMMARY).write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -182,9 +203,11 @@ def _names_output(flags: list[str]) -> bool:
 def _row(outcome: Outcome) -> dict[str, object]:
     run = outcome.run
     usage = run.total_usage if run else None
+    review = stats.Review(run=run, seconds=outcome.seconds) if run else None
     return {
         "id": outcome.entry.id,
         "url": outcome.entry.url,
+        "attempt": outcome.attempt,
         "status": outcome.status,
         "exit_code": outcome.code,
         "detail": outcome.detail,
@@ -198,6 +221,8 @@ def _row(outcome: Outcome) -> dict[str, object]:
         "items": len(run.items) if run else 0,
         "prompt_tokens": usage.prompt_tokens if usage else 0,
         "completion_tokens": usage.completion_tokens if usage else 0,
+        "runner": _usage_row(review.runner_usage if review else None),
+        "judge": _usage_row(review.judge_usage if review else None),
     }
 
 
@@ -206,6 +231,10 @@ def _page(benchmark: Benchmark) -> str:
         f"# Benchmark run {benchmark.directory.name}",
         "",
         f"Flags: `{' '.join(benchmark.flags) or '(none)'}`",
+    ]
+    if benchmark.repeats > 1:
+        lines.append(f"Repeats: {benchmark.repeats} per entry")
+    lines += [
         "",
         "| Entry | Status | Findings | Confirmed | Out of scope | Tokens | Time | Run |",
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
@@ -214,8 +243,9 @@ def _page(benchmark: Benchmark) -> str:
         usage = outcome.run.total_usage if outcome.run else None
         tokens = usage.prompt_tokens + usage.completion_tokens if usage else 0
         status = outcome.status + (f" ({outcome.detail})" if outcome.detail else "")
+        entry = outcome.entry.id + (f" #{outcome.attempt}" if benchmark.repeats > 1 else "")
         lines.append(
-            f"| {outcome.entry.id} | {status} | {outcome.findings} | {outcome.confirmed} | "
+            f"| {entry} | {status} | {outcome.findings} | {outcome.confirmed} | "
             f"{outcome.out_of_scope} | {tokens} | {outcome.seconds:.0f}s | "
             f"{outcome.directory or '—'} |"
         )
@@ -225,6 +255,94 @@ def _page(benchmark: Benchmark) -> str:
         f"{len(reviewed)} of {len(benchmark.outcomes)} reviewed, "
         f"{sum(o.findings for o in reviewed)} findings, "
         f"{sum(o.confirmed for o in reviewed)} confirmed.",
+    ]
+    lines += _statistics_pages(benchmark)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _statistics(benchmark: Benchmark) -> tuple[list[stats.Group], stats.Group]:
+    """One group per entry over its finished reviews, and one over them all."""
+    ordered: dict[str, list[stats.Review]] = {}
+    for outcome in benchmark.outcomes:
+        if outcome.ok and outcome.run is not None:
+            ordered.setdefault(outcome.entry.id, []).append(
+                stats.Review(run=outcome.run, seconds=outcome.seconds)
+            )
+    groups = [stats.group(entry_id, reviews) for entry_id, reviews in ordered.items()]
+    pooled = [review for reviews in ordered.values() for review in reviews]
+    return groups, stats.whole("Whole run", groups, pooled)
+
+
+def _statistics_pages(benchmark: Benchmark) -> list[str]:
+    groups, run_group = _statistics(benchmark)
+    lines = ["", "## Statistics", ""]
+    if benchmark.repeats < 2:
+        lines.append(
+            "Self-consistency needs at least two repeats of an entry — `--repeats N` adds them."
+        )
+        lines.append("")
+    for group in groups:
+        lines += _stats_table(group)
+    lines += _stats_table(run_group)
+    return lines[:-1]  # the page's closing blank line is _page's own
+
+
+def _stats_table(group: stats.Group) -> list[str]:
+    per_severity = [
+        _ratio_row(f"Self-consistency, {SEVERITY_LABEL[severity].lower()}", value)
+        for severity, value in group.consistency_by_severity.items()
+    ]
+    return [
+        f"### {group.title} — {group.reviews} review(s)",
+        "",
+        "| Metric | Total | Mean | p50 | p90 | Max |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+        _total_row("Runner prompt tokens", group.runner.prompt_tokens),
+        _total_row("Runner completion tokens", group.runner.completion_tokens),
+        _total_row("Runner cached tokens", group.runner.cached_tokens),
+        _spread_row("Runner tokens per review", group.runner_tokens, _tokens),
+        _total_row("Judge prompt tokens", group.judge.prompt_tokens),
+        _total_row("Judge completion tokens", group.judge.completion_tokens),
+        _total_row("Judge cached tokens", group.judge.cached_tokens),
+        _spread_row("Judge tokens per review", group.judge_tokens, _tokens),
+        _spread_row("Review time (s)", group.seconds, _seconds),
+        _ratio_row("Self-consistency", group.consistency),
+        *per_severity,
         "",
     ]
-    return "\n".join(lines)
+
+
+def _total_row(metric: str, value: int) -> str:
+    return f"| {metric} | {value} | | | | |"
+
+
+def _spread_row(
+    metric: str, spread: stats.Distribution | None, note: Callable[[float], str]
+) -> str:
+    if spread is None:
+        return f"| {metric} | | — | — | — | — |"
+    return (
+        f"| {metric} | | {note(spread.mean)} | {note(spread.p50)} | "
+        f"{note(spread.p90)} | {note(spread.max)} |"
+    )
+
+
+def _ratio_row(metric: str, value: float | None) -> str:
+    return f"| {metric} | {'—' if value is None else f'{value:.2f}'} | | | | |"
+
+
+def _usage_row(usage: Usage | None) -> dict[str, int]:
+    return {
+        "prompt_tokens": usage.prompt_tokens if usage else 0,
+        "completion_tokens": usage.completion_tokens if usage else 0,
+        "cached_tokens": usage.cached_tokens if usage else 0,
+    }
+
+
+def _tokens(value: float) -> str:
+    return str(round(value))
+
+
+def _seconds(value: float) -> str:
+    return f"{value:.1f}"
