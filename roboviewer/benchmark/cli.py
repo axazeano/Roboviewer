@@ -20,7 +20,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
+from typing import IO, Any
 
 from ..cli import exit_codes as roboviewer_exit
 from ..cli import main as review_main
@@ -118,7 +123,10 @@ def build_parser() -> argparse.ArgumentParser:
     run = commands.add_parser(
         "run",
         help="review every entry with roboviewer, flags passed through",
-        usage="benchmark run [--entries IDS] [--repeats N] [--refresh] [roboviewer options]",
+        usage=(
+            "benchmark run [--entries IDS] [--repeats N] [--parallel N] [--refresh] "
+            "[roboviewer options]"
+        ),
         allow_abbrev=False,
         description=(
             "One roboviewer run per entry, in its clone, between its two commits, with "
@@ -136,6 +144,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Review every entry this many times (default 1). The summary then reports "
             "statistics over the repeats: tokens, time, self-consistency"
+        ),
+    )
+    run.add_argument(
+        "--parallel",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Review this many entries at once (default 1). Repeats of one entry stay "
+            "sequential; each review still paces itself, so keep this modest"
         ),
     )
 
@@ -304,6 +322,8 @@ def _add(args: argparse.Namespace, store: Store) -> int:
 
 
 def _run(args: argparse.Namespace, store: Store, review_args: list[str]) -> int:
+    if args.parallel < 1:
+        raise ValueError(f"--parallel {args.parallel}: at least one entry reviews at a time")
     entries = items.select(items.load_items(store.items), args.entries)
     flags = _review_flags(review_args)
     benchmark = running.start(store, flags, repeats=args.repeats)
@@ -313,14 +333,44 @@ def _run(args: argparse.Namespace, store: Store, review_args: list[str]) -> int:
     if flags:
         print(f"  roboviewer {' '.join(flags)}")
 
-    for entry in entries:
-        if not _review_repeats(benchmark, entry, store, github, args):
-            break
+    if args.parallel > 1:
+        _review_in_parallel(benchmark, entries, store, github, args)
+    else:
+        for entry in entries:
+            if not _review_repeats(benchmark, entry, store, github, args):
+                break
 
     summary = running.write_summary(benchmark)
     _run_summary(benchmark, summary)
     expected = len(entries) * benchmark.repeats
     return OK if benchmark.ok and len(benchmark.outcomes) == expected else INCOMPLETE
+
+
+def _review_in_parallel(
+    benchmark: running.Benchmark,
+    entries: list[Entry],
+    store: Store,
+    github: GitHub,
+    args: argparse.Namespace,
+) -> None:
+    """At most `--parallel` entries at once, each worker walking one entry's
+    repeats in order — so run directories and the `latest` link inside an
+    entry's folder are never raced. A stop — a rate limit, a tool that cannot
+    start — lets running reviews finish and starts no new entry. Every line a
+    worker prints is prefixed with its entry id, or the streams would be
+    unreadable."""
+    stop = threading.Event()
+
+    def review(entry: Entry) -> None:
+        if stop.is_set():
+            return
+        _prefix_current_thread(f"{entry.id:<24}| ")
+        if not _review_repeats(benchmark, entry, store, github, args, stop=stop):
+            stop.set()
+
+    with _prefixed_output(), ThreadPoolExecutor(max_workers=args.parallel) as pool:
+        for _ in pool.map(review, entries):
+            pass
 
 
 def _review_repeats(
@@ -329,10 +379,15 @@ def _review_repeats(
     store: Store,
     github: GitHub,
     args: argparse.Namespace,
+    stop: threading.Event | None = None,
 ) -> bool:
     """Every attempt of one entry. False when the whole run must stop — a rate
-    limit, or a tool that could not start and would refuse every entry alike."""
+    limit, or a tool that could not start and would refuse every entry alike.
+    `stop` is that signal arriving from another worker: no further attempt
+    starts once it is set."""
     for attempt in range(1, benchmark.repeats + 1):
+        if stop is not None and stop.is_set():
+            return False
         counter = f"  {attempt}/{benchmark.repeats}" if benchmark.repeats > 1 else ""
         print(f"── {entry.id}{counter}  {entry.url}")
         refresh = args.refresh and attempt == 1
@@ -364,8 +419,9 @@ def _review_repeats(
                 file=sys.stderr,
             )
             return False
-        if outcome.status == "not_fetched":
-            # The other attempts would be refused the same clone the same way
+        if outcome.status == "not_fetched" or outcome.crashed:
+            # The other attempts would be refused the same clone, or crash on
+            # the same review, the same way
             return True
     return True
 
@@ -502,6 +558,67 @@ def _fetch_summary(results: list[Result], store: Store) -> None:
             f"Review one: roboviewer {example.entry.base[:12]} {example.entry.head[:12]} "
             f"-C {store.repo_dir(example.entry)}"
         )
+
+
+@contextmanager
+def _prefixed_output() -> Iterator[None]:
+    """stdout and stderr wrapped so each worker thread's lines carry its entry
+    prefix; a thread that set none — the main one — writes through unchanged."""
+    out, err = _PrefixedStream(sys.stdout), _PrefixedStream(sys.stderr)
+    sys.stdout, sys.stderr = out, err
+    try:
+        yield
+    finally:
+        sys.stdout, sys.stderr = out.stream, err.stream
+
+
+def _prefix_current_thread(prefix: str) -> None:
+    """Only effective under `_prefixed_output`; harmless anywhere else."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, _PrefixedStream):
+            stream.set_prefix(prefix)
+
+
+class _PrefixedStream:
+    """Per-thread line prefixes over one real stream.
+
+    Lines are buffered per thread until their newline and written whole under
+    a lock: `print` issues the text and the newline as two writes, and without
+    the buffering two workers' halves would splice mid-line.
+    """
+
+    def __init__(self, stream: IO[str]) -> None:
+        self.stream = stream
+        self._local = threading.local()
+        self._write_lock = threading.Lock()
+
+    def set_prefix(self, prefix: str) -> None:
+        self._local.prefix = prefix
+
+    def write(self, text: str) -> int:
+        prefix = getattr(self._local, "prefix", "")
+        if not prefix:
+            with self._write_lock:
+                return self.stream.write(text)
+        pending = getattr(self._local, "pending", "") + text
+        complete, newline, rest = pending.rpartition("\n")
+        if newline:
+            whole = complete + newline
+            with self._write_lock:
+                self.stream.write("".join(prefix + line for line in whole.splitlines(True)))
+        self._local.pending = rest
+        return len(text)
+
+    def flush(self) -> None:
+        pending = getattr(self._local, "pending", "")
+        if pending:
+            with self._write_lock:
+                self.stream.write(getattr(self._local, "prefix", "") + pending)
+            self._local.pending = ""
+        self.stream.flush()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.stream, name)
 
 
 def _say_cloning(entry: Entry) -> None:

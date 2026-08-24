@@ -2,7 +2,9 @@
 
 One `benchmark run` is one directory under `<root>/runs/`, stamped with the
 time it started: the tool's own output for each entry underneath it, and a
-summary beside them that says what each review came to. The reviews go through
+summary beside them that says what each review came to. The summary is
+rewritten after every review, so at any moment it covers everything finished
+so far — a run killed halfway still leaves its tables behind. The reviews go through
 `roboviewer.cli.main` with the flags passed through unchanged, the way
 `measure.trace review` does it — so there is no second command line to keep in
 step, and a flag that works on the tool works here.
@@ -10,7 +12,9 @@ step, and a flag that works on the tool works here.
 An entry that is not on disk yet is fetched first; one that cannot be is
 reported and skipped, and the others still run. The tool's exit code per entry
 is kept as it was: 0 and 1 are a review that finished, anything else is one
-that did not.
+that did not. A tool that raises instead of exiting is that one entry's
+failure too — recorded with -1 for the exit code it never gave, and the run
+moves on.
 
 A run can review every entry several times — `repeats` — and then the summary
 carries statistics over the repeats, computed in `stats`: tokens, time, and how
@@ -20,6 +24,7 @@ much the repeats agree with each other.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -75,6 +80,11 @@ class Outcome:
     def ok(self) -> bool:
         return self.status == "reviewed"
 
+    @property
+    def crashed(self) -> bool:
+        """The tool raised instead of exiting — the same review would raise again."""
+        return self.status == "stopped" and self.code < 0
+
 
 @dataclass
 class Benchmark:
@@ -84,6 +94,8 @@ class Benchmark:
     flags: list[str]
     repeats: int = 1
     outcomes: list[Outcome] = field(default_factory=list)
+    # Guards the outcomes and the summary files when entries run in parallel
+    lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
     def ok(self) -> bool:
@@ -117,13 +129,17 @@ def review_entry(
     review: Review,
 ) -> Outcome:
     """Fetch the entry if it is not there, review it, and record the outcome.
-    Reviewing the same entry again is the next attempt of it.
+    Reviewing the same entry again is the next attempt of it. Every recorded
+    outcome rewrites the summary, so an interrupted run keeps what it finished.
+    A tool that raises instead of exiting is recorded the same way a bad exit
+    code is, so one entry's crash does not take the rest of the run with it.
 
     Raises `RateLimited` from the fetch, which is the caller's signal to stop
     asking rather than to fail every remaining entry the same way.
     """
     started = time.monotonic()
-    attempt = 1 + sum(1 for outcome in benchmark.outcomes if outcome.entry.id == entry.id)
+    with benchmark.lock:
+        attempt = 1 + sum(1 for outcome in benchmark.outcomes if outcome.entry.id == entry.id)
     if refresh or not store.is_built(entry):
         fetched = fetching.fetch(entry, store, github, refresh=refresh)
         if not fetched.ok:
@@ -135,27 +151,33 @@ def review_entry(
                 detail=fetched.detail,
                 attempt=attempt,
             )
-            benchmark.outcomes.append(outcome)
+            _record(benchmark, outcome)
             return outcome
 
     argv = [entry.base, entry.head, "-C", str(store.repo_dir(entry))]
     if not _names_output(benchmark.flags):
-        argv += ["-o", str(benchmark.directory)]
+        # Absolute, or the tool resolves it against the clone -C points it at
+        argv += ["-o", str(benchmark.directory.absolute())]
     argv += benchmark.flags
 
     watcher = _Collector()
-    code = review(argv, watcher)
+    try:
+        code = review(argv, watcher)
+        detail = "" if code in (0, 1) else f"roboviewer exited with {code}"
+    except Exception as exc:  # noqa: BLE001 — one entry's crash, not the run's
+        code = -1
+        detail = f"roboviewer raised {type(exc).__name__}: {exc}"
     outcome = Outcome(
         entry=entry,
         status="reviewed" if code in (0, 1) else "stopped",
         code=code,
         seconds=time.monotonic() - started,
-        detail="" if code in (0, 1) else f"roboviewer exited with {code}",
+        detail=detail,
         run=watcher.run,
         directory=watcher.directory,
         attempt=attempt,
     )
-    benchmark.outcomes.append(outcome)
+    _record(benchmark, outcome)
     return outcome
 
 
@@ -177,6 +199,13 @@ def write_summary(benchmark: Benchmark) -> Path:
     )
     (benchmark.directory / SUMMARY_PAGE).write_text(_page(benchmark), encoding="utf-8")
     return benchmark.directory / SUMMARY
+
+
+def _record(benchmark: Benchmark, outcome: Outcome) -> None:
+    """One outcome in, summary rewritten — atomically against parallel entries."""
+    with benchmark.lock:
+        benchmark.outcomes.append(outcome)
+        write_summary(benchmark)
 
 
 def _fresh(runs: Path, stamp: str) -> Path:

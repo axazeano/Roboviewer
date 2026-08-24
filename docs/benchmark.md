@@ -71,6 +71,7 @@ benchmark run                       # every entry, the tool's defaults
 benchmark run --no-judge -v         # the flags are roboviewer's own
 benchmark run --entries cli-13946   # one entry
 benchmark run --repeats 5           # every entry five times, with statistics
+benchmark run --parallel 3          # three entries at once
 benchmark run --refresh             # fetch again first
 ```
 
@@ -99,12 +100,23 @@ One run is one directory under `benchmarks/runs/`, named for the minute it
 started. The tool's own output for each entry is underneath — `run.json`,
 `findings.json`, the reports — and beside them `summary.json`, one row per
 review: status, exit code, run id, model, findings, confirmed, out of scope,
-tokens, seconds, the directory; and `summary.md`, the same as a table. The
-summary is what two runs are compared on; the run directories are the sizable
-raw material and are not meant for git.
+tokens, seconds, the directory; and `summary.md`, the same as a table. Both
+are rewritten after every finished review, so a run interrupted halfway keeps
+the summary of everything it completed — and a running one can be watched by
+opening `summary.md`. The summary is what two runs are compared on; the run
+directories are the sizable raw material and are not meant for git.
 
 The command exits 0 when every entry was reviewed — the tool's own 0 and 1
 both count as a finished review — and 1 otherwise; 2 when it could not start.
+
+`--parallel N` reviews that many entries at once. It is entries that run in
+parallel, never the repeats of one entry — a worker walks its entry's repeats
+in order, so the run directories inside an entry's folder are never raced —
+and every line a worker prints is prefixed with its entry id. Each review
+still paces itself against the gateway independently, so keep N modest: a few
+entries in flight sit comfortably inside the provider's per-minute ceilings, a
+dozen would discover them. A stop — a rate limit, a tool that cannot start —
+lets the running reviews finish and starts no new entry.
 
 ## Repeats and statistics
 

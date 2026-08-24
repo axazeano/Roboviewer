@@ -21,10 +21,14 @@ class GitError(RuntimeError):
 
 def git(root: Path, *args: str, ok: tuple[int, ...] = (0,), timeout: float | None = None) -> str:
     """Runs `git <args>` in `root` and returns stdout. Any exit code outside
-    `ok` is a `GitError` carrying git's own words."""
-    proc = subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, text=True, timeout=timeout
-    )
+    `ok` is a `GitError` carrying git's own words. A command that outlives
+    `timeout` is a `GitError` too — one error type, whatever went wrong."""
+    try:
+        proc = subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise GitError(f"git {' '.join(args[:2])} … gave no answer in {timeout:g}s") from exc
     if proc.returncode not in ok:
         raise GitError(f"git {' '.join(args)} → {proc.returncode}: {proc.stderr.strip()}")
     return proc.stdout

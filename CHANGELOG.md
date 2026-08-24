@@ -32,6 +32,21 @@ Nothing a review does, writes or prints changed.
   mean and percentiles of tokens and time per review, and the self-consistency
   of the repeats, overall and per severity, as mean pairwise Jaccard over the
   confirmed findings keyed by file and line.
+- **`benchmark run --parallel N`** reviews N entries at once — repeats of one
+  entry stay sequential, each worker's output lines carry its entry id, the
+  summary keeps updating after every finished review, and a stop lets running
+  reviews finish without starting new entries. A benchmark bounded by the
+  model's generation speed finishes close to N times sooner.
+- **Reports land under the run, not inside the clone.** With the default
+  relative benchmarks root, `benchmark run` handed the tool a relative output
+  path, which the tool resolves against the repository under review — the
+  entry's clone. The path is passed absolute now, so reports go to
+  `runs/<stamp>/<id>/<run_id>/` as documented instead of vanishing with the
+  cache.
+- **The summary survives an interruption**: `summary.json` and `summary.md`
+  are rewritten after every finished review rather than once at the end, so a
+  benchmark run killed halfway keeps its tables over what it completed, and a
+  running one can be watched by opening the page.
 - **The references**: `measure/truth.toml` is now
   `benchmarks/references/ios-4091.toml`, one `[[finding]]` per checked claim
   with a `verdict` — `expected` for a defect the review has to find, `false` for
