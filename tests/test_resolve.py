@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from roboviewer.repo.git import GitError
+from roboviewer.repo.git import git as run_git
 from roboviewer.repo.references import MAX_SYMBOLS, ReferenceReport, check
 from roboviewer.review.prompts import references_block
 
@@ -187,6 +189,38 @@ def test_without_a_manifest_nothing_is_claimed_about_membership(repo) -> None:
     file as unregistered there would be pure noise."""
     report = repo({"app/Anything.swift": "let a = 1\n"})
     assert not [v for n, _, v, _ in report.resource_misses if n == "build-membership"]
+
+
+# -------------------------------------------------------------------- timeouts
+
+
+def test_a_timeout_is_the_wrappers_own_error(tmp_path: Path, monkeypatch) -> None:
+    """`git grep` over a huge tree can outlive its timeout. That is the wrapper's
+    one error type, not a subprocess exception nobody upstream catches."""
+    def hang(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
+
+    monkeypatch.setattr(subprocess, "run", hang)
+    with pytest.raises(GitError, match="no answer in 120s"):
+        run_git(tmp_path, "grep", "-e", "x", timeout=120)
+
+
+def test_a_pass_that_times_out_reports_itself_instead_of_crashing(repo, monkeypatch) -> None:
+    """The crash this reproduces: a batched grep timing out on a huge repository
+    took down the whole run. A timeout is a failed pass — the report says so and
+    the review goes on without reference answers."""
+    real_run = subprocess.run
+
+    def run(cmd, *args, **kwargs):
+        if "grep" in cmd:
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    report = repo({"app/main.swift": "func run() {\n    helper.neverFound()\n}\n"})
+    assert report.error
+    assert report.empty
+    assert references_block(report) == ""
 
 
 # ------------------------------------------------------------------- rendering
