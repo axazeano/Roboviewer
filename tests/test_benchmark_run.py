@@ -9,6 +9,7 @@ stop the others, and that the summary says what each review came to.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -27,20 +28,26 @@ from .test_benchmark_fetch import (
     entry_for,
     make_origin,
     pointing_at,
+    rate_limited,
     transport_for,
 )
 
 
 class FakeReview:
     """Stands in for `roboviewer.cli.main`: remembers what it was called with
-    and reports a run with two findings, one of them judged away."""
+    and reports a run with two findings, one of them judged away. The first
+    `crash_first` calls raise instead of exiting, the way the real tool once
+    let a timeout escape."""
 
-    def __init__(self, code: int = 0) -> None:
+    def __init__(self, code: int = 0, crash_first: int = 0) -> None:
         self.code = code
+        self.crash_first = crash_first
         self.calls: list[list[str]] = []
 
     def __call__(self, argv: list[str], observer: RunObserver) -> int:
         self.calls.append(list(argv))
+        if len(self.calls) <= self.crash_first:
+            raise RuntimeError("the provider timed out")
         root = Path(argv[argv.index("-C") + 1])
         output = Path(argv[argv.index("-o") + 1]) if "-o" in argv else root / ".roboviewer"
         run = ReviewRun(
@@ -177,6 +184,32 @@ def test_a_review_that_did_not_finish_keeps_the_tool_s_exit_code(
     assert outcome.status == "stopped"
     assert outcome.code == 3
     assert "exited with 3" in outcome.detail
+    assert not outcome.crashed, "the tool exited on its own; only a raise is a crash"
+
+
+def test_a_review_that_raises_is_contained_and_does_not_stop_the_rest(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once, an unhandled timeout out of one entry's review killed the whole
+    process and the remaining entries were never reviewed. A raise is that one
+    entry's failure, written into the summary like any other."""
+    pointing_at(origin, monkeypatch)
+    benchmark = running.start(store, [], stamp="stamp")
+    other = entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43")
+
+    first = running.review_entry(
+        benchmark, entry_for(origin), store, anonymous, review=FakeReview(crash_first=1)
+    )
+    second = running.review_entry(benchmark, other, store, anonymous, review=FakeReview())
+
+    assert first.status == "stopped"
+    assert first.crashed
+    assert first.code == -1
+    assert first.detail == "roboviewer raised RuntimeError: the provider timed out"
+    assert second.status == "reviewed"
+    saved = json.loads((store.runs / "stamp" / "summary.json").read_text(encoding="utf-8"))
+    assert [row["status"] for row in saved["entries"]] == ["stopped", "reviewed"]
+    assert not benchmark.ok
 
 
 def test_the_summary_says_what_each_review_came_to(
@@ -476,6 +509,62 @@ def test_an_entry_that_cannot_be_fetched_is_not_asked_again_by_the_repeats(
     assert [row["status"] for row in saved["entries"]] == ["not_fetched"]
 
 
+def test_a_crashing_entry_skips_its_repeats_and_the_next_entry_still_runs(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The same review would raise the same way, so the crashed entry is not
+    asked again — but the crash stays its own, and the next entry gets its
+    full share of attempts."""
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    review = FakeReview(crash_first=1)
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(
+        store,
+        entry_for(origin),
+        entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43"),
+    )
+
+    code = main(["--root", str(store.root), "run", "--repeats", "2"])
+
+    assert code == 1
+    assert len(review.calls) == 3, "the crashed entry is not asked again; the next one is"
+    said = capsys.readouterr()
+    assert "raised RuntimeError" in said.err
+    assert "2 reviewed, 1 not" in said.out
+    [stamp] = list(store.runs.iterdir())
+    saved = json.loads((stamp / "summary.json").read_text(encoding="utf-8"))
+    assert [(row["id"], row["attempt"], row["status"]) for row in saved["entries"]] == [
+        ("sample-42", 1, "stopped"), ("other-43", 1, "reviewed"), ("other-43", 2, "reviewed"),
+    ]
+
+
+def test_a_rate_limit_still_stops_the_whole_run(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A crash is one entry's failure; a rate limit is not — every fetch after
+    it would be refused the same way, so the run stops asking."""
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr("roboviewer.benchmark.github._urllib_transport", rate_limited)
+    review = FakeReview()
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(
+        store,
+        entry_for(origin),
+        entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43"),
+    )
+
+    code = main(["--root", str(store.root), "run"])
+
+    assert code == 1
+    assert review.calls == [], "nothing was reviewed: the first fetch already hit the limit"
+    assert "rate limit reached" in capsys.readouterr().err
+
+
 def test_the_command_refuses_zero_repeats(
     origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -487,6 +576,92 @@ def test_the_command_refuses_zero_repeats(
     assert main(["--root", str(store.root), "run", "--repeats", "0"]) == 2
     assert review.calls == []
     assert "at least once" in capsys.readouterr().err
+
+
+class ThreadAwareReview(FakeReview):
+    """Remembers which thread reviewed which clone, so a test can pin that one
+    entry's repeats never leave their worker."""
+
+    def __init__(self, code: int = 0) -> None:
+        super().__init__(code)
+        self.threads: dict[str, set[int]] = {}
+
+    def __call__(self, argv: list[str], observer) -> int:  # type: ignore[no-untyped-def]
+        clone = Path(argv[argv.index("-C") + 1]).name
+        self.threads.setdefault(clone, set()).add(threading.get_ident())
+        return super().__call__(argv, observer)
+
+
+def test_parallel_reviews_every_entry_and_keeps_an_entry_on_one_worker(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    review = ThreadAwareReview()
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(
+        store,
+        entry_for(origin),
+        entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43"),
+        entry_for(origin, id="third-44", url="https://github.com/owner/repo/pull/44"),
+    )
+
+    code = main(["--root", str(store.root), "run", "--parallel", "2", "--repeats", "2"])
+
+    assert code == 0
+    assert len(review.calls) == 6
+    for clone, threads in review.threads.items():
+        assert len(threads) == 1, f"{clone}: repeats crossed workers"
+    [stamp] = list(store.runs.iterdir())
+    saved = json.loads((stamp / "summary.json").read_text(encoding="utf-8"))
+    assert len(saved["entries"]) == 6
+    by_id: dict[str, list[int]] = {}
+    for row in saved["entries"]:
+        by_id.setdefault(row["id"], []).append(row["attempt"])
+    assert all(sorted(attempts) == [1, 2] for attempts in by_id.values())
+    out = capsys.readouterr().out
+    assert any(line.startswith("sample-42") and "| ──" in line for line in out.splitlines())
+    assert any(line.startswith("third-44") for line in out.splitlines())
+
+
+def test_parallel_below_one_is_refused(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    review = FakeReview()
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(store, entry_for(origin))
+
+    assert main(["--root", str(store.root), "run", "--parallel", "0"]) == 2
+    assert review.calls == []
+    assert "at least one" in capsys.readouterr().err
+
+
+def test_a_setup_failure_stops_a_parallel_run_before_the_queue_drains(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    review = FakeReview(code=2)
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(
+        store,
+        entry_for(origin),
+        entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43"),
+        entry_for(origin, id="third-44", url="https://github.com/owner/repo/pull/44"),
+    )
+
+    code = main(["--root", str(store.root), "run", "--parallel", "2"])
+
+    assert code == 1
+    assert len(review.calls) == 2, "the queued entry must never start"
+    assert "could not start" in capsys.readouterr().err
 
 
 def test_a_repository_flag_is_refused_before_anything_runs(
