@@ -15,11 +15,20 @@ from typing import Any
 
 import httpx
 from openai import APIError, APIStatusError, AsyncOpenAI
+from openai.types.chat.chat_completion import Choice
 
 from ..config import ProviderConfig
 from .request import request_headers
 
 SECRET_HEADERS = ("authorization", "api-key", "x-api-key", "token", "cookie", "secret")
+
+# Reasoning models spend tokens on reasoning_content before any answer or
+# tool_call; a small budget cuts them off at finish_reason=length, which looks
+# exactly like "cannot call tools". 64 was enough to lose every reasoning model.
+MAX_TOKENS = 4096
+
+# Where gateways put the reasoning text on the message, by dialect
+REASONING_FIELDS = ("reasoning_content", "reasoning")
 
 HINTS: dict[int, str] = {
     400: (
@@ -74,6 +83,26 @@ class ProbeResult:
         self.legacy_function_call: str | None = None
         self.finish_reason: str | None = None
         self.content: str = ""
+        self.reasoning: str = ""
+
+    @classmethod
+    def from_choice(cls, choice: Choice) -> ProbeResult:
+        result = cls()
+        message = choice.message
+        result.finish_reason = choice.finish_reason
+        result.content = message.content or ""
+        result.tool_calls = [
+            tc.function.name for tc in (message.tool_calls or []) if tc.type == "function"
+        ]
+        legacy = getattr(message, "function_call", None)
+        if legacy is not None:
+            result.legacy_function_call = getattr(legacy, "name", str(legacy))
+        for field in REASONING_FIELDS:
+            value = getattr(message, field, None)
+            if value:
+                result.reasoning = str(value)
+                break
+        return result
 
     @property
     def ok(self) -> bool:
@@ -85,6 +114,12 @@ class ProbeResult:
         probe = self.content.strip()
         return bool(probe) and ("pong" in probe and ("{" in probe or "<" in probe))
 
+    @property
+    def ran_out_while_reasoning(self) -> bool:
+        """Cut off by max_tokens with the budget spent on reasoning — says nothing
+        about tool calling, unlike an answer the model chose to give as text."""
+        return self.finish_reason == "length" and not self.tool_calls and bool(self.reasoning)
+
     def summary(self) -> str:
         if self.error:
             return f"error — {self.error}"
@@ -92,6 +127,8 @@ class ProbeResult:
             return f"tool_calls: {', '.join(self.tool_calls)}"
         if self.legacy_function_call:
             return f"legacy function_call field: {self.legacy_function_call}"
+        if self.ran_out_while_reasoning:
+            return f"the whole {MAX_TOKENS}-token budget went to reasoning · finish_reason=length"
         text = self.content.strip().replace("\n", " ")[:90] or "(empty)"
         marker = "text that looks like a call" if self.content_looks_like_call else "plain text"
         return f"{marker} · finish_reason={self.finish_reason} · {text}"
@@ -151,7 +188,7 @@ async def probe(provider: ProviderConfig, model: str, *, tools: bool, tool_choic
         "model": model,
         "messages": [{"role": "user", "content": "Call the pong tool with the word ping."
                       if tools else "ping"}],
-        "max_tokens": 64,
+        "max_tokens": MAX_TOKENS,
         "extra_headers": request_headers(provider),
     }
     if tools:
@@ -176,15 +213,7 @@ async def probe(provider: ProviderConfig, model: str, *, tools: bool, tool_choic
     finally:
         await client.close()
 
-    choice = completion.choices[0]
-    message = choice.message
-    result.finish_reason = choice.finish_reason
-    result.content = message.content or ""
-    result.tool_calls = [tc.function.name for tc in (message.tool_calls or [])]
-    legacy = getattr(message, "function_call", None)
-    if legacy is not None:
-        result.legacy_function_call = getattr(legacy, "name", str(legacy))
-    return result
+    return ProbeResult.from_choice(completion.choices[0])
 
 
 def mask_headers(headers: dict[str, str]) -> dict[str, str]:

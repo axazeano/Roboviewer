@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 
 from ..config import ProviderConfig, provider_config_path
-from ..provider.probe import TOOL_MODES, ProbeResult, Wire, mask_headers, probe_all
+from ..provider.probe import MAX_TOKENS, TOOL_MODES, ProbeResult, Wire, mask_headers, probe_all
 
 
 def check_provider(provider: ProviderConfig, model: str, source: str | None = None) -> int:
@@ -113,8 +113,16 @@ def _print_mode_table(modes: dict[str, ProbeResult]) -> None:
 
 
 def _explain_no_tool_calls(modes: dict[str, ProbeResult]) -> None:
-    """Four ways to answer without calling a tool, and only the wording tells
-    them apart — which is the whole reason for probing before a run."""
+    """Ways to end up without a tool call, and only the wording tells them
+    apart — which is the whole reason for probing before a run. One of them,
+    running out of tokens mid-reasoning, is not a verdict on the model at all."""
+    if any(modes[k].ran_out_while_reasoning for k in modes):
+        print("Verdict: inconclusive — the token budget ran out while the model was reasoning.")
+        print(f"  The model reasons before answering, and {MAX_TOKENS} tokens were not enough")
+        print("  to finish. That is a budget problem, not proof the model cannot call tools.")
+        print("  What to do: send the same request by hand with a larger max_tokens; if a")
+        print("  tool_call comes back, the model is fine and only this probe fell short.")
+        return
     print("Verdict: the gateway returned no real tool_call at all.")
     if any(modes[k].legacy_function_call for k in modes):
         print("  A legacy function_call field arrived instead of tool_calls — the gateway")
