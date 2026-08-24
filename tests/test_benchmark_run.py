@@ -107,6 +107,25 @@ def test_each_entry_is_reviewed_in_its_clone_between_its_two_commits(
     assert store.is_built(entry), "fetched on the way, because it was not there"
 
 
+def test_a_relative_root_still_sends_the_tool_an_absolute_output_path(
+    origin: Origin, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The tool resolves a relative -o against the repository it reviews — the
+    entry's clone — which would bury every report inside the cache."""
+    pointing_at(origin, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    store = Store(Path("benchmarks"))
+    review = FakeReview()
+    benchmark = running.start(store, [], stamp="stamp")
+
+    running.review_entry(benchmark, entry_for(origin), store, anonymous, review=review)
+
+    [argv] = review.calls
+    sent = Path(argv[argv.index("-o") + 1])
+    assert sent.is_absolute()
+    assert sent == (tmp_path / "benchmarks" / "runs" / "stamp").absolute()
+
+
 def test_an_output_flag_of_the_tool_s_own_is_respected(
     origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
 ) -> None:
