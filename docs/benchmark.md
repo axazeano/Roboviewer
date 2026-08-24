@@ -99,9 +99,11 @@ One run is one directory under `benchmarks/runs/`, named for the minute it
 started. The tool's own output for each entry is underneath — `run.json`,
 `findings.json`, the reports — and beside them `summary.json`, one row per
 review: status, exit code, run id, model, findings, confirmed, out of scope,
-tokens, seconds, the directory; and `summary.md`, the same as a table. The
-summary is what two runs are compared on; the run directories are the sizable
-raw material and are not meant for git.
+tokens, seconds, the directory; and `summary.md`, the same as a table. Both
+are rewritten after every finished review, so a run interrupted halfway keeps
+the summary of everything it completed — and a running one can be watched by
+opening `summary.md`. The summary is what two runs are compared on; the run
+directories are the sizable raw material and are not meant for git.
 
 The command exits 0 when every entry was reviewed — the tool's own 0 and 1
 both count as a finished review — and 1 otherwise; 2 when it could not start.

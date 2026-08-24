@@ -2,7 +2,9 @@
 
 One `benchmark run` is one directory under `<root>/runs/`, stamped with the
 time it started: the tool's own output for each entry underneath it, and a
-summary beside them that says what each review came to. The reviews go through
+summary beside them that says what each review came to. The summary is
+rewritten after every review, so at any moment it covers everything finished
+so far — a run killed halfway still leaves its tables behind. The reviews go through
 `roboviewer.cli.main` with the flags passed through unchanged, the way
 `measure.trace review` does it — so there is no second command line to keep in
 step, and a flag that works on the tool works here.
@@ -117,7 +119,8 @@ def review_entry(
     review: Review,
 ) -> Outcome:
     """Fetch the entry if it is not there, review it, and record the outcome.
-    Reviewing the same entry again is the next attempt of it.
+    Reviewing the same entry again is the next attempt of it. Every recorded
+    outcome rewrites the summary, so an interrupted run keeps what it finished.
 
     Raises `RateLimited` from the fetch, which is the caller's signal to stop
     asking rather than to fail every remaining entry the same way.
@@ -136,6 +139,7 @@ def review_entry(
                 attempt=attempt,
             )
             benchmark.outcomes.append(outcome)
+            write_summary(benchmark)
             return outcome
 
     argv = [entry.base, entry.head, "-C", str(store.repo_dir(entry))]
@@ -156,6 +160,7 @@ def review_entry(
         attempt=attempt,
     )
     benchmark.outcomes.append(outcome)
+    write_summary(benchmark)
     return outcome
 
 

@@ -182,6 +182,44 @@ def test_the_summary_says_what_each_review_came_to(
     assert "1 of 1 reviewed" in page
 
 
+def test_every_review_rewrites_the_summary(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An interrupted run keeps the summary of everything it finished, because
+    the artifact is updated per review rather than once at the end."""
+    pointing_at(origin, monkeypatch)
+    entry = entry_for(origin)
+    review = FakeReview()
+    benchmark = running.start(store, [], repeats=2, stamp="stamp")
+    summary = store.runs / "stamp" / "summary.json"
+
+    running.review_entry(benchmark, entry, store, anonymous, review=review)
+    after_one = json.loads(summary.read_text(encoding="utf-8"))
+    running.review_entry(benchmark, entry, store, anonymous, review=review)
+    after_two = json.loads(summary.read_text(encoding="utf-8"))
+
+    assert len(after_one["entries"]) == 1
+    assert (store.runs / "stamp" / "summary.md").is_file()
+    assert len(after_two["entries"]) == 2
+    assert after_two["stats"]["run"]["reviews"] == 2
+
+
+def test_a_failed_fetch_also_updates_the_summary(
+    origin: Origin, store: Store, anonymous: GitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pointing_at(origin, monkeypatch)
+    benchmark = running.start(store, [], stamp="stamp")
+
+    running.review_entry(
+        benchmark, entry_for(origin, id="broken-1", head=MISSING_SHA), store, anonymous,
+        review=FakeReview(),
+    )
+
+    saved = json.loads((store.runs / "stamp" / "summary.json").read_text(encoding="utf-8"))
+    [row] = saved["entries"]
+    assert row["status"] == "not_fetched"
+
+
 # ------------------------------------------------------------------ repeats
 
 
