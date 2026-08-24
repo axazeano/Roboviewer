@@ -6,15 +6,17 @@ which of the four ways it is broken, and what to put in the config. The exit
 code is part of that — a script can gate on it.
 
 The probes themselves need a gateway; the verdict does not, so it is tested on
-its own.
+its own. Neither does the header above it — which file the provider came from,
+and where the key was found — so it is pinned here too.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from roboviewer.cli.check_provider import report_tool_modes
-from roboviewer.provider.probe import ProbeResult
+from roboviewer.cli.check_provider import check_provider, report_tool_modes
+from roboviewer.config import ProviderConfig, provider_config_path
+from roboviewer.provider.probe import ProbeResult, Wire
 
 
 def _called() -> ProbeResult:
@@ -133,3 +135,56 @@ def test_every_mode_is_listed_whatever_the_verdict(capsys: pytest.CaptureFixture
     out = capsys.readouterr().out
     for label in ('tool_choice = "auto"', 'tool_choice = "required"', "tool_choice = {function}"):
         assert label in out
+
+
+# ------------------------------------------------------------------ the header
+
+
+async def _failing_probe(
+    provider: ProviderConfig, model: str, wire: Wire
+) -> tuple[ProbeResult, dict[str, ProbeResult]]:
+    plain = ProbeResult()
+    plain.error = "HTTP 401"
+    return plain, {}
+
+
+def test_from_line_names_the_provider_file_when_there_is_one(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """"Which file is this configured in" and "where did the key come from" are
+    two different answers; the header once printed the key's on both lines."""
+    monkeypatch.delenv("ROBOVIEWER_API_KEY", raising=False)
+
+    assert check_provider(ProviderConfig(), "m", source="/etc/roboviewer/provider.toml") == 2
+
+    out = capsys.readouterr().out
+    assert "from           /etc/roboviewer/provider.toml" in out
+    assert "no file — on defaults" not in out
+    assert "key            not found" in out
+
+
+def test_from_line_falls_back_to_the_default_path_with_a_note(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ROBOVIEWER_API_KEY", raising=False)
+
+    assert check_provider(ProviderConfig(), "m", source=None) == 2
+
+    out = capsys.readouterr().out
+    assert f"from           {provider_config_path()} [no file — on defaults]" in out
+
+
+def test_key_line_names_the_key_source_not_the_config_file(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("roboviewer.cli.check_provider.probe_all", _failing_probe)
+
+    code = check_provider(
+        ProviderConfig(api_key="sk-test"), "m", source="/etc/roboviewer/provider.toml"
+    )
+
+    assert code == 1  # the stubbed plain probe fails; the header is what is under test
+    out = capsys.readouterr().out
+    assert "from           /etc/roboviewer/provider.toml" in out
+    assert "key            provider.api_key from the config" in out
+    assert "sk-test" not in out

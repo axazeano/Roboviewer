@@ -141,24 +141,28 @@ class ProviderConfig(BaseModel):
     # stronger mode — it prints the value to use.
     terminal_tool_choice: Literal["forced", "required", "auto"] = "forced"
 
-    def api_key_source(self) -> tuple[str | None, str]:
-        """(key, where it came from).
+    def api_key_origin(self) -> str:
+        """Where the key comes from, as words.
 
-        The source is the whole of what gets printed. Nothing derived from the
+        The origin is the whole of what gets printed. Nothing derived from the
         key itself is — not the ends of it, not a digest, not its length: a
         terminal keeps scrollback, a screenshot outlives the terminal, and a CI
         job keeps its log. "Which file or variable did this come from" is the
         question a 401 actually needs answered.
         """
         if self.api_key:
-            return self.api_key, "provider.api_key from the config"
-        from_env = os.environ.get(self.api_key_env)
-        if from_env:
-            return from_env, f"environment variable {self.api_key_env}"
-        return None, "not found"
+            return "provider.api_key from the config"
+        if os.environ.get(self.api_key_env):
+            return f"environment variable {self.api_key_env}"
+        return "not found"
+
+    def lookup_api_key(self) -> str | None:
+        if self.api_key:
+            return self.api_key
+        return os.environ.get(self.api_key_env) or None
 
     def resolve_api_key(self) -> str:
-        key, _ = self.api_key_source()
+        key = self.lookup_api_key()
         if not key:
             raise RuntimeError(
                 f"No API key found. Set the {self.api_key_env} environment variable "

@@ -206,10 +206,9 @@ def _config_source(cfg: Config) -> None:
 
 
 def _provider(cfg: Config) -> None:
-    _, key_source = cfg.provider.api_key_source()
     print("Provider:")
     print(f"  base_url     {cfg.provider.base_url}")
-    print(f"  key          {key_source}")
+    print(f"  key          {cfg.provider.api_key_origin()}")
     print(f"  pacing       {_pacing(cfg.provider.rate_limits)}")
 
 
