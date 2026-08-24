@@ -26,6 +26,12 @@ Nothing a review does, writes or prints changed.
   candidates on GitHub. The package is `roboviewer.benchmark`, the data lives
   under `benchmarks/` at the repository root: the index and the references
   committed, the clones, comments and runs ignored.
+- **`benchmark run --repeats N`** reviews every entry N times, and the summary
+  reports statistics over the repeats — one table per repository and one for
+  the whole run: runner and judge prompt, completion and cached token totals,
+  mean and percentiles of tokens and time per review, and the self-consistency
+  of the repeats, overall and per severity, as mean pairwise Jaccard over the
+  confirmed findings keyed by file and line.
 - **The references**: `measure/truth.toml` is now
   `benchmarks/references/ios-4091.toml`, one `[[finding]]` per checked claim
   with a `verdict` — `expected` for a defect the review has to find, `false` for

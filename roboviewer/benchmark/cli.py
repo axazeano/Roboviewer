@@ -118,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     run = commands.add_parser(
         "run",
         help="review every entry with roboviewer, flags passed through",
-        usage="benchmark run [--entries IDS] [--refresh] [roboviewer options]",
+        usage="benchmark run [--entries IDS] [--repeats N] [--refresh] [roboviewer options]",
         allow_abbrev=False,
         description=(
             "One roboviewer run per entry, in its clone, between its two commits, with "
@@ -128,6 +128,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     _entries_flags(run)
+    run.add_argument(
+        "--repeats",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Review every entry this many times (default 1). The summary then reports "
+            "statistics over the repeats: tokens, time, self-consistency"
+        ),
+    )
 
     fetch_cmd = commands.add_parser(
         "fetch",
@@ -296,24 +306,52 @@ def _add(args: argparse.Namespace, store: Store) -> int:
 def _run(args: argparse.Namespace, store: Store, review_args: list[str]) -> int:
     entries = items.select(items.load_items(store.items), args.entries)
     flags = _review_flags(review_args)
-    benchmark = running.start(store, flags)
+    benchmark = running.start(store, flags, repeats=args.repeats)
     github = GitHub(token=resolve_token())
-    print(f"▸ {len(entries)} entr(ies) → {benchmark.directory}")
+    times = f" x {benchmark.repeats}" if benchmark.repeats > 1 else ""
+    print(f"▸ {len(entries)} entr(ies){times} → {benchmark.directory}")
     if flags:
         print(f"  roboviewer {' '.join(flags)}")
 
     for entry in entries:
-        print(f"── {entry.id}  {entry.url}")
-        if args.refresh or not store.is_built(entry):
+        if not _review_repeats(benchmark, entry, store, github, args):
+            break
+
+    summary = running.write_summary(benchmark)
+    _run_summary(benchmark, summary)
+    expected = len(entries) * benchmark.repeats
+    return OK if benchmark.ok and len(benchmark.outcomes) == expected else INCOMPLETE
+
+
+def _review_repeats(
+    benchmark: running.Benchmark,
+    entry: Entry,
+    store: Store,
+    github: GitHub,
+    args: argparse.Namespace,
+) -> bool:
+    """Every attempt of one entry. False when the whole run must stop — a rate
+    limit, or a tool that could not start and would refuse every entry alike."""
+    for attempt in range(1, benchmark.repeats + 1):
+        counter = f"  {attempt}/{benchmark.repeats}" if benchmark.repeats > 1 else ""
+        print(f"── {entry.id}{counter}  {entry.url}")
+        refresh = args.refresh and attempt == 1
+        if refresh or not store.is_built(entry):
             _say_cloning(entry)
         try:
             outcome = running.review_entry(
-                benchmark, entry, store, github, refresh=args.refresh, review=review_main
+                benchmark,
+                entry,
+                store,
+                github,
+                # The clone is fetched once; the repeats review the same one
+                refresh=refresh,
+                review=review_main,
             )
         except RateLimited as exc:
             # Every entry still to fetch would be refused the same way
             print(f"✗ {entry.id}: {exc}", file=sys.stderr)
-            break
+            return False
         _outcome_line(outcome)
         if outcome.code == roboviewer_exit.SETUP:
             # Exit 2 is "the tool could not start" — a missing key, a broken
@@ -325,11 +363,11 @@ def _run(args: argparse.Namespace, store: Store, review_args: list[str]) -> int:
                 f"it alone: benchmark run --entries {entry.id}",
                 file=sys.stderr,
             )
-            break
-
-    summary = running.write_summary(benchmark)
-    _run_summary(benchmark, summary)
-    return OK if benchmark.ok and len(benchmark.outcomes) == len(entries) else INCOMPLETE
+            return False
+        if outcome.status == "not_fetched":
+            # The other attempts would be refused the same clone the same way
+            return True
+    return True
 
 
 def _review_flags(remainder: list[str]) -> list[str]:
