@@ -22,6 +22,7 @@ much the repeats agree with each other.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -86,6 +87,8 @@ class Benchmark:
     flags: list[str]
     repeats: int = 1
     outcomes: list[Outcome] = field(default_factory=list)
+    # Guards the outcomes and the summary files when entries run in parallel
+    lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
     def ok(self) -> bool:
@@ -126,7 +129,8 @@ def review_entry(
     asking rather than to fail every remaining entry the same way.
     """
     started = time.monotonic()
-    attempt = 1 + sum(1 for outcome in benchmark.outcomes if outcome.entry.id == entry.id)
+    with benchmark.lock:
+        attempt = 1 + sum(1 for outcome in benchmark.outcomes if outcome.entry.id == entry.id)
     if refresh or not store.is_built(entry):
         fetched = fetching.fetch(entry, store, github, refresh=refresh)
         if not fetched.ok:
@@ -138,8 +142,7 @@ def review_entry(
                 detail=fetched.detail,
                 attempt=attempt,
             )
-            benchmark.outcomes.append(outcome)
-            write_summary(benchmark)
+            _record(benchmark, outcome)
             return outcome
 
     argv = [entry.base, entry.head, "-C", str(store.repo_dir(entry))]
@@ -160,8 +163,7 @@ def review_entry(
         directory=watcher.directory,
         attempt=attempt,
     )
-    benchmark.outcomes.append(outcome)
-    write_summary(benchmark)
+    _record(benchmark, outcome)
     return outcome
 
 
@@ -183,6 +185,13 @@ def write_summary(benchmark: Benchmark) -> Path:
     )
     (benchmark.directory / SUMMARY_PAGE).write_text(_page(benchmark), encoding="utf-8")
     return benchmark.directory / SUMMARY
+
+
+def _record(benchmark: Benchmark, outcome: Outcome) -> None:
+    """One outcome in, summary rewritten — atomically against parallel entries."""
+    with benchmark.lock:
+        benchmark.outcomes.append(outcome)
+        write_summary(benchmark)
 
 
 def _fresh(runs: Path, stamp: str) -> Path:

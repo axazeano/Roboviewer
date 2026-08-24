@@ -9,6 +9,7 @@ stop the others, and that the summary says what each review came to.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -487,6 +488,92 @@ def test_the_command_refuses_zero_repeats(
     assert main(["--root", str(store.root), "run", "--repeats", "0"]) == 2
     assert review.calls == []
     assert "at least once" in capsys.readouterr().err
+
+
+class ThreadAwareReview(FakeReview):
+    """Remembers which thread reviewed which clone, so a test can pin that one
+    entry's repeats never leave their worker."""
+
+    def __init__(self, code: int = 0) -> None:
+        super().__init__(code)
+        self.threads: dict[str, set[int]] = {}
+
+    def __call__(self, argv: list[str], observer) -> int:  # type: ignore[no-untyped-def]
+        clone = Path(argv[argv.index("-C") + 1]).name
+        self.threads.setdefault(clone, set()).add(threading.get_ident())
+        return super().__call__(argv, observer)
+
+
+def test_parallel_reviews_every_entry_and_keeps_an_entry_on_one_worker(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    review = ThreadAwareReview()
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(
+        store,
+        entry_for(origin),
+        entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43"),
+        entry_for(origin, id="third-44", url="https://github.com/owner/repo/pull/44"),
+    )
+
+    code = main(["--root", str(store.root), "run", "--parallel", "2", "--repeats", "2"])
+
+    assert code == 0
+    assert len(review.calls) == 6
+    for clone, threads in review.threads.items():
+        assert len(threads) == 1, f"{clone}: repeats crossed workers"
+    [stamp] = list(store.runs.iterdir())
+    saved = json.loads((stamp / "summary.json").read_text(encoding="utf-8"))
+    assert len(saved["entries"]) == 6
+    by_id: dict[str, list[int]] = {}
+    for row in saved["entries"]:
+        by_id.setdefault(row["id"], []).append(row["attempt"])
+    assert all(sorted(attempts) == [1, 2] for attempts in by_id.values())
+    out = capsys.readouterr().out
+    assert any(line.startswith("sample-42") and "| ──" in line for line in out.splitlines())
+    assert any(line.startswith("third-44") for line in out.splitlines())
+
+
+def test_parallel_below_one_is_refused(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    review = FakeReview()
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(store, entry_for(origin))
+
+    assert main(["--root", str(store.root), "run", "--parallel", "0"]) == 2
+    assert review.calls == []
+    assert "at least one" in capsys.readouterr().err
+
+
+def test_a_setup_failure_stops_a_parallel_run_before_the_queue_drains(
+    origin: Origin, store: Store, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pointing_at(origin, monkeypatch)
+    monkeypatch.setattr(
+        "roboviewer.benchmark.github._urllib_transport", transport_for(REST_COMMENTS)
+    )
+    review = FakeReview(code=2)
+    monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
+    index_with(
+        store,
+        entry_for(origin),
+        entry_for(origin, id="other-43", url="https://github.com/owner/repo/pull/43"),
+        entry_for(origin, id="third-44", url="https://github.com/owner/repo/pull/44"),
+    )
+
+    code = main(["--root", str(store.root), "run", "--parallel", "2"])
+
+    assert code == 1
+    assert len(review.calls) == 2, "the queued entry must never start"
+    assert "could not start" in capsys.readouterr().err
 
 
 def test_a_repository_flag_is_refused_before_anything_runs(
