@@ -32,6 +32,10 @@ Nothing a review does, writes or prints changed.
   mean and percentiles of tokens and time per review, and the self-consistency
   of the repeats, overall and per severity, as mean pairwise Jaccard over the
   confirmed findings keyed by file and line.
+- **The summary survives an interruption**: `summary.json` and `summary.md`
+  are rewritten after every finished review rather than once at the end, so a
+  benchmark run killed halfway keeps its tables over what it completed, and a
+  running one can be watched by opening the page.
 - **The references**: `measure/truth.toml` is now
   `benchmarks/references/ios-4091.toml`, one `[[finding]]` per checked claim
   with a `verdict` — `expected` for a defect the review has to find, `false` for
