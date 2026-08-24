@@ -17,8 +17,7 @@ def check_provider(provider: ProviderConfig, model: str, source: str | None = No
     """The model is passed in rather than read off the provider: reaching the
     gateway and choosing what to ask it are two settings now, and the probe
     needs one name out of the second."""
-    # origin is a description of where the key was found, never the key itself
-    key, origin = provider.api_key_source()
+    key = provider.lookup_api_key()
 
     print("Provider")
     if source:
@@ -27,7 +26,7 @@ def check_provider(provider: ProviderConfig, model: str, source: str | None = No
         print(f"  from           {provider_config_path()} [no file — on defaults]")
     print(f"  base_url       {provider.base_url}")
     print(f"  model          {model}")
-    print(f"  key            {origin}")
+    print(f"  key            {provider.api_key_origin()}")
     print(f"  auth           {provider.auth_header}: "
           f"{(provider.auth_scheme + ' ') if provider.auth_scheme else ''}<key>")
     print(f"  submission     terminal_tool_choice = \"{provider.terminal_tool_choice}\"")
