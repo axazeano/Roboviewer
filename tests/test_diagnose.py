@@ -30,6 +30,13 @@ def _answered(content: str, finish_reason: str = "stop") -> ProbeResult:
     return result
 
 
+def _reasoning_cutoff() -> ProbeResult:
+    result = ProbeResult()
+    result.finish_reason = "length"
+    result.reasoning = "First, the user wants the pong tool called, so I should"
+    return result
+
+
 def _modes(**by_key: ProbeResult) -> dict[str, ProbeResult]:
     return {key: by_key.get(key, _answered("pong")) for key in ("auto", "required", "forced")}
 
@@ -64,6 +71,22 @@ def test_a_call_retold_as_text_is_told_apart_from_silence(
     in the text, which reads like a clean run."""
     assert report_tool_modes(_modes(auto=_answered('{"text": "pong"}'))) == 1
     assert "retells it in words" in capsys.readouterr().out
+
+
+def test_running_out_of_tokens_mid_reasoning_is_not_blamed_on_the_model(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A reasoning model that spent the whole budget thinking told us nothing.
+    Calling that "cannot do tool calling" is the false negative this guards."""
+    cutoff = _reasoning_cutoff
+    assert report_tool_modes(_modes(auto=cutoff(), required=cutoff(), forced=cutoff())) == 1
+
+    out = capsys.readouterr().out
+    assert "ran out while the model was reasoning" in out
+    assert "not proof the model cannot call tools" in out
+    assert "budget went to reasoning" in out  # the mode table names it too
+    assert "no real tool_call at all" not in out
+    assert "another gateway" not in out
 
 
 # ------------------------------------------------------------------ partly works
