@@ -12,10 +12,17 @@ answer it.
 from __future__ import annotations
 
 import io
+import os
+import pty
 import re
 import stat
+import termios
+import threading
 import tomllib
+from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 import pytest
 
@@ -28,6 +35,12 @@ from roboviewer.config.example import EXAMPLES_DIR
 # The interview, in order, when every answer is Enter. Named so a test that adds
 # an answer says which question it is answering.
 ALL_DEFAULTS = [""] * 11
+
+# What a terminal sends for each of them
+UP, DOWN, SPACE, ENTER = b"\x1b[A", b"\x1b[B", b" ", b"\r"
+
+# What the menu painted, per terminal, filled in by the thread reading it
+PAINTED: dict[int, list[bytes]] = {}
 
 
 @pytest.fixture(autouse=True)
@@ -270,6 +283,126 @@ def test_a_stdin_that_cannot_answer_is_turned_away_rather_than_waited_on(
     assert not any(path.exists() for path in written(isolated_home))
 
 
+# ------------------------------------------------------------------ the arrows
+
+
+@dataclass
+class Terminal:
+    """A real terminal to answer on, since the arrows need one."""
+
+    master: int
+    reader: TextIO
+    writer: TextIO
+
+    def press(self, keys: bytes) -> None:
+        os.write(self.master, keys)
+
+    def asking(self) -> Questions:
+        return Questions(stdin=self.reader, stdout=self.writer)
+
+
+@pytest.fixture
+def terminal(monkeypatch: pytest.MonkeyPatch) -> Iterator[Terminal]:
+    """What the menu paints is read off continuously rather than at the end: a
+    terminal nobody reads stops taking writes, and the test would hang inside a
+    repaint instead of failing."""
+    monkeypatch.setenv("TERM", "xterm")
+    master, slave = pty.openpty()
+    # Two handles rather than one: a pty is not seekable, so it cannot be opened
+    # for reading and writing at once.
+    reader = os.fdopen(slave, "r", buffering=1)
+    writer = os.fdopen(os.dup(slave), "w", buffering=1)
+    drain = threading.Thread(target=_drain, args=(master,), daemon=True)
+    drain.start()
+
+    yield Terminal(master, reader, writer)
+
+    writer.close()
+    reader.close()
+    os.close(master)
+    drain.join(timeout=1)
+
+
+def test_the_arrows_move_the_cursor_and_enter_takes_what_is_under_it(terminal: Terminal) -> None:
+    terminal.press(DOWN + ENTER)
+
+    chosen = terminal.asking().choice("Pick", [Option("a", "first"), Option("b", "second")])
+
+    assert chosen == "b"
+
+
+def test_the_cursor_wraps_rather_than_sticking_at_the_top(terminal: Terminal) -> None:
+    """Up from the first option is the last one; a cursor that stops dead reads
+    as a question that is broken."""
+    terminal.press(UP + ENTER)
+
+    chosen = terminal.asking().choice(
+        "Pick", [Option("a", "first"), Option("b", "second"), Option("c", "third")]
+    )
+
+    assert chosen == "c"
+
+
+def test_space_marks_and_unmarks_on_a_list_that_takes_several(terminal: Terminal) -> None:
+    terminal.press(DOWN + SPACE + ENTER)  # md is marked by default; add html
+
+    picked = terminal.asking().several(
+        "Reports",
+        [Option("md", "md"), Option("html", "html"), Option("sarif", "sarif")],
+        default=["md"],
+    )
+
+    assert picked == ["md", "html"]
+
+
+def test_what_stays_on_the_screen_is_the_answer_rather_than_the_list(terminal: Terminal) -> None:
+    """The list is scaffolding for one question; eleven of them left behind
+    would be the whole interview twice over."""
+    terminal.press(DOWN + ENTER)
+
+    terminal.asking().choice("Pick", [Option("a", "first"), Option("b", "second")])
+    terminal.writer.flush()
+
+    assert "Pick: second" in _painted(terminal.master)
+
+
+def test_escape_on_its_own_ends_the_interview(terminal: Terminal) -> None:
+    """An arrow is Escape and two more characters, so a lone Escape can only be
+    told apart by nothing following it."""
+    terminal.press(b"\x1b")
+
+    with pytest.raises(Cancelled):
+        terminal.asking().choice("Pick", [Option("a", "first")])
+
+
+def test_the_terminal_is_handed_back_as_it_was_even_when_no_answer_comes(
+    terminal: Terminal,
+) -> None:
+    """Raw mode outlives the process if it is not restored: the person is left
+    at a shell that no longer echoes what they type."""
+    before = _modes(terminal.reader.fileno())
+    terminal.press(b"\x1b")
+
+    with pytest.raises(Cancelled):
+        terminal.asking().choice("Pick", [Option("a", "first")])
+
+    after = _modes(terminal.reader.fileno())
+    assert after == before
+    assert after[3] & termios.ECHO and after[3] & termios.ICANON
+
+
+def test_without_a_terminal_the_same_question_is_numbered_and_typed() -> None:
+    """A pipe, a runner, `ssh -T`, or the scripted interviews above."""
+    out = io.StringIO()
+
+    chosen = Questions(stdin=io.StringIO("2\n"), stdout=out).choice(
+        "Pick", [Option("a", "first"), Option("b", "second")]
+    )
+
+    assert chosen == "b"
+    assert "1) first" in out.getvalue()
+
+
 # ------------------------------------------------------------------ one question at a time
 
 
@@ -299,6 +432,31 @@ def test_none_of_them_is_an_answer_the_default_cannot_express() -> None:
     questions = Questions(stdin=io.StringIO("-\n"), stdout=io.StringIO())
 
     assert questions.several("Which", [Option("md", "md")], default=["md"]) == []
+
+
+def _modes(descriptor: int) -> list[object]:
+    """The terminal's settings, without the kernel's own PENDIN bit: it says
+    input happened to be waiting at the moment of the switch, which is a fact
+    about this test's timing rather than about what was restored."""
+    modes = termios.tcgetattr(descriptor)
+    modes[3] = int(modes[3]) & ~termios.PENDIN
+    return list(modes)
+
+
+def _drain(master: int) -> None:
+    """Everything the menu paints, kept where a test can look at it."""
+    while True:
+        try:
+            chunk = os.read(master, 4096)
+        except OSError:
+            return
+        if not chunk:
+            return
+        PAINTED.setdefault(master, []).append(chunk)
+
+
+def _painted(master: int) -> str:
+    return b"".join(PAINTED.get(master, [])).decode(errors="replace")
 
 
 def _documented_stacks() -> dict[str, list[str]]:

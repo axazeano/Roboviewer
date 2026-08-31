@@ -41,7 +41,13 @@ It asks for the gateway's address and how it wants the key, the model, whether
 the judge gets a stronger one, the language findings are written in, which
 reports to write, whether a CI job should go red, and which stacks' generated
 files to keep out of a review. Every question has a default, and each file it
-writes is the annotated example with the answers set into it. An existing file
+writes is the annotated example with the answers set into it.
+
+Lists are answered with the arrows: `↑`/`↓` move, `space` marks an entry where
+several are allowed, `Enter` takes what is under the cursor, and `Escape` stops
+the interview. Without a terminal to draw on — a pipe, `ssh -T`, a `TERM` that
+cannot move a cursor, Windows — the same lists are numbered and the number is
+typed instead. An existing file
 is never overwritten without being asked, the key stays in an environment
 variable unless you ask for it to be written down (mode `600` when you do), and
 at the end it offers to run `check-provider` against what it just wrote. It is a

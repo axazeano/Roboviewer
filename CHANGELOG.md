@@ -29,7 +29,11 @@ writes or prints changed.
   An existing file is never overwritten without being asked, the key stays in an
   environment variable unless writing it down is chosen explicitly (mode `600`
   when it is), and the last question offers the `check-provider` probe against
-  what was just written. A stdin that cannot answer is refused with exit 2
+  what was just written. Lists are answered with the arrows — `space` marks
+  where several are allowed, `Escape` stops — and the answer replaces the list
+  on the screen; without a terminal to draw on, the same lists are numbered and
+  typed. No dependency comes with it: `termios` is in the standard library, and
+  where it is not, the numbered form is the whole of what changes. A stdin that cannot answer is refused with exit 2
   instead of hanging. The two example files moved into the package, at
   `roboviewer/config/examples/`, since the wizard writes them and they now ship
   in the wheel.
