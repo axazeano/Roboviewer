@@ -14,7 +14,6 @@ from __future__ import annotations
 import io
 import os
 import pty
-import re
 import stat
 import termios
 import threading
@@ -28,13 +27,13 @@ import pytest
 
 from roboviewer.cli import main
 from roboviewer.cli.init.questions import Cancelled, Option, Questions
-from roboviewer.cli.init.wizard import STACKS, Wizard
+from roboviewer.cli.init.wizard import Wizard
 from roboviewer.config import Config, Example, ExampleError, load_config
 from roboviewer.config.example import EXAMPLES_DIR
 
 # The interview, in order, when every answer is Enter. Named so a test that adds
 # an answer says which question it is answering.
-ALL_DEFAULTS = [""] * 11
+ALL_DEFAULTS = [""] * 9
 
 # What a terminal sends for each of them
 UP, DOWN, SPACE, ENTER = b"\x1b[A", b"\x1b[B", b" ", b"\r"
@@ -139,16 +138,6 @@ def test_a_key_the_example_does_not_carry_is_an_error() -> None:
         Example.load("config").set("run.invented_setting", 1)
 
 
-def test_stack_globs_are_added_to_the_list_already_there() -> None:
-    example = Example.load("config")
-
-    example.extend_list("run.exclude_globs", ["*.pbxproj", "**/Pods/**"], "iOS / Swift")
-
-    globs = tomllib.loads(example.text())["run"]["exclude_globs"]
-    assert globs[:2] == ["*.lock", "**/*.generated.*"]
-    assert globs[-2:] == ["*.pbxproj", "**/Pods/**"]
-
-
 @pytest.mark.parametrize("name", ["config", "provider"])
 def test_the_shipped_example_is_a_valid_config(name: str) -> None:
     """It is what init writes, so it has to pass the same validation a
@@ -156,14 +145,6 @@ def test_the_shipped_example_is_a_valid_config(name: str) -> None:
     raw = tomllib.loads((EXAMPLES_DIR / f"{name}.toml").read_text(encoding="utf-8"))
 
     Config.model_validate({"provider": raw} if name == "provider" else raw)
-
-
-def test_every_stack_the_wizard_offers_is_the_block_the_example_documents() -> None:
-    """Both lists exist for the same reason and are read by the same person;
-    they must not drift apart."""
-    documented = _documented_stacks()
-
-    assert dict(STACKS.values()) == documented
 
 
 # ------------------------------------------------------------------ the interview
@@ -194,8 +175,6 @@ def test_the_answers_reach_both_files(isolated_home: Path) -> None:
             "1",  # judge reasoning on its default
             "ru",  # language
             "1,2",  # md and html
-            "3",  # fail on major
-            "1",  # iOS / Swift
         ]
     )
 
@@ -209,8 +188,6 @@ def test_the_answers_reach_both_files(isolated_home: Path) -> None:
     assert cfg.judge.enable_thinking is None
     assert cfg.run.output_language == "ru"
     assert cfg.run.report_formats == ["md", "html"]
-    assert cfg.run.fail_on == "major"
-    assert "*.pbxproj" in cfg.run.exclude_globs
 
 
 def test_a_variable_that_is_not_set_is_said_so_with_the_line_that_sets_it(
@@ -229,14 +206,17 @@ def test_a_key_written_into_the_file_is_the_only_way_it_reaches_the_disk(
             "",  # address
             "",  # bearer
             "2",  # the key goes into the file
-            *[""] * 8,
-            "n",  # do not probe the gateway
+            *[""] * 5,  # model, reasoning, judge, language, reports
+            "n",  # and no, do not go and probe the gateway
         ],
         key="sk-secret-value",
     )
     provider, _ = written(isolated_home)
 
     assert tomllib.loads(provider.read_text())["api_key"] == "sk-secret-value"
+    # A key it can reach is what makes the probe worth offering; declining it is
+    # what keeps this test off the network
+    assert "Later, then:  roboviewer check-provider" in printed
     assert stat.S_IMODE(provider.stat().st_mode) == 0o600
     # Not echoed while it is typed, and not printed back afterwards
     assert "sk-secret-value" not in printed
@@ -457,19 +437,3 @@ def _drain(master: int) -> None:
 
 def _painted(master: int) -> str:
     return b"".join(PAINTED.get(master, [])).decode(errors="replace")
-
-
-def _documented_stacks() -> dict[str, list[str]]:
-    """The ready-made blocks the example lists in its comments, as a table."""
-    stacks: dict[str, list[str]] = {}
-    title = None
-    for line in (EXAMPLES_DIR / "config.toml").read_text(encoding="utf-8").splitlines():
-        body = line.lstrip("#").strip()
-        if body.endswith(":") and not body.startswith('"'):
-            title = body[:-1]
-            stacks[title] = []
-        elif title and (glob := re.fullmatch(r'"(.+)",', body)):
-            stacks[title].append(glob.group(1))
-        elif not body:
-            title = None
-    return {name: globs for name, globs in stacks.items() if globs}

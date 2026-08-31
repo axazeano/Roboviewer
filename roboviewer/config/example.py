@@ -57,16 +57,6 @@ class Example:
         self._lines[index] = f"{indent}{name} = {toml(value)}"
         self._uncomment_section(index, section)
 
-    def extend_list(self, key: str, entries: list[str], title: str) -> None:
-        """Add entries to a list already in the file, under a comment naming
-        them. Used for `exclude_globs`, where the example's own list is the
-        starting point and a stack adds to it."""
-        section, _, name = key.rpartition(".")
-        start = self._find(section, name)
-        end = self._closing_bracket(start, key)
-        addition = [f"    # {title}", *(f'    "{entry}",' for entry in entries)]
-        self._lines[end:end] = addition
-
     def text(self) -> str:
         return "\n".join(self._lines) + "\n"
 
@@ -111,12 +101,6 @@ class Example:
             if header and header.group(1) == section:
                 self._lines[above] = f"[{section}]"
                 return
-
-    def _closing_bracket(self, start: int, key: str) -> int:
-        for index in range(start, len(self._lines)):
-            if self._lines[index].strip() == "]":
-                return index
-        raise ExampleError(f"the list at {key} is never closed")
 
 
 def toml(value: object) -> str:

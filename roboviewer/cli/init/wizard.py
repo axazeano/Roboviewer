@@ -21,26 +21,6 @@ from ...reports import renders
 from .. import exit_codes
 from .questions import Option, Questions
 
-# Files a review has no reason to read, per stack. The same blocks the example
-# lists in its comments; `tests/test_cli_init.py` pins the two together.
-STACKS: dict[str, tuple[str, list[str]]] = {
-    "ios": (
-        "iOS / Swift",
-        [
-            "*.pbxproj",
-            "*.xcworkspacedata",
-            "*.strings",
-            "**/Package.resolved",
-            "**/*Sourcery.swift",
-            "**/Pods/**",
-        ],
-    ),
-    "android": ("Android / Kotlin", ["**/build/**", "**/*.pro", "**/gradle/wrapper/**"]),
-    "js": ("JS / TypeScript", ["**/dist/**", "**/*.min.js", "**/*.d.ts"]),
-    "python": ("Python", ["**/migrations/**", "**/*_pb2.py"]),
-    "go": ("Go", ["**/*.pb.go", "**/mock_*.go"]),
-}
-
 # What each report format is for. Keyed off `renders.known()`, so a format
 # added there is offered here whether or not anybody remembers this line.
 FORMATS: dict[str, str] = {
@@ -183,27 +163,6 @@ class Wizard:
                 default=["md"],
             ),
         )
-        config.set("run.fail_on", self._fail_on())
-        self._excludes(config)
-
-    def _fail_on(self) -> str:
-        return self._q.choice(
-            "Fail a CI job on findings from this severity up",
-            [
-                Option(exit_codes.NEVER, "never", "report and exit 0, whatever was found"),
-                *(Option(name, name) for name in exit_codes.THRESHOLDS if name != exit_codes.NEVER),
-            ],
-        )
-
-    def _excludes(self, config: Example) -> None:
-        chosen = self._q.several(
-            "Stacks whose generated files should stay out of a review",
-            [Option(key, title) for key, (title, _) in STACKS.items()],
-            default=[],
-        )
-        for key in chosen:
-            title, globs = STACKS[key]
-            config.extend_list("run.exclude_globs", globs, title)
 
     def _write(self, provider: Example, config: Example) -> list[Written]:
         self._q.heading("Writing")

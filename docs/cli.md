@@ -38,10 +38,10 @@ roboviewer init
 ```
 
 It asks for the gateway's address and how it wants the key, the model, whether
-the judge gets a stronger one, the language findings are written in, which
-reports to write, whether a CI job should go red, and which stacks' generated
-files to keep out of a review. Every question has a default, and each file it
-writes is the annotated example with the answers set into it.
+the judge gets a stronger one, the language findings are written in, and which
+reports to write. Every question has a default, and each file it writes is the
+annotated example with the answers set into it — the rest of the settings are
+in there, commented and explained, for when you want them.
 
 Lists are answered with the arrows: `↑`/`↓` move, `space` marks an entry where
 several are allowed, `Enter` takes what is under the cursor, and `Escape` stops

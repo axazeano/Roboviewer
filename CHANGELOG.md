@@ -21,9 +21,8 @@ writes or prints changed.
 
 - **`roboviewer init`, the setup asked rather than copied.** A short interview —
   the gateway's address and how it wants the key, the model, a stronger judge or
-  not, the language, the reports, the CI gate, the stacks whose generated files
-  a review should not read — writes `~/.config/roboviewer/provider.toml` and
-  `config.toml`. Every question has a default, so Enter throughout leaves a
+  not, the language, the reports — writes `~/.config/roboviewer/provider.toml`
+  and `config.toml`. Every question has a default, so Enter throughout leaves a
   working setup. What lands is the annotated example with the answers set into
   it, comments and all, rather than a generated file holding only the answers.
   An existing file is never overwritten without being asked, the key stays in an
