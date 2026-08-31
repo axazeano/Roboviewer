@@ -44,10 +44,10 @@ max_turns = 25
 # enable_thinking = false
 
 [run]
-# Branches are not configurable: the target is a CLI argument, the source defaults
-# to the current branch.
-#   roboviewer develop
-#   roboviewer develop feature/login
+# Branches are not configurable: both are named on the command line, and the
+# source defaults to the current branch.
+#   roboviewer review --into develop
+#   roboviewer review --from feature/login --into develop
 checklist_dir = "checklists/default"
 # Prompt directory. Empty means the bundled texts, plus .roboviewer/prompts/
 # inside the reviewed repository if it exists. A custom set need only carry the

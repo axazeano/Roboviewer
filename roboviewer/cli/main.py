@@ -1,9 +1,12 @@
-"""The command: the order the steps run in, and what a failure exits with.
+"""The commands: the order the steps run in, and what a failure exits with.
 
 Each step below either produces its part of the run or raises `CLIError`, so
 `main` has one place that prints a failure and one that decides the exit code.
-The flags are `arguments`, what the steps produce is printed by `console`, and
-where their files come from is decided by `config.overrides`.
+Which command is being run is decided once, at the top of `_execute`, and every
+command after that is a few steps of the same list.
+
+The commands and their flags are `arguments`, what the steps produce is printed
+by `console`, and where their files come from is decided by `config.overrides`.
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ from ..review import (
     output_dir_for,
 )
 from . import ci_env, console, exit_codes
-from .arguments import apply_overrides, build_parser
+from .arguments import COMPARING, apply_overrides, build_parser
 
 
 class CLIError(RuntimeError):
@@ -60,51 +63,49 @@ def main(argv: list[str] | None = None, observer: RunObserver = SILENT) -> int:
     """The command. `observer` is how something outside the tool asks to be
     told what the run and its agents did — see `observer`; by default nobody is
     watching and the run keeps no account of itself."""
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     try:
-        return _execute(args, parser, observer)
+        return _execute(args, observer)
     except CLIError as exc:
         console.error(exc.message, exc.hint)
         return exc.code
 
 
-def _execute(
-    args: argparse.Namespace, parser: argparse.ArgumentParser, observer: RunObserver
-) -> int:
-    """The order the steps run in, and where each of them can stop the run early.
+def _execute(args: argparse.Namespace, observer: RunObserver) -> int:
+    """Which command runs, and where each of them stops.
 
     Everything that fails raises `CLIError`; what stops on purpose returns a code
-    of its own, because `--diff-only` finishing is not a failure.
+    of its own, because `diff` finishing is not a failure.
     """
-    # Diagnostic commands work without branches and outside a repository
-    informational = args.list_items or args.show_config or args.check_provider
-    root = _repo_root(args.repo, required=not informational)
-    cfg = apply_overrides(_config(args.config), args)
-
-    if args.show_config:
-        console.config(cfg, root)
-        return 0
-    if args.check_provider:
+    if args.command == "check-provider":
+        # The one command that reads nothing but the provider file
         from .check_provider import check_provider
 
+        cfg = _config(args.config)
         return check_provider(cfg.provider, cfg.reviewer.model, cfg.provider_source)
 
+    root = _repo_root(args.repo, required=args.command in COMPARING)
+    cfg = apply_overrides(_config(args.config), args)
+    if args.command == "show-config":
+        console.config(cfg, root)
+        return 0
+    if args.command == "list-items":
+        console.checklist_items(_checklist(cfg, root, args.only))
+        return 0
+    if args.command == "diff":
+        console.diff_summary(_changes(cfg, root, _target(args), args.source))
+        return 0
+    return _review_command(cfg, root, args, observer)
+
+
+def _review_command(
+    cfg: Config, root: Path, args: argparse.Namespace, observer: RunObserver
+) -> int:
+    """The checklist is read before git is asked anything: a misspelled item is
+    the cheapest failure there is, and it should not wait for a diff."""
     items = _checklist(cfg, root, args.only)
-    if args.list_items:
-        console.checklist_items(items)
-        return 0
-
-    # Every command that works without branches has returned by now
-    target = args.target or _target_from_ci()
-    if not target:
-        parser.error("no target branch given: roboviewer <target> [source]")
-
-    changes = _changes(cfg, root, target, args.source)
+    changes = _changes(cfg, root, _target(args), args.source)
     compared = changes.comparison
-    if args.diff_only:
-        console.diff_summary(changes)
-        return 0
     if not changes.files:
         console.notice(f"No changes in {compared.source} relative to {compared.target}.")
         return 0
@@ -116,6 +117,17 @@ def _execute(
             "the working copy is untouched."
         )
     return asyncio.run(_review(plan, args.verbose, observer))
+
+
+def _target(args: argparse.Namespace) -> str:
+    target = args.target or _target_from_ci()
+    if not target:
+        raise CLIError(
+            "No target branch given.",
+            "Name it with --into <branch>. In a merge-request pipeline it comes "
+            "from the environment instead.",
+        )
+    return target
 
 
 def _target_from_ci() -> str | None:
@@ -142,7 +154,7 @@ def _repo_root(requested: str, *, required: bool) -> Path:
         if required:
             raise CLIError(
                 f"Error: {exc}",
-                "Point at a repository with -C PATH or the ROBOVIEWER_REPO variable.",
+                "Point at a repository with --repo PATH or the ROBOVIEWER_REPO variable.",
             ) from exc
         # A diagnostic command has no repository to work on and does not need one
         return path

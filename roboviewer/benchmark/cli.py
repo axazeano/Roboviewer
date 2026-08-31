@@ -313,7 +313,8 @@ def _add(args: argparse.Namespace, store: Store) -> int:
     _entry_line(result, github)
     if result.ok:
         print(
-            f"Review it: roboviewer {entry.base[:12]} {entry.head[:12]} -C {store.repo_dir(entry)}"
+            f"Review it: roboviewer review --from {entry.head[:12]} "
+            f"--into {entry.base[:12]} --repo {store.repo_dir(entry)}"
         )
     return OK if result.ok else INCOMPLETE
 
@@ -555,8 +556,8 @@ def _fetch_summary(results: list[Result], store: Store) -> None:
     example = next((r for r in results if r.ok), None)
     if example is not None:
         print(
-            f"Review one: roboviewer {example.entry.base[:12]} {example.entry.head[:12]} "
-            f"-C {store.repo_dir(example.entry)}"
+            f"Review one: roboviewer review --from {example.entry.head[:12]} "
+            f"--into {example.entry.base[:12]} --repo {store.repo_dir(example.entry)}"
         )
 
 

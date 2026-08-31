@@ -69,7 +69,7 @@ first, and the rest come from here. The directory is `.roboviewer/prompts/`
 inside the reviewed repository (picked up on its own) or any other path set via
 `run.prompts_dir` in the config.
 
-`roboviewer --show-config` prints which file came from where.
+`roboviewer show-config` prints which file came from where.
 
 A broken placeholder fails the run at startup, before the first request to the
 model, and names the file — so a typo costs a second rather than eight failed

@@ -32,7 +32,7 @@ auth_scheme = "Bearer"
 #   "forced"   — tool_choice = {"type": "function", ...}, names the exact tool
 #   "required" — tool_choice = "required", any tool but at least one
 #   "auto"     — no pressure; relies on the plain-text JSON fallback
-# Lower it only if `roboviewer --check-provider` reports the gateway rejects the
+# Lower it only if `roboviewer check-provider` reports the gateway rejects the
 # stronger mode — it prints the recommended value.
 terminal_tool_choice = "forced"
 

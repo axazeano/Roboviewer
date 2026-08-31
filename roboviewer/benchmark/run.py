@@ -42,8 +42,10 @@ from .store import Store
 
 SUMMARY = "summary.json"
 SUMMARY_PAGE = "summary.md"
-# Flags that would point the review somewhere other than the entry's clone.
-OWN_FLAGS = ("-C", "--repo")
+# Flags the benchmark sets itself: which repository is reviewed, and between
+# which two commits. A flag here would point the review at something other than
+# the entry.
+OWN_FLAGS = ("--repo", "--from", "--into")
 
 Status = Literal["reviewed", "stopped", "not_fetched"]
 # What runs one review: the tool's `main`, injectable so the suite can run a
@@ -108,9 +110,10 @@ def start(
     """A directory for this run. `stamp` is injectable for the suite; a real
     run is named for the minute it began."""
     for flag in flags:
-        if flag in OWN_FLAGS or flag.startswith("--repo="):
+        if flag in OWN_FLAGS or any(flag.startswith(own + "=") for own in OWN_FLAGS):
             raise ValueError(
-                f"{flag} is not a benchmark flag: each entry is reviewed in its own clone"
+                f"{flag} is not a benchmark flag: each entry is reviewed in its own clone, "
+                "between the two commits the index names"
             )
     if repeats < 1:
         raise ValueError(f"--repeats {repeats}: a run reviews every entry at least once")
@@ -154,9 +157,14 @@ def review_entry(
             _record(benchmark, outcome)
             return outcome
 
-    argv = [entry.base, entry.head, "-C", str(store.repo_dir(entry))]
+    argv = [
+        "review",
+        "--into", entry.base,
+        "--from", entry.head,
+        "--repo", str(store.repo_dir(entry)),
+    ]
     if not _names_output(benchmark.flags):
-        # Absolute, or the tool resolves it against the clone -C points it at
+        # Absolute, or the tool resolves it against the clone --repo points it at
         argv += ["-o", str(benchmark.directory.absolute())]
     argv += benchmark.flags
 

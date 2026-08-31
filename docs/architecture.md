@@ -7,9 +7,9 @@ know where they are without reading three others.
 ## The shape of a run
 
 ```
-roboviewer <target> [source]
+roboviewer review --from <branch> --into <branch>
   │
-  ├─ cli        parse the flags, load the config, gather the change,
+  ├─ cli        pick the command, load the config, gather the change,
   │             build the plan, run it, write the reports, decide the exit code
   ├─ repo       read git: which branches, which files and lines changed, the
   │             files in full with markup, what the diff references that
@@ -37,7 +37,7 @@ records from it, and the pipeline knows neither.
 | `roboviewer/review/` | The review. The order of the stages (`pipeline`), the checklist (`checklist`), what the agents hand back (`submissions`), the merge (`merge`), the scope gate (`scope`), the judge (`judge`) | `pipeline.py` |
 | `roboviewer/review/prompts/` | Everything the model reads: the eight texts in `default/`, the context block (`context`), findings as a judge sees them (`findings`), the language directive (`language`), the tool descriptions (`tool_schemas`), what the runner says between turns (`turns`), and the loader and builders (`assembly`) | `default/README.md` |
 | `roboviewer/reports/` | The view a report is rendered from (`view`), one module per format (`renders/`), the Jinja templates (`templates/`), and writing the run to disk (`save`) | `view.py` |
-| `roboviewer/cli/` | The command: the flow (`main`), the flags (`arguments`), everything printed (`console`), the exit codes (`exit_codes`), the CI detection (`ci_env`), `--check-provider` (`check_provider`) | `main.py` |
+| `roboviewer/cli/` | The commands: the flow (`main`), the parser (`arguments`), everything printed (`console`), the exit codes (`exit_codes`), the CI detection (`ci_env`), `check-provider` (`check_provider`) | `main.py` |
 | `roboviewer/benchmark/` | The `benchmark` command, beside the review rather than on its path: the index (`items`), the references (`references`), where everything lives (`store`), one entry into a clone (`fetch`, `clone`), what GitHub knows (`github`, `candidates/`), the tool over every entry (`run`), statistics over the repeats (`stats`), the command (`cli`) | `__init__.py` |
 | `roboviewer/checklists/` | The bundled checklist sets — data, read by `review.checklist` and named on the command line (`--checklist checklists/grouped`), which is why they stay at the package root | `default/` |
 | `benchmarks/` | The benchmark's data, at the repository root: `items.toml` the index of merge requests, `references/<id>.toml` what a good review of one finds — both committed; `repos/`, `comments/` and `runs/` are the cache the command fills | `items.toml` |

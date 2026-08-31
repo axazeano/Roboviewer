@@ -4,7 +4,7 @@ Prompts and checklists are English, so findings come back in English. To get
 them in another language, ask for it rather than translating the prompts:
 
 ```bash
-roboviewer develop --language ru
+roboviewer review --into develop --language ru
 ```
 
 Or once, in the config:

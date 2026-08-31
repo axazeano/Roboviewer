@@ -6,7 +6,7 @@
 #     -v ~/.config/roboviewer/config.toml:/config.toml:ro \
 #     -v "$PWD/.roboviewer:/out" \
 #     -e ROBOVIEWER_API_KEY -e ROBOVIEWER_PROVIDER_CONFIG=/provider.toml \
-#     axazeano/roboviewer:latest develop --config /config.toml --output /out
+#     axazeano/roboviewer:latest review --into develop --config /config.toml --output /out
 
 # Alpine rather than slim: on Debian the git package pulls in perl, and perl is
 # where both 9.1 CVEs of the 76 sat.

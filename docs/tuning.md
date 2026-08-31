@@ -11,7 +11,7 @@ three such pairs for the judge — the batch pass, the per-finding verification
 and the final calibration. Drop a changed copy of any of them into
 `.roboviewer/prompts/` inside the repository being reviewed and it wins; the
 rest keep coming from the bundled set, so a custom set carries only the files
-it changes. `--show-config` prints which text came from where, and a typo in a
+it changes. `roboviewer show-config` prints which text came from where, and a typo in a
 placeholder fails the run before the first request instead of eight agents
 deep.
 
@@ -28,9 +28,9 @@ distributed between agents — the aspect texts themselves are identical, so
 running the same MR through each compares structure rather than wording:
 
 ```bash
-roboviewer develop                                 # default: 8 aspects, one agent each
-roboviewer develop --checklist checklists/grouped  # 3 agents over related aspects
-roboviewer develop --checklist checklists/single   # one agent for everything
+roboviewer review --into develop                   # default: 8 aspects, one agent each
+roboviewer review --checklist checklists/grouped   # 3 agents over related aspects
+roboviewer review --checklist checklists/single    # one agent for everything
 ```
 
 Fewer agents means the context block is resent fewer times, which is most of the

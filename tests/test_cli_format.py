@@ -16,7 +16,7 @@ from roboviewer.config import Config
 
 
 def parse(*argv: str) -> argparse.Namespace:
-    return build_parser().parse_args(["develop", *argv])
+    return build_parser().parse_args(["review", "--into", "develop", *argv])
 
 
 def test_default_is_markdown_only() -> None:

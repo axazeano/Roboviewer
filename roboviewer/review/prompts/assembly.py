@@ -47,7 +47,7 @@ class PromptError(RuntimeError):
 @dataclass
 class Prompts:
     texts: dict[str, str]
-    # name → path it was read from; --show-config prints this, so "which text
+    # name → path it was read from; show-config prints this, so "which text
     # produced these findings" is never a matter of memory
     sources: dict[str, str]
     # Language the model writes its own prose in. Empty asks for nothing, so the

@@ -6,7 +6,7 @@ Point it at two branches and it comes back with a ranked list of problems worth
 fixing — not a wall of style nitpicks.
 
 ```bash
-roboviewer develop
+roboviewer review --into develop
 ```
 
 ```
@@ -139,7 +139,7 @@ than a configuration of this tool.
 - git
 - An OpenAI-compatible endpoint **with tool calling** — the agents drive the
   review through tools, so a completions-only gateway will not work.
-  `roboviewer --check-provider` tells you which side of that line yours is on.
+  `roboviewer check-provider` tells you which side of that line yours is on.
 
 ## Install
 
@@ -161,7 +161,7 @@ docker run --rm \
   -v ~/.config/roboviewer/config.toml:/config.toml:ro \
   -v "$PWD/.roboviewer:/out" \
   -e ROBOVIEWER_API_KEY -e ROBOVIEWER_PROVIDER_CONFIG=/provider.toml \
-  axazeano/roboviewer:latest develop --config /config.toml --output /out
+  axazeano/roboviewer:latest review --into develop --config /config.toml --output /out
 ```
 
 Mount the repository with its history — a shallow clone has no merge base to
@@ -179,7 +179,7 @@ mkdir -p ~/.config/roboviewer
 cp provider.example.toml ~/.config/roboviewer/provider.toml
 cp config.example.toml   ~/.config/roboviewer/config.toml
 export ROBOVIEWER_API_KEY=...
-roboviewer --check-provider
+roboviewer check-provider
 ```
 
 Set `provider.base_url` and `reviewer.model`. Everything else has working
@@ -189,7 +189,7 @@ defaults and is documented inline in
 
 The provider lives in its own file so the settings file stays safe to copy: a
 `--config` file carrying a `[provider]` section is refused.
-`--check-provider` makes a handful of targeted requests and names what is wrong
+`check-provider` makes a handful of targeted requests and names what is wrong
 — wrong auth scheme, a `base_url` missing `/v1`, a gateway that cannot do tool
 calling — instead of leaving you to infer it from eight agents failing at once.
 
@@ -199,22 +199,23 @@ do about rate limits: [Configuration](docs/configuration.md).
 ## Use
 
 ```bash
-roboviewer <target> [source]
+roboviewer review --from <branch> --into <branch>
 ```
 
-The target branch is required. The source defaults to your current branch, and
-naming it explicitly lets you review someone else's branch without checking it
-out.
+Both branches are named rather than ordered. `--into` is what the branch merges
+into; without it, the branch a merge-request pipeline names in its environment.
+`--from` defaults to your current branch, and naming it lets you review someone
+else's without checking it out.
 
 ```bash
-roboviewer develop                    # current branch into develop
-roboviewer develop feature/login      # someone else's branch
-roboviewer -C ~/projects/app develop  # a repository living elsewhere
+roboviewer review --into develop                       # current branch into develop
+roboviewer review --from feature/login --into develop  # someone else's branch
+roboviewer review --into develop --repo ~/projects/app # a repository living elsewhere
 ```
 
-Reports land in `.roboviewer/runs/<timestamp>/`, and `--diff-only` shows what
-would be reviewed without spending tokens. Every flag:
-[Command line](docs/cli.md).
+Reports land in `.roboviewer/runs/<timestamp>/`, and `roboviewer diff --into
+develop` shows what would be reviewed without spending tokens. Every command and
+flag: [Command line](docs/cli.md).
 
 ## Documentation
 
