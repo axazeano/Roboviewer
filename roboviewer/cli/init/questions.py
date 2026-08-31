@@ -139,17 +139,16 @@ class Questions:
         """Comma-separated. Empty takes the default, and `-` takes none."""
         self.say(f"  {prompt}")
         self._list(options)
-        shown = ", ".join(str(i + 1) for i, o in enumerate(options) if o.value in default) or "-"
+        shown = _as_numbers(options, default)
         while True:
             answer = self._read(f"  > [{shown}]: ")
             if not answer:
                 return default
             if answer == "-":
                 return []
-            picked = [_number(part, len(options)) for part in answer.split(",")]
-            if all(index is not None for index in picked):
-                chosen = {index for index in picked if index is not None}
-                return [o.value for i, o in enumerate(options) if i in chosen]
+            picked = _numbers(answer, len(options))
+            if picked is not None:
+                return [o.value for index, o in enumerate(options) if index in picked]
             self.say(f"  numbers from 1 to {len(options)}, comma-separated, or - for none.")
 
     def _read(self, prompt: str) -> str:
@@ -362,3 +361,17 @@ def _number(answer: str, count: int) -> int | None:
     if not text.isdigit() or not 1 <= int(text) <= count:
         return None
     return int(text) - 1
+
+
+def _numbers(answer: str, count: int) -> set[int] | None:
+    """`1,3` as indexes, or None if any part of it is not one. All or nothing:
+    half a list taken and half discarded is worse than being asked again."""
+    picked = [_number(part, count) for part in answer.split(",")]
+    if any(index is None for index in picked):
+        return None
+    return {index for index in picked if index is not None}
+
+
+def _as_numbers(options: list[Option], chosen: list[str]) -> str:
+    """The default, written as the numbers that would pick it."""
+    return ", ".join(str(i + 1) for i, o in enumerate(options) if o.value in chosen) or "-"
