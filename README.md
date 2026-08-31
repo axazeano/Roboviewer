@@ -223,8 +223,19 @@ roboviewer review --into develop --repo ~/projects/app # a repository living els
 ```
 
 Reports land in `.roboviewer/runs/<timestamp>/`, and `roboviewer diff --into
-develop` shows what would be reviewed without spending tokens. Every command and
-flag: [Command line](docs/cli.md).
+develop` shows what would be reviewed without spending tokens.
+
+On GitHub, `roboviewer comment` puts a finished run on the pull request as one
+review — a comment on each finding the diff can carry one, the rest in the body
+with the judge's summary. It reads the run off disk, so it spends no tokens, and
+inside Actions it needs no arguments at all:
+
+```bash
+roboviewer comment --dry-run   # read it before the pull request does
+roboviewer comment             # post it
+```
+
+Every command and flag: [Command line](docs/cli.md).
 
 ## Documentation
 
@@ -234,7 +245,7 @@ flag: [Command line](docs/cli.md).
 | [Command line](docs/cli.md) | Every flag and the environment variables behind them |
 | [How it works](docs/how-it-works.md) | Whole files, the reference pre-pass, one agent per concern, the judge |
 | [Reports and output](docs/reports.md) | What a run writes, the four formats, overriding a template |
-| [Continuous integration](docs/ci.md) | Exit codes, and a job for GitLab and for GitHub |
+| [Continuous integration](docs/ci.md) | Exit codes, a job for GitLab and for GitHub, comments on the pull request |
 | [Customise the checklist](docs/checklists.md) | Adding a concern without touching code |
 | [Output language](docs/language.md) | Findings in a language other than English |
 | [Tuning](docs/tuning.md) | Prompts, how many agents, thinking, the turn limit |
@@ -247,9 +258,11 @@ tooling baseline and how the benchmark is built and run.
 
 ## What it doesn't do
 
-- It does not post comments on your merge request, and does not talk to GitHub
-  or GitLab at all. Output is files on disk; in CI it is the pipeline that
-  publishes them, from formats the forge already understands.
+- It does not talk to a forge to review. A review reads two git branches and
+  writes files on disk; in CI the pipeline publishes them, from formats the
+  forge already understands. Putting them on a GitHub pull request is a second
+  command over a finished run, `roboviewer comment`, and GitHub is the only
+  forge it writes to.
 - It does not modify your code. The agents get read-only tools —
   `read_file`, `grep`, `list_files`, `git_show` — and nothing else.
 - It does not replace a human reviewer. On the merge request it was measured
@@ -266,7 +279,9 @@ tooling baseline and how the benchmark is built and run.
   else, so in CI it reports the same findings again on every push — including
   the ones you have already read and decided to leave. Nothing in the tool
   suppresses a repeat, and that is the usual reason review bots get switched
-  off. Until that changes, the honest place for it is a branch you run by hand.
+  off. `roboviewer comment` inherits that: it posts a new review every time and
+  never edits or folds the last one, so it belongs on a pull request opening and
+  on a job you start by hand, not on every push.
 
 ## License
 

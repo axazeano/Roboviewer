@@ -1,6 +1,6 @@
 """Everything the CLI prints.
 
-Kept apart from `cli` for the same reason reports are kept out of `pipeline`:
+Kept apart from `cli` for the same reason reports are kept out of `pull`:
 deciding what a run does and describing it to a human are two jobs, and only one
 of them changes when the wording does. `cli` is left with the flow and the exit
 codes.
@@ -15,6 +15,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from ..comments import Draft, Posted, PullRequest
 from ..config import (
     Config,
     ModelConfig,
@@ -162,6 +163,29 @@ def config(cfg: Config, root: Path) -> None:
     _run(cfg, root)
 
 
+def would_post(pull: PullRequest, draft: Draft, directory: Path) -> None:
+    """A dry run: what would be posted, in full, and nothing sent.
+
+    In full deliberately — the point of a dry run is to read the words before a
+    pull request does, and a summary of a summary would not serve that.
+    """
+    print(f"Would post to {pull.name}: {pull.slug}#{pull.number}")
+    print(f"  {_counted(draft)}")
+    print(f"  from {directory}")
+    print()
+    print(draft.body)
+    for comment in draft.comments:
+        print()
+        print(f"--- {comment.file}:{comment.line} ---")
+        print(comment.body)
+
+
+def posted(result: Posted, draft: Draft) -> None:
+    print(f"Posted {_counted(draft)}: {result.url}")
+    if result.note:
+        _line(result.note)
+
+
 class _AgentLines(Observer):
     """What one agent is doing, for `-v`: tool calls, retries, pacing, the
     wrap-up. Nothing otherwise — the item's own line says how it ended."""
@@ -286,3 +310,17 @@ def _prompt_sources(cfg: Config, root: Path) -> None:
 
 def _thinking(value: bool | None) -> str:
     return {None: "model default", True: "on", False: "off"}[value]
+
+
+def _counted(draft: Draft) -> str:
+    """How many findings, and how many of them a forge could anchor."""
+    total = draft.findings
+    if not total:
+        return "no findings"
+    plural = "s" if total != 1 else ""
+    if not draft.unanchored:
+        return f"{total} finding{plural}, all on the diff"
+    return (
+        f"{total} finding{plural}: {len(draft.comments)} on the diff, "
+        f"{draft.unanchored} in the body"
+    )

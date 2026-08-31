@@ -1,9 +1,14 @@
 """The commands, their flags, and how a flag overrides the config.
 
-Six commands rather than one carrying diagnostic flags: `review` and `diff`
-compare two branches, `init`, `list-items`, `show-config` and `check-provider`
-work on the setup and never look at a branch. A flag that quietly runs something
-other than a review is a command in disguise.
+Seven commands rather than one carrying diagnostic flags: `review` and `diff`
+compare two branches and `comment` puts a finished review on a merge request;
+`init`, `list-items`, `show-config` and `check-provider` work on the setup and
+never look at a branch. A flag that quietly runs something other than a review
+is a command in disguise.
+
+Posting is its own command rather than a flag on `review` for one reason: the
+two fail for unrelated reasons. A review that cost an hour of tokens and a push
+that failed on a permission should not have to be repeated together.
 
 The branches are named — `--from`, `--into` — rather than ordered: an order
 nobody can read back off a shell history is an order somebody gets wrong.
@@ -24,8 +29,10 @@ from ..config import Config
 from ..reports import renders
 from . import exit_codes
 
-# The commands that compare two branches; the rest need no repository at all.
-COMPARING = ("review", "diff")
+# The commands that need a real repository under them: two to compare branches,
+# one to work out which lines a forge can hang a comment on. The rest answer a
+# question about the setup and need nothing checked out.
+NEEDS_REPOSITORY = ("review", "diff", "comment")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,12 +51,15 @@ def build_parser() -> argparse.ArgumentParser:
             "        a repository living elsewhere\n"
             "  roboviewer diff --into develop\n"
             "        what would be reviewed, before a token is spent\n"
+            "  roboviewer comment\n"
+            "        put the last run on the pull request the job is for\n"
             "\n"
             "Environment variables:\n"
             "  ROBOVIEWER_REPO    default repository (when --repo is not given)\n"
             "  ROBOVIEWER_OUTPUT  where reports go (when --output is not given)\n"
             "  ROBOVIEWER_PROVIDER_CONFIG  the provider file, for a runner or a\n"
             "                     container with no ~/.config/roboviewer/\n"
+            "  GITHUB_TOKEN       what `comment` posts as (GH_TOKEN is read too)\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -129,6 +139,51 @@ def build_parser() -> argparse.ArgumentParser:
     _repository(diff)
     _settings_file(diff)
 
+    comment = commands.add_parser(
+        "comment",
+        help="put a finished review on the merge request",
+        description=(
+            "Post a run that is already on disk to the pull request this job is for, as "
+            "one review: a comment on each finding the diff can carry a comment on, and "
+            "a body with the judge's summary and the findings it cannot. The pull "
+            "request, the repository and the token are read from the pipeline's own "
+            "environment. Nothing earlier is edited or deleted: every run posts a new "
+            "review."
+        ),
+    )
+    _repository(comment)
+    _settings_file(comment)
+    comment.add_argument(
+        "--run",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "The run directory to post. Defaults to the latest run under the output "
+            "directory, which is what the review step just wrote"
+        ),
+    )
+    comment.add_argument(
+        "--pull",
+        type=int,
+        metavar="NUMBER",
+        help=(
+            "Pull request number. Without it, the one the pipeline names in its "
+            "environment"
+        ),
+    )
+    comment.add_argument(
+        "--project",
+        metavar="OWNER/NAME",
+        help=(
+            "The repository on the forge. Without it, the one the pipeline names in "
+            "its environment"
+        ),
+    )
+    comment.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the review that would be posted and send nothing",
+    )
     commands.add_parser(
         "init",
         help="set the tool up by answering questions",

@@ -20,6 +20,12 @@ roboviewer review --from <branch> --into <branch>
   │    └─ provider   each agent is a tool-calling loop against an
   │                  OpenAI-compatible gateway, paced against its limits
   └─ reports    ReviewRun → view → report.md / report.html / SARIF / Code Quality
+
+roboviewer comment
+  │
+  ├─ cli        read the run off disk, ask git which lines the diff carries
+  └─ comments   ReviewRun → a body and comments on lines → one review on the
+                merge request the pipeline is running for
 ```
 
 Two things cut across all of it: `models.py`, the vocabulary every package
@@ -37,6 +43,7 @@ records from it, and the pipeline knows neither.
 | `roboviewer/review/` | The review. The order of the stages (`pipeline`), the checklist (`checklist`), what the agents hand back (`submissions`), the merge (`merge`), the scope gate (`scope`), the judge (`judge`) | `pipeline.py` |
 | `roboviewer/review/prompts/` | Everything the model reads: the eight texts in `default/`, the context block (`context`), findings as a judge sees them (`findings`), the language directive (`language`), the tool descriptions (`tool_schemas`), what the runner says between turns (`turns`), and the loader and builders (`assembly`) | `default/README.md` |
 | `roboviewer/reports/` | The view a report is rendered from (`view`), one module per format (`renders/`), the Jinja templates (`templates/`), and writing the run to disk (`save`) | `view.py` |
+| `roboviewer/comments/` | What a finished run turns into on a merge request, off the review path entirely: which merge request the job is for (`pull_request`), the run turned into a body and comments on lines (`compose`), the one thing a forge is asked to do (`forge`), and the forge that does it (`github`) | `__init__.py` |
 | `roboviewer/cli/` | The commands: the flow (`main`), the parser (`arguments`), everything printed (`console`), the exit codes (`exit_codes`), the CI detection (`ci_env`), `check-provider` (`check_provider`), the setup interview (`init/`) | `main.py` |
 | `roboviewer/benchmark/` | The `benchmark` command, beside the review rather than on its path: the index (`items`), the references (`references`), where everything lives (`store`), one entry into a clone (`fetch`, `clone`), what GitHub knows (`github`, `candidates/`), the tool over every entry (`run`), statistics over the repeats (`stats`), the command (`cli`) | `__init__.py` |
 | `roboviewer/checklists/` | The bundled checklist sets — data, read by `review.checklist` and named on the command line (`--checklist checklists/grouped`), which is why they stay at the package root | `default/` |
@@ -50,7 +57,7 @@ Lower may not import higher. Within `roboviewer/`:
 ```
 benchmark
 cli
-reports
+comments   reports
 review            (review/prompts inside it)
 provider   repo
 config     observer
@@ -67,11 +74,20 @@ models
   the only one that knows what a prompt is.
 - `reports` reads `models` and nothing of the review's internals: `ReviewRun`
   is the whole contract.
+- `comments` sits beside `reports` and reads the same one thing, `models`. The
+  pair is the point: a run turns into files in one and into remarks on a merge
+  request in the other. It knows no git, no config and no provider — which lines
+  a diff carries arrives as an argument, because a package that shells out is a
+  package a test has to have a repository for. Only `cli` imports it, and
+  `tests/test_layout.py` holds the review path to that: a review must stay
+  runnable with no forge, no token and no network.
 - `cli` imports everything and is imported by nothing but `__main__`,
   `benchmark.cli` and `measure.trace.cli`.
 - `benchmark` sits beside `cli`, not under it: it runs the tool through
   `cli.main`, reads `models` and `observer`, and nothing on the review path
-  imports it. It is the only package that talks to a forge.
+  imports it. It talks to a forge to read what the tool is measured on, through
+  a client of its own: `comments` writes where this one reads, and neither may
+  depend on the other.
 - `measure` imports `roboviewer` through public surfaces only (`models`,
   `observer`, `config`, `cli.main`, `reports.renders`). Nothing in
   `roboviewer` imports `measure`.
@@ -97,14 +113,21 @@ module offers first and how it does it after.
 - **`ReviewView`** (`reports.view`) is the contract with user templates — see
   `reports/templates/default/README.md` — and renaming a field there breaks
   other people's reports.
+- **`Forge`** (`comments.forge`) is the one thing a forge is asked to do: put a
+  `Draft` on the merge request a `PullRequest` names. GitHub is written; a second
+  forge is a class with that method and a branch in `forge_for`, and no caller
+  names a forge — the job's own variables do.
 
 ## What is deliberately not here
 
 - No forge client on the review path: `roboviewer` reads two git branches and
-  never talks to GitHub or GitLab. The only forge code is `roboviewer.benchmark`,
-  which reviews nothing itself — it fetches what the tool is measured on and
-  runs the tool over it.
-- No state between runs; every run starts from the diff.
+  produces a `ReviewRun` with no idea that a pull request exists. Two packages
+  talk to a forge and neither is on that path — `roboviewer.comments`, which
+  posts a run that is already finished, and `roboviewer.benchmark`, which
+  fetches what the tool is measured on and runs the tool over it.
+- No state between runs; every run starts from the diff. `comment` keeps none
+  either: it never looks up what an earlier run posted, so every run posts a new
+  review rather than editing one.
 - No prompt text outside `review/prompts/`: the tool descriptions, the
   annotation legend, the turn budget notes and the context block are all
   there, next to the eight markdown texts.

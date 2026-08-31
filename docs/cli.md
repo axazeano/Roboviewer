@@ -27,10 +27,12 @@ roboviewer review --into develop --repo ~/projects/app  # a repository living el
 | `diff` | Print what would be reviewed and stop, before a token is spent |
 | `list-items` | Print the checklist items this run would use |
 | `show-config` | Print the settings a run would use, and the file they came from |
+| `comment` | Put a finished run on the pull request as one review |
 | `check-provider` | Probe the gateway and break the answer down, for debugging 401 and friends |
 
-`review` and `diff` compare two branches and need a repository; the other four
-work on the setup and run anywhere. `init` is the one to run first — it writes
+`review` and `diff` compare two branches, and `comment` needs the diff to know
+which lines can carry a comment, so those three need a repository; the other
+four work on the setup and run anywhere. `init` is the one to run first — it writes
 the two files every other command reads.
 
 ```bash
@@ -71,6 +73,36 @@ a pipeline.
 | `-j, --concurrency N` | `review` | How many items to review in parallel |
 | `--no-judge` | `review` | Skip the final judge pass |
 | `-v, --verbose` | `review` | Stream agent activity: tool calls, retries, errors |
+| `--run PATH` | `comment` | Which run to post; defaults to the latest one under the output directory |
+| `--pull N` | `comment` | Pull request number; without it, the one the pipeline names |
+| `--project owner/name` | `comment` | Repository on the forge; without it, the one the pipeline names |
+| `--dry-run` | `comment` | Print the review that would be posted and send nothing |
+
+## Posting a review
+
+```bash
+roboviewer review --into develop        # writes .roboviewer/runs/<id>/
+roboviewer comment --dry-run            # read it before a pull request does
+roboviewer comment                      # post it
+```
+
+`comment` sends nothing to a provider and reviews nothing: it reads a run that
+is already on disk. Two steps rather than one flag on `review` because the two
+fail for unrelated reasons — an hour of tokens should not be spent again over a
+missing permission.
+
+Each finding the diff can carry becomes a comment on its line; the rest go into
+the body of the same review, along with the judge's summary. A finding may miss
+a line because the scope gate allows a small margin around a changed one and a
+forge allows none — a remark about the declaration just above your edit is a
+good remark with nowhere to hang.
+
+Inside GitHub Actions the pull request, the repository and the API address come
+from the job. Elsewhere, name them: `--project owner/name --pull 42`. The token
+is read from `GITHUB_TOKEN` or `GH_TOKEN` and from nowhere else, and it needs
+`pull-requests: write`. Every run posts a new review: nothing earlier is edited,
+folded or deleted, so a re-run leaves what it said before standing. See
+[CI setup](ci.md) for the job.
 
 `ROBOVIEWER_REPO` and `ROBOVIEWER_OUTPUT` cover `--repo`/`-o` if you set them
 once, and `ROBOVIEWER_PROVIDER_CONFIG` names the provider file where there is no

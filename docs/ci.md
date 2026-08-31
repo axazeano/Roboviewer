@@ -1,7 +1,9 @@
 # Continuous integration
 
 There is nothing to install on your forge. The run writes files, the pipeline
-publishes them, and the one thing a runner reads back is the exit code.
+publishes them, and the one thing a runner reads back is the exit code. On
+GitHub it can also put the findings on the pull request itself — see
+[Comments on the pull request](#comments-on-the-pull-request).
 
 | Code | Means |
 | --- | --- |
@@ -95,3 +97,44 @@ Findings arrive as Code Scanning alerts, matched across runs by fingerprint, so
 a finding you fixed closes itself. Both jobs copy the files out of
 `runs/latest/` rather than pointing at the symlink: what an uploader does with a
 symlink differs between runners, and a copy behaves the same everywhere.
+
+## Comments on the pull request
+
+Code Scanning is a tab. `roboviewer comment` puts the findings where the
+discussion is: one review on the pull request, a comment on each finding the
+diff can carry one, and a body holding the judge's summary and the rest.
+
+```yaml
+      - run: roboviewer review --config .roboviewer/config.toml --format md,sarif
+        env:
+          ROBOVIEWER_PROVIDER_CONFIG: .roboviewer/provider.toml
+          ROBOVIEWER_API_KEY: ${{ secrets.LLM_API_KEY }}
+      - if: always()
+        run: roboviewer comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+with `pull-requests: write` added to the job's `permissions`. The pull request,
+the repository and the API address come out of the job's own variables, so
+nothing above names them; `--project owner/name --pull 42` says it by hand
+outside a pipeline. `--run PATH` picks a run other than the latest, and
+`--dry-run` prints the whole review without sending it.
+
+`comment` is a second step rather than a flag on `review` on purpose. Posting
+fails for reasons a review does not — a token, a permission, a network — and
+those should not cost the tokens again. It reads a run off disk and talks to no
+provider, so `if: always()` posts the findings even when `--fail-on` has just
+failed the job.
+
+Two things to know before turning it on:
+
+- **A finding may miss its line.** The scope gate keeps a finding within a small
+  margin of a changed line, and a forge will only anchor to a line its diff
+  actually carries — a remark about the declaration just above your edit has
+  nowhere to hang. Those go into the body of the same review, which says how
+  many they were. Nothing is dropped.
+- **Every run posts a new review.** Nothing earlier is looked up, edited, folded
+  or deleted, and no state is kept between runs, so a second run over the same
+  branch says everything again. Post on `pull_request: [opened]` and on a manual
+  `workflow_dispatch` rather than on every push, or the pull request fills up.

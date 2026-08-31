@@ -14,11 +14,28 @@ disagree, and then puts the wheel on [PyPI][pypi] and the image on
 ## Unreleased
 
 The command line says what it does: a command per job and the branches by name,
-and the first of those commands sets the tool up by asking. The code is laid out
-by subsystem, so that a person opening any file knows where they are, and the
+and the first of those commands sets the tool up by asking. The findings can now
+reach a GitHub pull request instead of only an artifact. The code is laid out by
+subsystem, so that a person opening any file knows where they are, and the
 corpus becomes a benchmark with a command of its own. Nothing a review does,
 writes or prints changed.
 
+- **`roboviewer comment`, a finished run on the pull request.** One review on
+  the merge request: a comment on each finding sitting on a line the diff
+  carries, and a body holding the judge's summary and every finding it does not
+  — the scope gate allows a margin around a changed line and a forge allows
+  none, so a remark about the declaration just above an edit is reported rather
+  than dropped. The pull request, the repository, the API address and the token
+  come out of a GitHub Actions job's own variables; `--project owner/name --pull
+  N` says them by hand, `--run PATH` picks a run other than the latest, and
+  `--dry-run` prints the whole review without sending it. A second command
+  rather than a flag on `review`: posting fails over a token or a permission,
+  and that should not cost the tokens a second time. It reads the run off disk
+  and talks to no provider. Statelessly, and deliberately: nothing earlier is
+  looked up, edited or deleted, so every run posts a new review — put it on a
+  pull request opening and a manual job, not on every push. GitHub is the forge
+  written; the seam takes a second one. Nothing on the review path imports any
+  of it, and a test holds it there.
 - **`roboviewer init`, the setup asked rather than copied.** A short interview —
   the gateway's address and how it wants the key, the model, a stronger judge or
   not, the language, the reports — writes `~/.config/roboviewer/provider.toml`
