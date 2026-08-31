@@ -13,11 +13,29 @@ disagree, and then puts the wheel on [PyPI][pypi] and the image on
 
 ## Unreleased
 
-The command line says what it does: a command per job and the branches by name.
-The code is laid out by subsystem, so that a person opening any file knows where
-they are, and the corpus becomes a benchmark with a command of its own. Nothing
-a review does, writes or prints changed.
+The command line says what it does: a command per job and the branches by name,
+and the first of those commands sets the tool up by asking. The code is laid out
+by subsystem, so that a person opening any file knows where they are, and the
+corpus becomes a benchmark with a command of its own. Nothing a review does,
+writes or prints changed.
 
+- **`roboviewer init`, the setup asked rather than copied.** A short interview —
+  the gateway's address and how it wants the key, the model, a stronger judge or
+  not, the language, the reports — writes `~/.config/roboviewer/provider.toml`
+  and `config.toml`. Every question has a default, so Enter throughout leaves a
+  working setup. What lands is the annotated example with the answers set into
+  it, comments and all, rather than a generated file holding only the answers.
+  An existing file is never overwritten without being asked, the key stays in an
+  environment variable unless writing it down is chosen explicitly (mode `600`
+  when it is), and the last question offers the `check-provider` probe against
+  what was just written. Lists are answered with the arrows — `space` marks
+  where several are allowed, `Escape` stops — and the answer replaces the list
+  on the screen; without a terminal to draw on, the same lists are numbered and
+  typed. No dependency comes with it: `termios` is in the standard library, and
+  where it is not, the numbered form is the whole of what changes. A stdin that cannot answer is refused with exit 2
+  instead of hanging. The two example files moved into the package, at
+  `roboviewer/config/examples/`, since the wizard writes them and they now ship
+  in the wheel.
 - **A command per job, and the branches named — breaking.** The review is
   `roboviewer review --from <branch> --into <branch>`: two bare branch names in
   a fixed order could not be read back off a shell history without remembering

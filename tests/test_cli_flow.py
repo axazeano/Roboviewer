@@ -155,8 +155,8 @@ def test_check_provider_asks_for_neither_a_repository_nor_a_branch(
 
 
 def test_every_command_is_a_command_rather_than_a_flag() -> None:
-    """The four questions about the setup, each answered by its own name."""
+    """Every job the tool does, each answered by its own name."""
     parser = build_parser()
 
-    for command in ("review", "diff", "list-items", "show-config", "check-provider"):
+    for command in ("review", "diff", "init", "list-items", "show-config", "check-provider"):
         assert parser.parse_args([command]).command == command

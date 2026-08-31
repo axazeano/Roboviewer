@@ -62,6 +62,7 @@ include = ["roboviewer*"]
 [tool.setuptools.package-data]
 roboviewer = [
     "checklists/**/*.md",
+    "config/examples/*.toml",
     "review/prompts/**/*.md",
     "reports/templates/**/*.j2",
     "reports/templates/**/*.md",

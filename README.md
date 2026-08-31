@@ -175,23 +175,32 @@ the version it was reviewed with.
 ## Configure
 
 ```bash
-mkdir -p ~/.config/roboviewer
-cp provider.example.toml ~/.config/roboviewer/provider.toml
-cp config.example.toml   ~/.config/roboviewer/config.toml
-export ROBOVIEWER_API_KEY=...
-roboviewer check-provider
+roboviewer init
 ```
 
-Set `provider.base_url` and `reviewer.model`. Everything else has working
-defaults and is documented inline in
-[provider.example.toml](provider.example.toml) and
-[config.example.toml](config.example.toml).
+A short interview — the address, how the gateway wants the key, the model, the
+language, which reports — and it writes the two files it walks you through:
+`~/.config/roboviewer/provider.toml` and `config.toml`. Every question has a
+default, so Enter all the way through leaves a working setup. Each file is
+written as the annotated example with your answers set into it, so it stays as
+readable six months later as it was on the first day, and an existing file is
+never overwritten without being asked. At the end it offers to probe the
+gateway.
+
+The key does not have to reach the disk: `ROBOVIEWER_API_KEY` is the default and
+writing the key into the file is a separate answer, which then gets mode `600`.
+
+To do it by hand instead, copy
+[the examples](roboviewer/config/examples) into `~/.config/roboviewer/` and set
+`provider.base_url` and `reviewer.model`; everything else has working defaults
+and is documented inline.
 
 The provider lives in its own file so the settings file stays safe to copy: a
 `--config` file carrying a `[provider]` section is refused.
-`check-provider` makes a handful of targeted requests and names what is wrong
-— wrong auth scheme, a `base_url` missing `/v1`, a gateway that cannot do tool
-calling — instead of leaving you to infer it from eight agents failing at once.
+`roboviewer check-provider` makes a handful of targeted requests and names what
+is wrong — wrong auth scheme, a `base_url` missing `/v1`, a gateway that cannot
+do tool calling — instead of leaving you to infer it from eight agents failing
+at once.
 
 The sections, the rule that `--config` replaces rather than layers, and what to
 do about rate limits: [Configuration](docs/configuration.md).
