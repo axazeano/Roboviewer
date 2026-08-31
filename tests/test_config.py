@@ -219,7 +219,7 @@ def test_a_config_inside_the_reviewed_repository_is_not_picked_up(
     in_repo.parent.mkdir(parents=True)
     in_repo.write_text('[provider]\nmodel = "repo-model"\n', encoding="utf-8")
 
-    assert main(["--show-config", "-C", str(root)]) == 0
+    assert main(["show-config", "--repo", str(root)]) == 0
 
     out = capsys.readouterr().out
     assert "repo-model" not in out
@@ -229,7 +229,7 @@ def test_a_config_inside_the_reviewed_repository_is_not_picked_up(
 def test_show_config_names_the_file_in_use(capsys: pytest.CaptureFixture[str]) -> None:
     path = write_home_config()
 
-    assert main(["--show-config"]) == 0
+    assert main(["show-config"]) == 0
 
     assert str(path) in capsys.readouterr().out
 
@@ -237,7 +237,7 @@ def test_show_config_names_the_file_in_use(capsys: pytest.CaptureFixture[str]) -
 def test_show_config_says_so_when_there_is_no_file(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert main(["--show-config"]) == 0
+    assert main(["show-config"]) == 0
 
     # Two files now, so the line says which half is on defaults rather than
     # claiming the whole configuration is.
@@ -272,7 +272,7 @@ def test_a_typo_stops_the_run_and_names_the_key(
     write_home_config('[reviewer]\nmodel = "m"\nmodle = "typo"\n')
 
     # 2 is "the tool could not run", the same code every other setup failure uses
-    assert main(["--show-config"]) == 2
+    assert main(["show-config"]) == 2
 
     assert "modle" in capsys.readouterr().err
 
@@ -319,7 +319,7 @@ def test_the_judge_section_is_what_makes_the_two_roles_differ(
 ) -> None:
     write_home_config('[reviewer]\nmodel = "m"\nmax_turns = 15\n\n[judge]\nmax_turns = 6\n')
 
-    assert main(["--show-config"]) == 0
+    assert main(["show-config"]) == 0
 
     out = capsys.readouterr().out
     assert "max_turns    15" in out

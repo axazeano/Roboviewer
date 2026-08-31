@@ -423,7 +423,7 @@ def _describe(exc: Exception) -> str:
         if status in (401, 403):
             return (
                 f"HTTP {status}: the provider rejected the key ({detail}). "
-                "Dig into it with `roboviewer --check-provider`"
+                "Dig into it with `roboviewer check-provider`"
             )
         if status == 404:
             return f"HTTP 404: endpoint or model not found ({detail}). Check base_url and model"

@@ -28,8 +28,8 @@ the error says where the provider belongs.
 
 `--config PATH` reads a different settings file **instead of** the one in
 `~/.config/roboviewer/`, not on top of it — but it never changes where the
-provider comes from. `--show-config` prints both files and which half came from
-which.
+provider comes from. `roboviewer show-config` prints both files and which half
+came from which.
 
 ### Coming from a single file
 
@@ -45,7 +45,7 @@ all three — see [Tuning](tuning.md).
 ## Check the gateway
 
 ```bash
-roboviewer --check-provider
+roboviewer check-provider
 ```
 
 It makes a handful of targeted requests and names what is wrong — wrong auth

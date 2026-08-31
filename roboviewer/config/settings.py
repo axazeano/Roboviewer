@@ -137,7 +137,7 @@ class ProviderConfig(BaseModel):
     auth_scheme: str = "Bearer"
 
     # How hard the agent is pushed to submit its result on the final turn.
-    # Lower it only when `--check-provider` says the gateway rejects the
+    # Lower it only when `check-provider` says the gateway rejects the
     # stronger mode — it prints the value to use.
     terminal_tool_choice: Literal["forced", "required", "auto"] = "forced"
 

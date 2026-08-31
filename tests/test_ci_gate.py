@@ -132,7 +132,7 @@ def test_the_target_branch_can_come_from_the_environment(
     monkeypatch.setenv("HOME", str(repo / "home"))
     monkeypatch.setenv("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", "main")
 
-    code = main(["--diff-only", "-C", str(repo)])
+    code = main(["diff", "--repo", str(repo)])
 
     out = capsys.readouterr().out
     assert code == 0
@@ -146,7 +146,7 @@ def test_an_explicit_target_beats_the_environment(
     monkeypatch.setenv("HOME", str(repo / "home"))
     monkeypatch.setenv("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", "nowhere")
 
-    code = main(["main", "--diff-only", "-C", str(repo)])
+    code = main(["diff", "--into", "main", "--repo", str(repo)])
 
     assert code == 0
     assert "nowhere" not in capsys.readouterr().out
@@ -165,7 +165,7 @@ def test_a_shallow_clone_is_named_as_the_likely_cause(
         capture_output=True,
     )
 
-    code = main(["main", "--diff-only", "-C", str(clone)])
+    code = main(["diff", "--into", "main", "--repo", str(clone)])
 
     assert code == exit_codes.SETUP
     assert "clone is shallow" in capsys.readouterr().err

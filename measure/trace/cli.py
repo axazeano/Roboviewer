@@ -1,6 +1,7 @@
-"""The command: `python -m measure.trace review <target>` and `python -m measure.trace page <dir>`.
+"""The command: `python -m measure.trace review --into <branch>` and
+`python -m measure.trace page <dir>`.
 
-Two things to ask for. `review` runs the tool's own command with this package
+Two things to ask for. `review` runs the tool's own review with this package
 watching, so the flags are the tool's flags and there is no second command line
 to keep in step. `page` renders a log somebody already has — the run that was
 killed, the run from last week, the run a colleague sent over.
@@ -43,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="run a review, keep a log of it, and render the page",
         # Everything after the subcommand belongs to the tool: this command adds
         # no flags of its own, so there is nothing here to shadow one of its.
-        usage="python -m measure.trace review <target> [source] [roboviewer options]",
+        usage="python -m measure.trace review [roboviewer review options]",
     )
     review.add_argument("review_args", nargs=argparse.REMAINDER)
 
@@ -59,14 +60,15 @@ def _review(argv: list[str]) -> int:
     failure to render should cost the page, never the log it came from.
     """
     recorder = Recorder()
-    code = review_main(argv, observer=recorder)
+    # The tool's `review` command; everything typed after ours is its flags
+    code = review_main(["review", *argv], observer=recorder)
     # Closed again here, and a no-op when the run closed it itself: a review
     # that raised on its way out still leaves a file that is not half-written.
     recorder.close()
 
     if recorder.directory is None:
-        # The review stopped before it started — a bad flag, no changes, or a
-        # diagnostic command. Nothing was recorded and there is nothing to show.
+        # The review stopped before it started — a bad flag, or no changes at
+        # all. Nothing was recorded and there is nothing to show.
         return code
     _page(recorder.directory)
     return code

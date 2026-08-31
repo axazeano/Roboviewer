@@ -13,10 +13,23 @@ disagree, and then puts the wheel on [PyPI][pypi] and the image on
 
 ## Unreleased
 
-The code is laid out by subsystem, so that a person opening any file knows
-where they are, and the corpus becomes a benchmark with a command of its own.
-Nothing a review does, writes or prints changed.
+The command line says what it does: a command per job and the branches by name.
+The code is laid out by subsystem, so that a person opening any file knows where
+they are, and the corpus becomes a benchmark with a command of its own. Nothing
+a review does, writes or prints changed.
 
+- **A command per job, and the branches named — breaking.** The review is
+  `roboviewer review --from <branch> --into <branch>`: two bare branch names in
+  a fixed order could not be read back off a shell history without remembering
+  which way round they went. The repository is `--repo PATH`, git's `-C` is
+  gone, and the four things that were never a review have names of their own —
+  `roboviewer diff`, `list-items`, `show-config`, `check-provider` — instead of
+  the flags `--diff-only`, `--list-items`, `--show-config` and
+  `--check-provider`. Defaults are unchanged: `--from` is the current branch,
+  `--into` falls back to the branch a merge-request pipeline names, so a CI job
+  still carries no branch at all. The old positional form is refused with exit
+  2 and a line naming the new one. Everything else — the other flags, the
+  config keys, the report names, the four exit codes — is untouched.
 - **`benchmark`, a second console script**, shaped like git: `benchmark list
   add <pull-request>` records a merge request in `benchmarks/items.toml` and
   clones it at the commit reviewers saw, `list show` and `list remove` keep the
@@ -59,11 +72,11 @@ Nothing a review does, writes or prints changed.
   vocabulary in `models.py` and the one observer protocol in `observer.py` at
   the root. [docs/architecture.md](docs/architecture.md) is the map.
 - **The run tracer lives under `measure/`**: `measure.trace`, formerly
-  `research`, watches a run (`python -m measure.trace review develop`), outside
+  `research`, watches a run (`python -m measure.trace review --into develop`), outside
   the wheel. `measure.corpus` existed briefly on the way to `benchmark`.
 - Import paths changed throughout; nothing outside the repository imported
-  them. The CLI, the config files, the report formats and the prompt texts are
-  exactly what 0.2.0 shipped.
+  them. Apart from the command line above, the config files, the report formats
+  and the prompt texts are exactly what 0.2.0 shipped.
 
 ## 0.2.0 — 2026-08-20
 

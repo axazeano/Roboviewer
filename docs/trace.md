@@ -10,7 +10,7 @@ repository root.
 ## Commands
 
 ```bash
-python -m measure.trace review develop              # run a review, keep a log, render the page
+python -m measure.trace review --into develop        # run a review, keep a log, render the page
 python -m measure.trace page .roboviewer/runs/latest  # render a log that already exists
 ```
 
@@ -18,10 +18,10 @@ python -m measure.trace page .roboviewer/runs/latest  # render a log that alread
 whatever the review exited with:
 
 ```bash
-python -m measure.trace review develop feature/login       # someone else's branch
-python -m measure.trace review develop --no-judge          # while iterating on a prompt
-python -m measure.trace review develop --only correctness  # one checklist item
-python -m measure.trace review develop -C ~/projects/app   # a repository elsewhere
+python -m measure.trace review --from feature/login --into develop  # someone else's branch
+python -m measure.trace review --into develop --no-judge           # while iterating on a prompt
+python -m measure.trace review --into develop --only correctness   # one checklist item
+python -m measure.trace review --into develop --repo ~/projects/app  # a repository elsewhere
 ```
 
 Both write into the run's own directory, beside the report:

@@ -48,15 +48,16 @@ class FakeReview:
         self.calls.append(list(argv))
         if len(self.calls) <= self.crash_first:
             raise RuntimeError("the provider timed out")
-        root = Path(argv[argv.index("-C") + 1])
+        root = Path(argv[argv.index("--repo") + 1])
         output = Path(argv[argv.index("-o") + 1]) if "-o" in argv else root / ".roboviewer"
+        target, source = argv[argv.index("--into") + 1], argv[argv.index("--from") + 1]
         run = ReviewRun(
             run_id="run-1",
             repo_root=str(root),
-            branch=argv[1],
-            target=argv[0],
-            base_sha=argv[0],
-            head_sha=argv[1],
+            branch=source,
+            target=target,
+            base_sha=target,
+            head_sha=source,
             model="stub",
             started_at="2026-08-23T10:00:00Z",
             items=[
@@ -108,9 +109,12 @@ def test_each_entry_is_reviewed_in_its_clone_between_its_two_commits(
     assert outcome.findings == 2
     assert outcome.confirmed == 1
     [argv] = review.calls
-    assert argv[:4] == [origin.base, origin.head, "-C", str(store.repo_dir(entry))]
-    assert argv[4:6] == ["-o", str(store.runs / "stamp")]
-    assert argv[6:] == ["--no-judge", "-v"]
+    assert argv[:7] == [
+        "review", "--into", origin.base, "--from", origin.head,
+        "--repo", str(store.repo_dir(entry)),
+    ]
+    assert argv[7:9] == ["-o", str(store.runs / "stamp")]
+    assert argv[9:] == ["--no-judge", "-v"]
     assert store.is_built(entry), "fetched on the way, because it was not there"
 
 
@@ -148,8 +152,8 @@ def test_an_output_flag_of_the_tool_s_own_is_respected(
 
 
 def test_pointing_the_review_at_another_repository_is_refused_up_front(store: Store) -> None:
-    with pytest.raises(ValueError, match="-C is not a benchmark flag"):
-        running.start(store, ["-C", "/somewhere"], stamp="stamp")
+    with pytest.raises(ValueError, match="--repo is not a benchmark flag"):
+        running.start(store, ["--repo", "/somewhere"], stamp="stamp")
     assert not store.runs.exists()
 
 
@@ -404,7 +408,7 @@ def test_the_command_reviews_the_index_and_prints_one_line_per_entry(
     code = main(["--root", str(store.root), "run", "--no-judge", "--format", "md"])
 
     assert code == 0
-    assert [argv[6:] for argv in review.calls] == [["--no-judge", "--format", "md"]] * 2
+    assert [argv[9:] for argv in review.calls] == [["--no-judge", "--format", "md"]] * 2
     out = capsys.readouterr().out
     assert "✔ sample-42" in out
     assert "✔ other-43" in out
@@ -434,8 +438,8 @@ def test_entries_narrows_the_run_and_a_double_dash_is_dropped(
 
     assert code == 0
     [argv] = review.calls
-    assert argv[2:4] == ["-C", str(store.repo_dir(entry_for(origin, id="other-43")))]
-    assert argv[6:] == ["-v"]
+    assert argv[5:7] == ["--repo", str(store.repo_dir(entry_for(origin, id="other-43")))]
+    assert argv[9:] == ["-v"]
     capsys.readouterr()
 
 
@@ -587,7 +591,7 @@ class ThreadAwareReview(FakeReview):
         self.threads: dict[str, set[int]] = {}
 
     def __call__(self, argv: list[str], observer) -> int:  # type: ignore[no-untyped-def]
-        clone = Path(argv[argv.index("-C") + 1]).name
+        clone = Path(argv[argv.index("--repo") + 1]).name
         self.threads.setdefault(clone, set()).add(threading.get_ident())
         return super().__call__(argv, observer)
 
@@ -672,7 +676,7 @@ def test_a_repository_flag_is_refused_before_anything_runs(
     monkeypatch.setattr("roboviewer.benchmark.cli.review_main", review)
     index_with(store, entry_for(origin))
 
-    assert main(["--root", str(store.root), "run", "-C", "/elsewhere"]) == 2
+    assert main(["--root", str(store.root), "run", "--repo", "/elsewhere"]) == 2
     assert review.calls == []
     assert "not a benchmark flag" in capsys.readouterr().err
 

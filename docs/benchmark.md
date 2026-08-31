@@ -47,7 +47,7 @@ benchmark list add https://github.com/prometheus/prometheus/pull/19339
   base e75af386be14 → head bfbc9d9295f7, 3 thread(s)
   `domain` and `found` are blank; fill them in before committing the index.
 ✔ prometheus-19339         4 review comment(s) in 3 thread(s)
-Review it: roboviewer e75af386be14 bfbc9d9295f7 -C benchmarks/repos/prometheus-19339
+Review it: roboviewer review --from bfbc9d9295f7 --into e75af386be14 --repo benchmarks/repos/prometheus-19339
 ```
 
 Two requests to GitHub: the pull request, for the base, the size, the language
@@ -75,13 +75,14 @@ benchmark run --parallel 3          # three entries at once
 benchmark run --refresh             # fetch again first
 ```
 
-One `roboviewer <base> <head> -C benchmarks/repos/<id>` per entry, with
-whatever flags follow passed through unchanged — `--config`, `--checklist`,
-`--format`, `--language`, `--no-judge`, `-j`, `-v` all mean what they mean on
-the tool, and there is no second set of flags to keep in step. Two of the
-tool's are not for here: `-C`, because each entry is reviewed in its own
-clone, and `--output`, which works but puts every entry's reports where you
-said instead of under the run. An entry that is not on disk is fetched first;
+One `roboviewer review --from <head> --into <base> --repo
+benchmarks/repos/<id>` per entry, with whatever flags follow passed through
+unchanged — `--config`, `--checklist`, `--format`, `--language`, `--no-judge`,
+`-j`, `-v` all mean what they mean on the tool, and there is no second set of
+flags to keep in step. Some of the tool's are not for here: `--repo`, `--from`
+and `--into`, because each entry is reviewed in its own clone between the two
+commits the index names, and `--output`, which works but puts every entry's
+reports where you said instead of under the run. An entry that is not on disk is fetched first;
 one that cannot be is reported and the others still run.
 
 ```
@@ -180,7 +181,7 @@ with every field explained and deliberately unbuildable SHAs.
 The clone holds both commits, so reviewing one by hand is one command:
 
 ```bash
-roboviewer <base> <head> -C benchmarks/repos/<id>
+roboviewer review --from <head> --into <base> --repo benchmarks/repos/<id>
 ```
 
 `base` is the target side and `head` the source side, exactly as in a normal

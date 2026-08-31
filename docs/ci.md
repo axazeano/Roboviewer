@@ -17,8 +17,8 @@ pointing at code the branch never touched, must never turn a pipeline red. Codes
 `1` and `3` are separate because one is fixed in the branch and the other rerun.
 
 In a merge-request pipeline the target branch comes from the environment —
-`CI_MERGE_REQUEST_TARGET_BRANCH_NAME` or `GITHUB_BASE_REF` — so the command line
-carries no branch at all, and the source is whatever the runner checked out.
+`CI_MERGE_REQUEST_TARGET_BRANCH_NAME` or `GITHUB_BASE_REF` — so neither `--into`
+nor `--from` is needed, and the source is whatever the runner checked out.
 Both runners clone shallow by default, and the branch point is usually missing
 from such a clone: give the job full history, or the run stops on code `2`
 saying so.
@@ -51,7 +51,7 @@ review:
     ROBOVIEWER_PROVIDER_CONFIG: .roboviewer/provider.toml
   script:
     - pip install -q git+https://github.com/axazeano/Roboviewer.git
-    - roboviewer --config .roboviewer/config.toml --format md,codequality --fail-on blocker
+    - roboviewer review --config .roboviewer/config.toml --format md,codequality --fail-on blocker
   after_script:                        # runs even when the gate failed the job
     - cp .roboviewer/runs/latest/{gl-code-quality-report.json,report.md} .
   artifacts:
@@ -79,7 +79,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - run: pip install -q git+https://github.com/axazeano/Roboviewer.git
-      - run: roboviewer --config .roboviewer/config.toml --format md,sarif --fail-on blocker
+      - run: roboviewer review --config .roboviewer/config.toml --format md,sarif --fail-on blocker
         env:
           ROBOVIEWER_PROVIDER_CONFIG: .roboviewer/provider.toml
         env:

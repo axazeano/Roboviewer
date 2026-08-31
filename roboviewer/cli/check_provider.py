@@ -1,4 +1,4 @@
-"""What `--check-provider` prints, and the exit code its verdict implies.
+"""What `roboviewer check-provider` prints, and the exit code its verdict implies.
 
 The requests themselves are `provider.probe`; this is the reading of them: which
 of the four ways tool calling can be broken this gateway shows, and what to put

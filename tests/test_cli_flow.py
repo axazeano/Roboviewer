@@ -1,10 +1,12 @@
-"""What the CLI does before a request is made, and how it stops.
+"""What the CLI does before a request is made, which command it runs, and how
+it stops.
 
-Two things are worth pinning down. Where an overridable file set comes from —
+Three things are worth pinning down. Where an overridable file set comes from —
 a run that silently reads the bundled prompts instead of the ones in the
-repository produces findings nobody can trace back to a text. And that a step
+repository produces findings nobody can trace back to a text. That a step
 which cannot go on exits with 2 and says why on stderr, since that is the whole
-contract a script calling roboviewer has.
+contract a script calling roboviewer has. And that every job the tool does has
+a name of its own, so no flag quietly runs something other than a review.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from roboviewer.cli import main
+from roboviewer.cli.arguments import build_parser
 from roboviewer.config import Config, overrides
 from roboviewer.review.prompts import PromptError, Prompts
 
@@ -84,7 +87,7 @@ def test_a_configured_prompts_directory_that_is_missing_is_an_error(repo: Path) 
 def test_a_failing_step_exits_with_2_and_explains_itself(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = main(["main", "-C", str(repo), "--checklist", "nowhere"])
+    code = main(["review", "--into", "main", "--repo", str(repo), "--checklist", "nowhere"])
 
     assert code == 2
     assert "Checklist error" in capsys.readouterr().err
@@ -93,7 +96,7 @@ def test_a_failing_step_exits_with_2_and_explains_itself(
 def test_a_missing_repository_names_the_way_out(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = main(["main", "-C", str(tmp_path)])
+    code = main(["review", "--into", "main", "--repo", str(tmp_path)])
 
     assert code == 2
     assert "ROBOVIEWER_REPO" in capsys.readouterr().err
@@ -102,8 +105,58 @@ def test_a_missing_repository_names_the_way_out(
 def test_a_diagnostic_command_runs_outside_a_repository(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """--list-items has no branches to compare and no repository to read."""
-    code = main(["--list-items", "-C", str(tmp_path)])
+    """`list-items` has no branches to compare and no repository to read."""
+    code = main(["list-items", "--repo", str(tmp_path)])
 
     assert code == 0
     assert "correctness" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ which command runs
+
+
+def test_the_old_positional_form_is_refused_and_names_the_new_one(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`roboviewer develop feature/login` used to be a review. Whoever types it
+    again must be told what replaced it, not only that it is invalid."""
+    with pytest.raises(SystemExit) as stopped:
+        main(["develop", "feature/login"])
+
+    assert stopped.value.code == 2
+    err = capsys.readouterr().err
+    assert "--from" in err and "--into" in err
+
+
+def test_a_review_without_a_target_branch_names_the_flag_that_gives_one(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in ("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", "GITHUB_BASE_REF"):
+        monkeypatch.delenv(name, raising=False)
+
+    code = main(["review", "--repo", str(repo)])
+
+    assert code == 2
+    assert "--into" in capsys.readouterr().err
+
+
+def test_check_provider_asks_for_neither_a_repository_nor_a_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """It probes a gateway, so it takes no --repo at all; with no key it stops
+    before reaching the network."""
+    monkeypatch.delenv("ROBOVIEWER_API_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    code = main(["check-provider"])
+
+    assert code == 2
+    assert "No key found" in capsys.readouterr().out
+
+
+def test_every_command_is_a_command_rather_than_a_flag() -> None:
+    """The four questions about the setup, each answered by its own name."""
+    parser = build_parser()
+
+    for command in ("review", "diff", "list-items", "show-config", "check-provider"):
+        assert parser.parse_args([command]).command == command
