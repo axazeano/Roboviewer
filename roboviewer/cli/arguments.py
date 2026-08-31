@@ -1,9 +1,9 @@
 """The commands, their flags, and how a flag overrides the config.
 
-Five commands rather than one carrying diagnostic flags: `review` and `diff`
-compare two branches, `list-items`, `show-config` and `check-provider` answer a
-question about the setup and never look at a branch. A flag that quietly runs
-something other than a review is a command in disguise.
+Six commands rather than one carrying diagnostic flags: `review` and `diff`
+compare two branches, `init`, `list-items`, `show-config` and `check-provider`
+work on the setup and never look at a branch. A flag that quietly runs something
+other than a review is a command in disguise.
 
 The branches are named — `--from`, `--into` — rather than ordered: an order
 nobody can read back off a shell history is an order somebody gets wrong.
@@ -34,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="A local, agent-driven automated reviewer for merge requests.",
         epilog=(
             "Examples:\n"
+            "  roboviewer init\n"
+            "        answer a few questions and write the two config files\n"
             "  roboviewer review --into develop\n"
             "        the current branch into develop\n"
             "  roboviewer review --from feature/login --into develop\n"
@@ -126,6 +128,17 @@ def build_parser() -> argparse.ArgumentParser:
     _branches(diff)
     _repository(diff)
     _settings_file(diff)
+
+    commands.add_parser(
+        "init",
+        help="set the tool up by answering questions",
+        description=(
+            "Write ~/.config/roboviewer/provider.toml and config.toml by answering a "
+            "short interview. Each file is the annotated example with your answers set "
+            "in it, so it stays as readable afterwards as it was to begin with. An "
+            "existing file is never overwritten without being asked."
+        ),
+    )
 
     items = commands.add_parser(
         "list-items",

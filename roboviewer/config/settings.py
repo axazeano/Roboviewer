@@ -25,7 +25,7 @@ STRICT = ConfigDict(extra="forbid")
 
 # Stack-agnostic on purpose: lockfiles, generated code, vendored dependencies and
 # snapshots. Anything language-specific belongs in the user's config — see
-# config.example.toml for ready-made blocks.
+# examples/config.toml for ready-made blocks, which `roboviewer init` offers.
 DEFAULT_EXCLUDES = [
     "*.lock",
     "**/*.generated.*",
@@ -132,7 +132,7 @@ class ProviderConfig(BaseModel):
     rate_limits: RateLimits = Field(default_factory=RateLimits)
 
     # Defaults to the OpenAI way, Authorization: Bearer <key>; gateways often
-    # want something else. See provider.example.toml for the combinations.
+    # want something else. See examples/provider.toml for the combinations.
     auth_header: str = "Authorization"
     auth_scheme: str = "Bearer"
 

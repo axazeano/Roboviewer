@@ -1,5 +1,6 @@
-# Copy to ~/.config/roboviewer/provider.toml — how to reach the gateway, and
-# nothing else. Set once per machine and then left alone.
+# ~/.config/roboviewer/provider.toml — how to reach the gateway, and nothing
+# else. Written by `roboviewer init`, or copied here by hand. Set once per
+# machine and then left alone.
 #
 # It lives apart from config.toml on purpose. The settings file gets copied —
 # into an experiment, into a write-up recording how a run was configured — and

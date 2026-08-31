@@ -77,6 +77,13 @@ def _execute(args: argparse.Namespace, observer: RunObserver) -> int:
     Everything that fails raises `CLIError`; what stops on purpose returns a code
     of its own, because `diff` finishing is not a failure.
     """
+    if args.command == "init":
+        # Before the config is read, not after: the wizard is what somebody runs
+        # when there is no config, or when the one there is does not load.
+        from .init import run_init
+
+        return run_init()
+
     if args.command == "check-provider":
         # The one command that reads nothing but the provider file
         from .check_provider import check_provider
@@ -218,8 +225,8 @@ def _provider_hint(cfg: Config) -> str:
     if cfg.provider_source:
         return f"The provider is configured in {cfg.provider_source}."
     return (
-        f"There is no provider file yet: copy provider.example.toml to "
-        f"{provider_config_path()} and set base_url, the model and the key there."
+        f"There is no provider file yet: run `roboviewer init`, which asks for "
+        f"the address, the key and the model and writes {provider_config_path()}."
     )
 
 

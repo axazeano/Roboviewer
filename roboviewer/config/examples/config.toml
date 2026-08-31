@@ -1,6 +1,7 @@
-# Copy to ~/.config/roboviewer/config.toml — what to ask of a model, and how a
-# run behaves. Keep it anywhere else and name it with --config, which reads that
-# file instead of this one rather than in addition to it.
+# ~/.config/roboviewer/config.toml — what to ask of a model, and how a run
+# behaves. `roboviewer init` writes this file by asking; copying it here by hand
+# comes to the same thing. Keep it anywhere else and name it with --config,
+# which reads that file instead of this one rather than in addition to it.
 #
 # How to reach the gateway is not here: it lives in provider.toml, and is read
 # from there on every run. A [provider] section in this file is refused, which

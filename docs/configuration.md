@@ -6,9 +6,16 @@ whether the gateway on the other end can actually run a review.
 ## Two files
 
 ```bash
+roboviewer init
+```
+
+The interview writes both of them, and answers what each question is for as it
+goes. To do it by hand instead, the same two files ship with the tool:
+
+```bash
 mkdir -p ~/.config/roboviewer
-cp provider.example.toml ~/.config/roboviewer/provider.toml
-cp config.example.toml   ~/.config/roboviewer/config.toml
+cp roboviewer/config/examples/provider.toml ~/.config/roboviewer/provider.toml
+cp roboviewer/config/examples/config.toml   ~/.config/roboviewer/config.toml
 ```
 
 `provider.toml` is how to reach the gateway — address, key, auth. It is set once
@@ -41,6 +48,13 @@ ignored.
 
 Prompts and templates follow the opposite rule, even though `.roboviewer/` holds
 all three — see [Tuning](tuning.md).
+
+## Setting up again
+
+`roboviewer init` is safe to rerun: it asks before overwriting either file, and
+"no" leaves that one exactly as it was. What it cannot do is edit the file you
+already have — it starts from the shipped example every time — so a config you
+have been turning for months is better edited than re-answered.
 
 ## Check the gateway
 
