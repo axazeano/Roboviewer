@@ -403,6 +403,65 @@ def test_a_named_pull_request_needs_no_pipeline_at_all(
     assert "acme/app#7" in capsys.readouterr().out
 
 
+def test_a_run_other_than_the_latest_is_posted_when_named(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--run is how a run that is no longer the latest gets posted: a rerun of
+    the publishing step after the branch has moved on."""
+    older = repo / ".roboviewer" / "runs" / "20260901-090000"
+    older.mkdir(parents=True)
+    run = make_run([finding("F1", 2)])
+    run.base_sha, run.head_sha = sha(repo, "main"), sha(repo, "feature/cart")
+    (older / "run.json").write_text(run.model_dump_json(indent=2), encoding="utf-8")
+
+    code = main(
+        ["comment", "--repo", str(repo), "--run", str(older),
+         "--project", "acme/app", "--pull", "7", "--dry-run"]
+    )
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert str(older) in out
+    assert "Title F1" in out
+
+
+def test_a_run_this_version_cannot_read_says_so(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A run written by a newer version is not a crash: the file is there and
+    parses as JSON, and only the shape is wrong."""
+    directory = repo / ".roboviewer" / "runs" / "latest"
+    directory.mkdir(parents=True)
+    (directory / "run.json").write_text('{"run_id": "x"}', encoding="utf-8")
+
+    code = main(
+        ["comment", "--repo", str(repo), "--project", "acme/app", "--pull", "7", "--dry-run"]
+    )
+
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "not a run this version can read" in err
+
+
+def test_a_clone_that_cannot_diff_the_run_says_which_commits(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The usual shape of this is a shallow CI clone: the run names two commits
+    and the checkout has neither."""
+    run = make_run([finding("F1", 2)])
+    run.base_sha, run.head_sha = "0" * 40, "1" * 40
+    write_run(repo, run)
+
+    code = main(
+        ["comment", "--repo", str(repo), "--project", "acme/app", "--pull", "7", "--dry-run"]
+    )
+
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "Git error" in err
+    assert "000000000000..111111111111" in err
+
+
 def test_a_run_that_is_not_there_says_where_it_looked(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
