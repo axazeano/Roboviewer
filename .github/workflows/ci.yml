@@ -47,11 +47,12 @@ jobs:
   # stubbed transport cannot say whether the gateway answers from a runner or
   # whether GitHub accepts the lines we anchor a review to; this can.
   #
-  # Every push, unlike what docs/ci.md advises anyone else to do: here a repeat
-  # review is the evidence, not the noise.
+  # Asked once, when the pull request opens. A later commit does not ask again;
+  # re-run the job from Actions to review the branch as it now stands.
   review:
     if: >-
       github.event_name == 'pull_request'
+      && github.event.action != 'synchronize'
       && github.event.pull_request.head.repo.full_name == github.repository
     # Holds the three secrets and waits for an approval before handing them
     # over. Nothing is spent on a pull request nobody asked to review.
