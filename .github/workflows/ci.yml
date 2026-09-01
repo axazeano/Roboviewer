@@ -48,12 +48,14 @@ jobs:
   # whether GitHub accepts the lines we anchor a review to; this can.
   #
   # Asked once, when the pull request opens. A later commit does not ask again;
-  # re-run the job from Actions to review the branch as it now stands.
+  # re-run the job from Actions to review the branch as it now stands. The
+  # no-ai-review label, set while opening, skips the question altogether.
   review:
     if: >-
       github.event_name == 'pull_request'
       && github.event.action != 'synchronize'
       && github.event.pull_request.head.repo.full_name == github.repository
+      && !contains(github.event.pull_request.labels.*.name, 'no-ai-review')
     # Holds the three secrets and waits for an approval before handing them
     # over. Nothing is spent on a pull request nobody asked to review.
     environment: model_provider

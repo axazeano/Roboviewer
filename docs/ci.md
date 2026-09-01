@@ -138,3 +138,10 @@ Two things to know before turning it on:
   or deleted, and no state is kept between runs, so a second run over the same
   branch says everything again. Post on `pull_request: [opened]` and on a manual
   `workflow_dispatch` rather than on every push, or the pull request fills up.
+
+A pull request that needs no review can say so with a label, which costs one
+line on the job:
+
+```yaml
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-ai-review') }}
+```
