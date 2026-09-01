@@ -246,14 +246,14 @@ def _target(args: argparse.Namespace) -> str:
     if not target:
         raise CLIError(
             "No target branch given.",
-            "Name it with --into <branch>. In a merge-request pull it comes "
+            "Name it with --into <branch>. In a merge-request pipeline it comes "
             "from the environment instead.",
         )
     return target
 
 
 def _target_from_ci() -> str | None:
-    """The target branch a merge-request pull already names in a variable.
+    """The target branch a merge-request pipeline already names in a variable.
 
     Announced rather than assumed: a review is against a branch, and which one
     should be readable in the job log without knowing the runner's variables.
@@ -385,7 +385,7 @@ def _plan(
 
 async def _review(plan: RunPlan, verbose: bool, observer: RunObserver = SILENT) -> int:
     console.run_header(plan.cfg)
-    pull = ReviewPipeline(
+    pipeline = ReviewPipeline(
         plan.cfg,
         plan.changes,
         plan.items,
@@ -394,7 +394,7 @@ async def _review(plan: RunPlan, verbose: bool, observer: RunObserver = SILENT) 
         observer=Broadcast([console.Console(verbose), observer]),
     )
     try:
-        run = await pull.execute()
+        run = await pipeline.execute()
     finally:
         await plan.runner.aclose()
 

@@ -1,6 +1,6 @@
 """Everything the CLI prints.
 
-Kept apart from `cli` for the same reason reports are kept out of `pull`:
+Kept apart from `cli` for the same reason reports are kept out of `pipeline`:
 deciding what a run does and describing it to a human are two jobs, and only one
 of them changes when the wording does. `cli` is left with the flow and the exit
 codes.

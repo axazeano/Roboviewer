@@ -227,6 +227,16 @@ def test_the_body_never_names_the_model() -> None:
     assert f"{SIGNATURE} · feature/cart into develop" in body
 
 
+def test_the_prose_for_a_refusing_forge_carries_every_finding() -> None:
+    """`body` lists only what could not be anchored. A forge that takes the body
+    and refuses the anchors must get the one that lists everything."""
+    draft = compose(make_run([finding("F1", 2), finding("F2", 40)]), {"cart.py": {2}})
+
+    assert "Title F1" not in draft.body
+    assert "Title F1" in draft.body_alone
+    assert "Title F2" in draft.body_alone
+
+
 def test_a_run_that_found_nothing_still_says_so() -> None:
     draft = compose(make_run([]), {})
 
@@ -283,6 +293,10 @@ def test_comments_the_forge_rejects_cost_the_anchors_and_not_the_review() -> Non
     assert "comments" not in transport.sent[1]
     assert posted.comments == 0
     assert "line must be part of the diff" in posted.note
+    # The finding that was going to be a comment has to survive into the prose;
+    # `body` names only the loose ones, so posting that would have lost it.
+    assert "Title F1" in transport.sent[1]["body"]
+    assert "Rationale F1" in transport.sent[1]["body"]
 
 
 @pytest.mark.parametrize(

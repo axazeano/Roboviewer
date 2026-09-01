@@ -98,7 +98,10 @@ jobs:
           mkdir -p .roboviewer
           printf 'base_url = "%s"\napi_key_env = "ROBOVIEWER_API_KEY"\n' "$BASE_URL" \
             > .roboviewer/provider.toml
-          printf '[reviewer]\nmodel = "%s"\n' "$MODEL" > .roboviewer/config.toml
+          # Three grouped items rather than the eight of the default set: a run
+          # over this repository's own diff takes half an hour on eight.
+          printf '[reviewer]\nmodel = "%s"\n\n[run]\nchecklist_dir = "checklists/grouped"\n' \
+            "$MODEL" > .roboviewer/config.toml
 
       # No --fail-on: a finding here is to read, not to block a merge. The
       # target branch comes from GITHUB_BASE_REF, as it does in a user's job.

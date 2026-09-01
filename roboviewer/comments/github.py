@@ -62,9 +62,9 @@ class GitHubForge:
     def _body_alone(
         self, url: str, pull: PullRequest, draft: Draft, detail: str
     ) -> Posted:
-        """What is left when GitHub will not take the anchors: the prose, which
-        names every finding anyway."""
-        status, raw = self._send(url, {"body": draft.body, "event": EVENT})
+        """What is left when GitHub will not take the anchors: the prose with
+        every finding written into it, `body` naming only the loose ones."""
+        status, raw = self._send(url, {"body": draft.body_alone, "event": EVENT})
         if status not in (200, 201):
             raise _refused(url, status, raw, pull)
         return Posted(
