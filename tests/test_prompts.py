@@ -11,6 +11,7 @@ from roboviewer.models import Finding, Severity
 from roboviewer.review.checklist import ChecklistItem
 from roboviewer.review.pipeline import ReviewPipeline
 from roboviewer.review.prompts import DEFAULT_DIR, NAMES, PromptError, Prompts, language_name
+from roboviewer.review.prompts.tool_schemas import SUBMIT_FINDINGS_TOOL
 
 from .conftest import ScriptedRunner, make_bundle, ok_outcome
 
@@ -106,6 +107,22 @@ def test_every_reviewer_prompt_forbids_checking_the_build() -> None:
         text = path.read_text(encoding="utf-8")
         assert "Never check whether it builds" in text, path
         assert "stop at that thought" in text, path
+
+
+def test_every_reviewer_prompt_and_the_schema_demand_a_line() -> None:
+    """A finding with no line cannot be acted on quickly and cannot become a
+    comment on a forge. The prompt has always asked for one; the schema is what
+    function calling enforces, and a model that drops optional fields dropped
+    this one on every finding — so the two have to say the same thing."""
+    items = SUBMIT_FINDINGS_TOOL["function"]["parameters"]["properties"]["findings"]["items"]
+    assert "line" in items["required"]
+    assert "left column" in items["properties"]["line"]["description"]
+    bundled = Path("roboviewer/review/prompts/default/item_system.md")
+    checklist_owned = Path("roboviewer/checklists").glob("*/_system.md")
+    for path in [bundled, *checklist_owned]:
+        text = path.read_text(encoding="utf-8")
+        assert "one file and one line number" in text, path
+        assert "guess a number" in text, path
 
 
 def test_every_judge_prompt_rejects_a_build_claim_without_verifying_it() -> None:

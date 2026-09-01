@@ -231,11 +231,12 @@ def test_the_summary_says_what_each_review_came_to(
     assert row["id"] == "sample-42"
     assert row["status"] == "reviewed"
     assert (row["findings"], row["confirmed"], row["out_of_scope"]) == (2, 1, 0)
+    assert row["with_line"] == 2
     assert row["run_id"] == "run-1"
     assert row["directory"].endswith("run-1")
     page = (store.runs / "stamp" / "summary.md").read_text(encoding="utf-8")
     assert "| sample-42 | reviewed | 2 | 1 |" in page
-    assert "1 of 1 reviewed" in page
+    assert "1 of 1 reviewed, 2 findings, 1 confirmed, 2 with a line." in page
 
 
 def test_every_review_rewrites_the_summary(

@@ -188,6 +188,58 @@ for every roboviewer configuration measured. The class of defect it misses —
 a symbol that resolves nowhere — is already computed by the reference pre-pass
 and printed into the prompt; the models do not act on it.
 
+## Findings with a line
+
+Measured after the series above, for TASK-78: `line` became a required field
+of the `submit_findings` schema where it had been optional, and the three
+reviewer system prompts were told not to guess one. Every finding of every
+deepseek-v4-flash run until then had come back without a line — 101 of 101 in
+the six-entry run `2026-08-25-182227`, 17 of 17 on this merge request — while
+muse-glimmer had never dropped one. The question was whether a forced field
+comes back filled with real numbers or invented ones, and what it costs in
+findings.
+
+Model deepseek-v4-flash-0731, `grouped` checklist, thinking off, judge
+two_stage, the config otherwise unchanged; before and after are this entry on
+the same day, two runs a side. The reference columns were established by
+reading each finding against `references/ios-4091.toml` — by meaning, since
+half of them had no line to compare.
+
+| Run | Schema | Findings | With a line | Confirmed | Confirmed and in the reference (distinct defects) | Confirmed and not in it | Tokens | Wall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `2026-09-01-191149` | line optional | 8 | 0 | 7 | 5 | 1 | 4.65M | 261 s |
+| `2026-09-01-191928` | line optional | 9 | 0 | 6 | 5 | 1 | 6.28M | 523 s |
+| `2026-09-01-195943` | line required | 8 | 8 | 5 | 3 | 2 | 4.98M | 1510 s¹ |
+| `2026-09-01-202454` | line required | 8 | 8 | 8 | 4 | 4 | 4.65M | 909 s |
+
+¹ Three five-minute gateway timeouts on one agent, retried; the review itself
+was no slower than the run below it.
+
+**The lines are real.** All sixteen were read against the code at the entry's
+head. Fifteen land on the code the finding describes — two on the exact line
+the reference names, `Albums+WebDAV.swift:453` and
+`NCMediaViewRepresentable.swift:39` — and one lands 59 lines above it:
+`NCMedia.swift:150` for a `titleConstraint` use at 209, the same method.
+Nothing was invented, and nobody used the `0` door.
+
+**The findings did not get worse.** Confirmed per run went 7 and 6 to 5 and 8.
+Distinct reference defects among the confirmed went 5 and 5 to 3 and 4 — a gap
+two runs a side cannot tell from run-to-run spread, and the after-runs put the
+difference into findings the reference does not list yet: the second one
+confirmed eight of eight, and two of its four unlisted findings were checked
+here and hold. `NCMedia.storyboard` carries no `initialViewController`, so
+`instantiateInitialViewController()` at `NCMediaViewRepresentable.swift:19`
+returns nil; and `NCMedia.swift:474` loads a nib named `NCMediaCommandView`
+while no such file is in the tree — the merge request added both lines. They
+are candidates for the reference, and are not counted in the table.
+
+Noticed in passing: the judge rejected "`NCMediaHost.swift` is not in the
+project" in both before-runs, and the reference lists it as expected
+(`mediahost-not-in-pbxproj`) — a judge error, not a finder one. And the
+`default`-checklist run `2026-08-25-182227` is a "before" with no "after" yet.
+
+The change stays.
+
 ## How to read these numbers
 
 - **One merge request.** Everything here is `n = 1` at the repository level.

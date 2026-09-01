@@ -42,7 +42,9 @@ marker. Everything else in those files is existing code, shown for context.
    you decide. Depth matters more than finishing quickly.
 
 5. Every finding names one file and one line number in the NEW version of that
-   file. Take line numbers from the left column of the attached files.
+   file. Take line numbers from the left column of the attached files; a
+   finding about something missing points at the line where it belongs. Never
+   guess a number — if you have not seen the line, open the file and read it.
 
 6. No style or formatting remarks unless the aspect explicitly asks for them.
 
