@@ -24,7 +24,9 @@ writes or prints changed.
   head of the line. A review is minutes of waiting, and reading a log afterwards
   meant guessing which stage took them. What is printed as content — the report
   summary, the settings listing, the diff table, a review shown by `--dry-run` —
-  is left alone: a clock on every line of a document is noise.
+  is left alone: a clock on every line of a document is noise. A finished
+  checklist item also says how far the run got — `2 of 3 done` — which is the
+  only order there is when items run several at a time.
 - **`roboviewer comment`, a finished run on the pull request.** One review on
   the merge request: a comment on each finding sitting on a line the diff
   carries, and a body holding the judge's summary and every finding it does not

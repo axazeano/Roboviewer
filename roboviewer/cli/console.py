@@ -41,8 +41,13 @@ class Console(Observer):
 
     def __init__(self, verbose: bool = False) -> None:
         self._verbose = verbose
+        # Items run several at a time, so a finished one says how far the run
+        # got rather than which one it was.
+        self._items = 0
+        self._done = 0
 
     def run_started(self, run: ReviewRun, directory: Path) -> None:  # noqa: ARG002
+        self._items = len(run.items)
         _line(
             f"▸ {run.branch} → {run.target}: {len(run.files)} files, "
             f"{len(run.items)} checklist items"
@@ -52,9 +57,11 @@ class Console(Observer):
         _line(f"▸ Started: {title}")
 
     def item_finished(self, item_id: str, title: str, result: ItemResult) -> None:  # noqa: ARG002
+        self._done += 1
         _line(
             f"• {title}: {len(result.findings)} findings ({result.status})"
             f" · {result.usage.total_tokens} tokens · {result.duration_s:.0f}s"
+            f" · {self._done} of {self._items} done"
         )
 
     def merged(self, count: int) -> None:
