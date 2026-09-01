@@ -43,6 +43,34 @@ jobs:
         if: always()
         run: pytest -q
 
+  # Whether a gateway is configured at all. It is a job of its own because a
+  # job cannot read a secret in its own `if:` — the secrets context is not
+  # available there — and everything about the gateway is a secret rather than a
+  # variable: an address and a model name can be somebody's corporate
+  # infrastructure, and a variable is readable by anyone who can read the
+  # repository. Only the answer leaves here, never the values.
+  configured:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.ask.outputs.ready }}
+    steps:
+      - id: ask
+        env:
+          BASE_URL: ${{ secrets.ROBOVIEWER_BASE_URL }}
+          MODEL: ${{ secrets.ROBOVIEWER_MODEL }}
+          KEY: ${{ secrets.ROBOVIEWER_API_KEY }}
+        run: |
+          if [ -n "$BASE_URL" ] && [ -n "$MODEL" ] && [ -n "$KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "No gateway configured, so the review was skipped." \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # The tool reviewing this repository's own pull requests, and posting the
   # result on them. Everything above is unit tests; this is the one job that
   # finds out whether the setup docs/ci.md describes actually works — whether
@@ -50,17 +78,13 @@ jobs:
   # build, and whether it accepts the lines we anchor it to. None of that can be
   # learned from a test with a stubbed transport.
   #
-  # Off until somebody sets the two repository variables; the pull request of a
-  # fork can reach neither them nor a token that may write, so it is skipped
-  # rather than failed red. This repository reviews every push to a pull
-  # request, unlike what docs/ci.md advises anyone else to do: here a second
-  # review on the same branch is the evidence, not the noise.
+  # The pull request of a fork reaches neither the secrets nor a token that may
+  # write, so `configured` never even asks about one. This repository reviews
+  # every push to a pull request, unlike what docs/ci.md advises anyone else to
+  # do: here a second review on the same branch is the evidence, not the noise.
   review:
-    if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && vars.ROBOVIEWER_BASE_URL != ''
-      && vars.ROBOVIEWER_MODEL != ''
+    needs: configured
+    if: needs.configured.outputs.ready == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -79,13 +103,25 @@ jobs:
       - name: install
         run: pip install -e .
 
+      # A run prints `model @ host` before it starts, and GitHub hides a secret
+      # only where its exact value appears — the host is a slice of the address,
+      # so it would survive into a log this repository shows the world. Register
+      # it as a secret of its own before anything can print it.
+      - name: hide the gateway
+        env:
+          BASE_URL: ${{ secrets.ROBOVIEWER_BASE_URL }}
+        run: |
+          host=$(printf '%s' "$BASE_URL" | sed -E 's#^[a-zA-Z]+://([^/]+).*#\1#')
+          if [ -n "$host" ]; then echo "::add-mask::$host"; fi
+
       # Written here rather than committed: the address of a gateway is
-      # somebody's infrastructure and this repository is public. The key never
-      # reaches either file — it arrives as ROBOVIEWER_API_KEY below.
+      # somebody's infrastructure and this repository is public. Through the
+      # environment, so that a quote in a value cannot rewrite the file. The key
+      # reaches neither file — it arrives as ROBOVIEWER_API_KEY below.
       - name: settings
-        env:                      # through the environment, so a quote in a value cannot rewrite the file
-          BASE_URL: ${{ vars.ROBOVIEWER_BASE_URL }}
-          MODEL: ${{ vars.ROBOVIEWER_MODEL }}
+        env:
+          BASE_URL: ${{ secrets.ROBOVIEWER_BASE_URL }}
+          MODEL: ${{ secrets.ROBOVIEWER_MODEL }}
         run: |
           mkdir -p .roboviewer
           printf 'base_url = "%s"\napi_key_env = "ROBOVIEWER_API_KEY"\n' "$BASE_URL" \
@@ -111,12 +147,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Kept whichever way the two steps above went: when the review is wrong
-      # about something, the run is what says why.
-      - name: keep the run
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: review
-          path: .roboviewer/runs/
-          if-no-files-found: ignore
+      # The run is deliberately not kept as an artifact: it names the model, and
+      # an artifact of a public repository is downloadable by anyone. What the
+      # run found is on the pull request, which is where it was going anyway.
