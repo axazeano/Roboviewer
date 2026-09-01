@@ -13,6 +13,7 @@ after. Progress goes to stdout, failures to stderr.
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from ..comments import Draft, Posted, PullRequest
@@ -30,6 +31,9 @@ from ..repo import ChangeSet
 from ..review import ChecklistItem, PromptError, Prompts
 from ..review.prompts import language_name
 from . import exit_codes
+
+# As wide as a stamp and its space, for the lines that continue one message.
+_INDENT = " " * 8
 
 
 class Console(Observer):
@@ -76,24 +80,26 @@ class Console(Observer):
 
 
 def error(message: str, hint: str = "") -> None:
-    print(message, file=sys.stderr)
+    print(f"{_stamp()} {message}", file=sys.stderr, flush=True)
     if hint:
-        print(hint, file=sys.stderr)
+        # Aligned under the message: a hint is the rest of one message, not a
+        # second thing that happened.
+        print(f"{_INDENT} {hint}", file=sys.stderr, flush=True)
 
 
 def notice(message: str) -> None:
-    print(message)
+    _line(message)
 
 
 def run_header(cfg: Config) -> None:
     origin = cfg.provider.base_url.split("//", 1)[-1].split("/", 1)[0]
     # The file, not a count: when a run goes to an endpoint nobody expected,
     # this is the line that says which file sent it there.
-    print(f"▸ {cfg.reviewer.model} @ {origin} · config: {cfg.source or 'built-in defaults'}")
+    _line(f"▸ {cfg.reviewer.model} @ {origin} · config: {cfg.source or 'built-in defaults'}")
     # A provider still sharing a file with the settings is worth one line before
     # the run rather than a page in the docs nobody opens twice.
     if cfg.provider_notice:
-        print(f"⚠ {cfg.provider_notice}")
+        _line(f"⚠ {cfg.provider_notice}")
 
 
 def summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> None:
@@ -111,19 +117,21 @@ def summary(run: ReviewRun, reports: list[Path], reports_dir: Path) -> None:
     cache = (
         f" · {usage.cache_hit_rate:.0%} from cache" if usage.cached_tokens else " · no cache hits"
     )
-    print(f"Confirmed {len(confirmed)} of {len(run.findings)} · "
-          f"{usage.total_tokens} tokens{cache}")
+    _line(
+        f"Confirmed {len(confirmed)} of {len(run.findings)} · "
+        f"{usage.total_tokens} tokens{cache}"
+    )
 
     cut_off = [i for i in run.items if i.status == "truncated"]
     if cut_off:
         # Worth a line of its own: these aspects reported little because they ran
         # out of turns, which reads exactly like "nothing to report" otherwise.
-        print(f"⚠ Cut off by the turn limit: {', '.join(i.item_title for i in cut_off)}")
+        _line(f"⚠ Cut off by the turn limit: {', '.join(i.item_title for i in cut_off)}")
     if reports:
-        print(f"Report: {', '.join(str(p) for p in reports)}")
+        _line(f"Report: {', '.join(str(p) for p in reports)}")
     else:
         # report_formats = [] in the config; the machine-readable data is written anyway
-        print(f"No reports requested; run data: {reports_dir}")
+        _line(f"No reports requested; run data: {reports_dir}")
 
 
 def gate_result(blocking: list[Finding], threshold: str) -> None:
@@ -136,10 +144,12 @@ def gate_result(blocking: list[Finding], threshold: str) -> None:
     if threshold == exit_codes.NEVER:
         return
     if not blocking:
-        print(f"✔ Gate: nothing at {threshold} or worse.")
+        _line(f"✔ Gate: nothing at {threshold} or worse.")
         return
-    print(f"✗ Gate: {len(blocking)} finding(s) at {threshold} or worse — "
-          f"{', '.join(f.id for f in blocking)}")
+    _line(
+        f"✗ Gate: {len(blocking)} finding(s) at {threshold} or worse — "
+        f"{', '.join(f.id for f in blocking)}"
+    )
 
 
 def checklist_items(items: list[ChecklistItem]) -> None:
@@ -168,7 +178,7 @@ def would_post(pull: PullRequest, draft: Draft, directory: Path) -> None:
 
     In full: a dry run is for reading the words before a pull request does.
     """
-    print(f"Would post to {pull.name}: {pull.slug}#{pull.number}")
+    _line(f"Would post to {pull.name}: {pull.slug}#{pull.number}")
     print(f"  {_counted(draft)}")
     print(f"  from {directory}")
     print()
@@ -180,7 +190,7 @@ def would_post(pull: PullRequest, draft: Draft, directory: Path) -> None:
 
 
 def posted(result: Posted, draft: Draft) -> None:
-    print(f"Posted {_counted(draft)}: {result.url}")
+    _line(f"Posted {_counted(draft)}: {result.url}")
     if result.note:
         _line(result.note)
 
@@ -200,7 +210,13 @@ class _AgentLines(Observer):
 
 
 def _line(text: str) -> None:
-    print(text, flush=True)
+    print(f"{_stamp()} {text}", flush=True)
+
+
+def _stamp() -> str:
+    """When this message happened. A run is minutes long, so the clock is
+    enough and the date would be noise on every line."""
+    return datetime.now().strftime("%H:%M:%S")
 
 
 def _config_source(cfg: Config) -> None:

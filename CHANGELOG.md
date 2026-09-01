@@ -20,6 +20,11 @@ subsystem, so that a person opening any file knows where they are, and the
 corpus becomes a benchmark with a command of its own. Nothing a review does,
 writes or prints changed.
 
+- **Every message a run prints carries the time it happened**, `HH:MM:SS` at the
+  head of the line. A review is minutes of waiting, and reading a log afterwards
+  meant guessing which stage took them. What is printed as content — the report
+  summary, the settings listing, the diff table, a review shown by `--dry-run` —
+  is left alone: a clock on every line of a document is noise.
 - **`roboviewer comment`, a finished run on the pull request.** One review on
   the merge request: a comment on each finding sitting on a line the diff
   carries, and a body holding the judge's summary and every finding it does not
