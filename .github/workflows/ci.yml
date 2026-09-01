@@ -54,6 +54,9 @@ jobs:
   #
   # The no-ai-review label, set while opening, skips the offer altogether.
   review:
+    # After the linters and the tests: reviewing code that does not lint or does
+    # not pass is paying a model to find what a runner already found.
+    needs: checks
     if: >-
       github.event_name == 'pull_request'
       && github.event.pull_request.head.repo.full_name == github.repository
