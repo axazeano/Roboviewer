@@ -21,6 +21,7 @@ import pytest
 
 from roboviewer.cli import main
 from roboviewer.comments import compose, detect, on_github, pull_request, token_for
+from roboviewer.comments.compose import SIGNATURE
 from roboviewer.comments.forge import ForgeError, forge_for
 from roboviewer.comments.github import GitHubForge
 from roboviewer.models import DiffStat, Finding, ReviewRun, Severity, Verdict
@@ -212,6 +213,18 @@ def test_the_body_carries_the_judges_summary_and_a_tally() -> None:
     assert "Two things worth fixing." in draft.body
     assert "**2 findings**" in draft.body
     assert "feature/cart into develop" in draft.body
+
+
+def test_the_body_never_names_the_model() -> None:
+    """A merge request is often public, and the name of a model can be somebody's
+    corporate infrastructure — which is why the job that posts this holds it as a
+    secret. A footer that printed it would publish what the job hides."""
+    run = make_run([finding("F1", 2), finding("F2", 40)])
+
+    body = compose(run, {"cart.py": {2}}).body
+
+    assert run.model not in body
+    assert f"{SIGNATURE} · feature/cart into develop" in body
 
 
 def test_a_run_that_found_nothing_still_says_so() -> None:

@@ -130,7 +130,10 @@ def _entry(finding: Finding) -> str:
 
 
 def _footer(run: ReviewRun) -> str:
-    return (
-        f"<sub>{SIGNATURE} · {run.model} · {run.branch} into {run.target} · "
-        f"run {run.run_id}</sub>"
-    )
+    """What left the remark and what it was looking at.
+
+    Not which model wrote it: a merge request is often public and the name of a
+    model can be somebody's corporate infrastructure, the same reason the job
+    that runs this keeps it a secret. Whoever wants it has the run on disk.
+    """
+    return f"<sub>{SIGNATURE} · {run.branch} into {run.target} · run {run.run_id}</sub>"
