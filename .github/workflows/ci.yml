@@ -47,13 +47,15 @@ jobs:
   # stubbed transport cannot say whether the gateway answers from a runner or
   # whether GitHub accepts the lines we anchor a review to; this can.
   #
-  # Asked once, when the pull request opens. A later commit does not ask again;
-  # re-run the job from Actions to review the branch as it now stands. The
-  # no-ai-review label, set while opening, skips the question altogether.
+  # Offered on every commit, run on none of them until asked: the job waits on
+  # its environment, and nothing is spent until somebody approves it. The
+  # concurrency above drops the waiting job of a superseded commit, so the one
+  # live button always belongs to the branch as it now stands.
+  #
+  # The no-ai-review label, set while opening, skips the offer altogether.
   review:
     if: >-
       github.event_name == 'pull_request'
-      && github.event.action != 'synchronize'
       && github.event.pull_request.head.repo.full_name == github.repository
       && !contains(github.event.pull_request.labels.*.name, 'no-ai-review')
     # Holds the three secrets and waits for an approval before handing them
