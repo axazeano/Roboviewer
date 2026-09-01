@@ -1,0 +1,9 @@
+# How the CI job reaches the gateway. Read by .github/workflows/ci.yml and by
+# nothing else; a local run reads ~/.config/roboviewer/provider.toml instead.
+#
+# @BASE_URL@ is replaced from a secret before the run: the address of a gateway
+# is somebody's infrastructure and this repository is public. The key is in no
+# file at all — it arrives as ROBOVIEWER_API_KEY.
+
+base_url = "@BASE_URL@"
+api_key_env = "ROBOVIEWER_API_KEY"

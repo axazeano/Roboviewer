@@ -92,37 +92,36 @@ jobs:
           host=$(printf '%s' "$BASE_URL" | sed -E 's#^[a-zA-Z]+://([^/]+).*#\1#')
           if [ -n "$host" ]; then echo "::add-mask::$host"; fi
 
-      # Written here rather than committed: this repository is public. Through
-      # the environment, so a quote in a value cannot rewrite the file. The key
-      # is in neither file; it arrives as ROBOVIEWER_API_KEY below.
+      # The settings are committed in .roboviewer/ci/; only the two secrets are
+      # put into them here, and into copies outside the tree, which keeps the
+      # values out of anything the run might write or archive.
       - name: settings
         env:
           BASE_URL: ${{ secrets.ROBOVIEWER_BASE_URL }}
           MODEL: ${{ secrets.ROBOVIEWER_MODEL }}
         run: |
-          mkdir -p .roboviewer
-          printf 'base_url = "%s"\napi_key_env = "ROBOVIEWER_API_KEY"\n' "$BASE_URL" \
-            > .roboviewer/provider.toml
-          # Three grouped items rather than the eight of the default set: a run
-          # over this repository's own diff takes half an hour on eight.
-          printf '[reviewer]\nmodel = "%s"\n\n[run]\nchecklist_dir = "checklists/grouped"\n' \
-            "$MODEL" > .roboviewer/config.toml
+          # A secret is arbitrary text; & | \\ mean something to sed's replacement.
+          esc() { printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'; }
+          sed "s|@BASE_URL@|$(esc "$BASE_URL")|" .roboviewer/ci/provider.toml \
+            > "$RUNNER_TEMP/provider.toml"
+          sed "s|@MODEL@|$(esc "$MODEL")|" .roboviewer/ci/config.toml \
+            > "$RUNNER_TEMP/config.toml"
 
       # No --fail-on: a finding here is to read, not to block a merge. The
       # target branch comes from GITHUB_BASE_REF, as it does in a user's job.
       - name: review
         run: |
           code=0
-          roboviewer review --config .roboviewer/config.toml || code=$?
+          roboviewer review --config "$RUNNER_TEMP/config.toml" || code=$?
           # 3 is "an item failed and its aspect went unreviewed": the run is on
           # disk and worth posting. 2 is the tool not having run at all.
           if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then exit "$code"; fi
         env:
-          ROBOVIEWER_PROVIDER_CONFIG: .roboviewer/provider.toml
+          ROBOVIEWER_PROVIDER_CONFIG: ${{ runner.temp }}/provider.toml
           ROBOVIEWER_API_KEY: ${{ secrets.ROBOVIEWER_API_KEY }}
 
       - name: comment
-        run: roboviewer comment --config .roboviewer/config.toml
+        run: roboviewer comment --config "$RUNNER_TEMP/config.toml"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
