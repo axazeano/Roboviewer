@@ -13,13 +13,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .. import repo
+from pydantic import ValidationError
+
+from .. import comments, repo
 from ..config import Config, load_config, overrides, provider_config_path
+from ..models import ReviewRun
 from ..observer import SILENT, Broadcast, RunObserver
 from ..provider import OpenAIAgentRunner, Runner
+from ..repo.diff import change_map
 from ..reports import renders, save
 from ..review import (
     ChecklistItem,
@@ -30,7 +34,7 @@ from ..review import (
     output_dir_for,
 )
 from . import ci_env, console, exit_codes
-from .arguments import COMPARING, apply_overrides, build_parser
+from .arguments import NEEDS_REPOSITORY, apply_overrides, build_parser
 
 
 class CLIError(RuntimeError):
@@ -77,21 +81,11 @@ def _execute(args: argparse.Namespace, observer: RunObserver) -> int:
     Everything that fails raises `CLIError`; what stops on purpose returns a code
     of its own, because `diff` finishing is not a failure.
     """
-    if args.command == "init":
-        # Before the config is read, not after: the wizard is what somebody runs
-        # when there is no config, or when the one there is does not load.
-        from .init import run_init
+    setting_up = _setup_command(args)
+    if setting_up is not None:
+        return setting_up
 
-        return run_init()
-
-    if args.command == "check-provider":
-        # The one command that reads nothing but the provider file
-        from .check_provider import check_provider
-
-        cfg = _config(args.config)
-        return check_provider(cfg.provider, cfg.reviewer.model, cfg.provider_source)
-
-    root = _repo_root(args.repo, required=args.command in COMPARING)
+    root = _repo_root(args.repo, required=args.command in NEEDS_REPOSITORY)
     cfg = apply_overrides(_config(args.config), args)
     if args.command == "show-config":
         console.config(cfg, root)
@@ -102,6 +96,8 @@ def _execute(args: argparse.Namespace, observer: RunObserver) -> int:
     if args.command == "diff":
         console.diff_summary(_changes(cfg, root, _target(args), args.source))
         return 0
+    if args.command == "comment":
+        return _comment_command(cfg, root, args)
     return _review_command(cfg, root, args, observer)
 
 
@@ -124,6 +120,133 @@ def _review_command(
             "the working copy is untouched."
         )
     return asyncio.run(_review(plan, args.verbose, observer))
+
+
+def _setup_command(args: argparse.Namespace) -> int | None:
+    """The two commands about the tool itself rather than about a repository:
+    one writes the configuration, the other probes the gateway with it.
+
+    Returns None when this run is neither.
+    """
+    if args.command == "init":
+        # Before the config is read, not after: the wizard is what somebody runs
+        # when there is no config, or when the one there is does not load.
+        from .init import run_init
+
+        return run_init()
+
+    if args.command == "check-provider":
+        # The one command that reads nothing but the provider file
+        from .check_provider import check_provider
+
+        cfg = _config(args.config)
+        return check_provider(cfg.provider, cfg.reviewer.model, cfg.provider_source)
+    return None
+
+
+def _comment_command(cfg: Config, root: Path, args: argparse.Namespace) -> int:
+    """Post a run that is already on disk, and never run one.
+
+    Composing comes before choosing a forge: it is where a dry run stops, and
+    the only step that can fail on the run rather than on the forge.
+    """
+    directory = _run_directory(cfg, root, args.run)
+    run = _saved_run(directory)
+    draft = comments.compose(run, _commentable(root, run))
+
+    pull = _pull_request(args)
+    if args.dry_run:
+        console.would_post(pull, draft, directory)
+        return 0
+
+    token = comments.token_for(pull.forge)
+    if not token:
+        raise CLIError(str(comments.missing_token(pull)), _token_hint(pull))
+
+    console.notice(f"Posting to {pull.name}: {pull.slug}#{pull.number}")
+    forge = comments.forge_for(pull, token)
+    try:
+        result = forge.post(pull, draft)
+    except comments.ForgeError as exc:
+        raise CLIError(f"Could not post the review: {exc}") from exc
+    console.posted(result, draft)
+    return 0
+
+
+def _pull_request(args: argparse.Namespace) -> comments.PullRequest:
+    """Which merge request to post to: what the job says, and what the flags say
+    over it. Outside a pipeline both flags are the only way to know."""
+    found = comments.detect()
+    slug = args.project or (found.slug if found else "")
+    number = args.pull or (found.number if found else None)
+    if not slug or number is None:
+        raise CLIError(
+            "No pull request to post to.",
+            "Inside a merge-request pipeline this comes from the environment. "
+            "Outside one, name it: --project owner/name --pull NUMBER.",
+        )
+    if found is None:
+        return comments.on_github(slug, number)
+    if slug != found.slug and not args.pull:
+        # The number would still be the job's, so this would post to a number
+        # that means something else in the repository being named.
+        raise CLIError(
+            f"--project names {slug}, but the number would come from the job, "
+            f"which runs for {found.slug}#{found.number}.",
+            "Name the number too: --pull NUMBER.",
+        )
+    return replace(found, slug=slug, number=number)
+
+
+def _run_directory(cfg: Config, root: Path, explicit: Path | None) -> Path:
+    """The run to post. `latest` is the symlink `save` leaves behind, which is
+    what the review step in the same job just wrote."""
+    if explicit is not None:
+        return explicit.expanduser()
+    return output_dir_for(cfg, root, "latest")
+
+
+def _saved_run(directory: Path) -> ReviewRun:
+    path = directory / "run.json"
+    try:
+        return ReviewRun.model_validate_json(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise CLIError(
+            f"No run to post at {path}.",
+            "Point at a run directory with --run PATH, or run `roboviewer review` first.",
+        ) from exc
+    except ValidationError as exc:
+        raise CLIError(f"{path} is not a run this version can read: {exc}") from exc
+
+
+def _commentable(root: Path, run: ReviewRun) -> dict[str, set[int]]:
+    """The lines a forge can hang a comment on: the ones the diff added.
+
+    Read from git, not from the run: a run records which findings were kept,
+    not which lines they were kept against.
+    """
+    try:
+        changes = change_map(root, run.base_sha, run.head_sha, [f.file for f in run.files])
+    except repo.GitError as exc:
+        raise CLIError(
+            f"Git error: {exc}",
+            (
+                f"The run compared {run.base_sha[:12]}..{run.head_sha[:12]}, and this "
+                f"clone cannot. {_depth_hint(root)}"
+            ).strip(),
+        ) from exc
+    return {path: entry.added for path, entry in changes.items()}
+
+
+def _token_hint(pull: comments.PullRequest) -> str:
+    """Where the token comes from in the one place that hands a job one."""
+    if pull.forge != comments.GITHUB:
+        return ""
+    return (
+        "In GitHub Actions the job is handed one: pass it as "
+        "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}, with `pull-requests: write` "
+        "in the job's permissions."
+    )
 
 
 def _target(args: argparse.Namespace) -> str:

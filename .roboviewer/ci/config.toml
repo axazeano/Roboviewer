@@ -1,0 +1,19 @@
+# What the CI job reviews with. Read by .github/workflows/ci.yml and by nothing
+# else — a file inside a repository is never picked up implicitly.
+#
+# @MODEL@ is replaced from a secret before the run, for the same reason the
+# gateway's address is. Everything else is here rather than in the workflow so
+# that a change to how a review is run shows up in a diff.
+
+[reviewer]
+model = "@MODEL@"
+temperature = 0.3
+max_turns = 15
+# Left on the model's own default, a thinking pass over this repository's diff
+# cost twenty-six minutes and four and a half million tokens.
+enable_thinking = false
+
+[run]
+# Three grouped items rather than the eight of the default set.
+checklist_dir = "checklists/grouped"
+judge_mode = "two_stage"
