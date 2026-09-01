@@ -166,8 +166,7 @@ def config(cfg: Config, root: Path) -> None:
 def would_post(pull: PullRequest, draft: Draft, directory: Path) -> None:
     """A dry run: what would be posted, in full, and nothing sent.
 
-    In full deliberately — the point of a dry run is to read the words before a
-    pull request does, and a summary of a summary would not serve that.
+    In full: a dry run is for reading the words before a pull request does.
     """
     print(f"Would post to {pull.name}: {pull.slug}#{pull.number}")
     print(f"  {_counted(draft)}")

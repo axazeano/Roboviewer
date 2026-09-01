@@ -43,12 +43,8 @@ jobs:
         if: always()
         run: pytest -q
 
-  # Whether a gateway is configured at all. It is a job of its own because a
-  # job cannot read a secret in its own `if:` — the secrets context is not
-  # available there — and everything about the gateway is a secret rather than a
-  # variable: an address and a model name can be somebody's corporate
-  # infrastructure, and a variable is readable by anyone who can read the
-  # repository. Only the answer leaves here, never the values.
+  # Whether a gateway is configured. A job of its own because the secrets
+  # context is not available in a job's own `if:`. Only the answer leaves here.
   configured:
     if: >-
       github.event_name == 'pull_request'
@@ -71,17 +67,12 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  # The tool reviewing this repository's own pull requests, and posting the
-  # result on them. Everything above is unit tests; this is the one job that
-  # finds out whether the setup docs/ci.md describes actually works — whether
-  # the gateway answers from a runner, whether GitHub accepts the review we
-  # build, and whether it accepts the lines we anchor it to. None of that can be
-  # learned from a test with a stubbed transport.
+  # The tool reviewing this repository's own pull requests. A test with a
+  # stubbed transport cannot say whether the gateway answers from a runner or
+  # whether GitHub accepts the lines we anchor a review to; this can.
   #
-  # The pull request of a fork reaches neither the secrets nor a token that may
-  # write, so `configured` never even asks about one. This repository reviews
-  # every push to a pull request, unlike what docs/ci.md advises anyone else to
-  # do: here a second review on the same branch is the evidence, not the noise.
+  # Every push, unlike what docs/ci.md advises anyone else to do: here a repeat
+  # review is the evidence, not the noise.
   review:
     needs: configured
     if: needs.configured.outputs.ready == 'true'
@@ -103,10 +94,9 @@ jobs:
       - name: install
         run: pip install -e .
 
-      # A run prints `model @ host` before it starts, and GitHub hides a secret
-      # only where its exact value appears — the host is a slice of the address,
-      # so it would survive into a log this repository shows the world. Register
-      # it as a secret of its own before anything can print it.
+      # A run prints `model @ host`, and GitHub hides a secret only where its
+      # exact value appears. The host is a slice of the address, so it needs
+      # registering as a secret of its own.
       - name: hide the gateway
         env:
           BASE_URL: ${{ secrets.ROBOVIEWER_BASE_URL }}
@@ -114,10 +104,9 @@ jobs:
           host=$(printf '%s' "$BASE_URL" | sed -E 's#^[a-zA-Z]+://([^/]+).*#\1#')
           if [ -n "$host" ]; then echo "::add-mask::$host"; fi
 
-      # Written here rather than committed: the address of a gateway is
-      # somebody's infrastructure and this repository is public. Through the
-      # environment, so that a quote in a value cannot rewrite the file. The key
-      # reaches neither file — it arrives as ROBOVIEWER_API_KEY below.
+      # Written here rather than committed: this repository is public. Through
+      # the environment, so a quote in a value cannot rewrite the file. The key
+      # is in neither file; it arrives as ROBOVIEWER_API_KEY below.
       - name: settings
         env:
           BASE_URL: ${{ secrets.ROBOVIEWER_BASE_URL }}
@@ -128,9 +117,8 @@ jobs:
             > .roboviewer/provider.toml
           printf '[reviewer]\nmodel = "%s"\n' "$MODEL" > .roboviewer/config.toml
 
-      # No --fail-on: a finding about this pull request is something to read,
-      # not a reason to stop it merging. The target branch is not named either —
-      # it comes from GITHUB_BASE_REF, which is the path a user's job takes.
+      # No --fail-on: a finding here is to read, not to block a merge. The
+      # target branch comes from GITHUB_BASE_REF, as it does in a user's job.
       - name: review
         run: |
           code=0
@@ -147,6 +135,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # The run is deliberately not kept as an artifact: it names the model, and
-      # an artifact of a public repository is downloadable by anyone. What the
-      # run found is on the pull request, which is where it was going anyway.
+      # No artifact of the run: it names the model, and an artifact of a public
+      # repository is downloadable by anyone.

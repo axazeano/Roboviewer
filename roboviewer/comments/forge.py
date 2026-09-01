@@ -1,13 +1,10 @@
-"""What sending a review to a forge amounts to, in the one shape every forge fits.
+"""What a forge is asked to do, in the one shape every forge fits.
 
-One call: take a `Draft` and put it on the merge request a `PullRequest` names.
-Everything a forge disagrees about — REST or GraphQL, what a comment is anchored
-by, which status code means "your token cannot write here" — is behind it, and a
-caller sees a URL or a `ForgeError` carrying a sentence somebody can act on.
+One call: put a `Draft` on the merge request a `PullRequest` names. Whatever a
+forge disagrees about is behind it; a caller sees a URL or a `ForgeError`.
 
-The seam takes two forges and one is written. Adding GitLab is a class with this
-one method and a branch in `forge_for`; no caller changes, because no caller
-names a forge — the job's own variables do.
+A second forge is a class with that method and a branch in `forge_for`. No
+caller names a forge — the job's own variables do.
 """
 
 from __future__ import annotations
@@ -22,9 +19,8 @@ from .pull_request import GITHUB, PullRequest, token_variables
 class ForgeError(RuntimeError):
     """A review that did not reach the merge request, in the user's terms.
 
-    Every message here names what to change: a variable to set, a permission to
-    grant, a number that does not exist. A traceback tells a person nothing they
-    can act on from inside a job log.
+    Every message names what to change: a variable to set, a permission to
+    grant, a number that does not exist.
     """
 
 
@@ -32,9 +28,8 @@ class ForgeError(RuntimeError):
 class Posted:
     """Where the review landed, and what it cost to get it there.
 
-    `comments` is how many remarks actually went on lines rather than how many
-    were offered: a forge that refuses the anchored comments still takes the
-    body, and `note` is what to say about the difference.
+    `comments` is how many remarks went on lines, not how many were offered: a
+    forge that refuses the anchors still takes the body. `note` says so.
     """
 
     url: str

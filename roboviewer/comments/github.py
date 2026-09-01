@@ -1,22 +1,15 @@
 """Posting a review to a GitHub pull request.
 
-One request: a review with a body and the anchored comments on it, as an event
-of kind COMMENT. One review rather than a comment per finding, because a pull
-request with fourteen separate notifications on it is a pull request whose
-author turns the tool off — and COMMENT rather than REQUEST_CHANGES, because
-whether a branch may merge is a person's call and not a model's.
+One request, one review, as an event of kind COMMENT — not REQUEST_CHANGES:
+whether a branch may merge is a person's call.
 
-GitHub validates every anchored comment against its own diff and refuses the
-whole review if one of them names a line it does not carry. That is a 422 for
-findings that were all worth reporting, so it is answered rather than raised:
-the body goes up alone, carrying every finding in its text, and the caller is
-told the comments did not land. A review nobody can read is worse than a review
-without line anchors.
+GitHub refuses the whole review with a 422 when one anchored comment names a
+line its diff does not carry, so that answer is caught and the body posted
+alone.
 
-HTTP goes through an injectable callable, which is the whole reason the tests
-need no network. `benchmark.github` reads pull requests through a similar one —
-kept apart deliberately: that client is the benchmark's, it reads where this one
-writes, and nothing on the review path may depend on the benchmark.
+HTTP goes through an injectable callable, so the tests need no network.
+`benchmark.github` has its own client: it reads where this one writes, and
+nothing on the review path may depend on the benchmark.
 """
 
 from __future__ import annotations

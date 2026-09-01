@@ -1,17 +1,11 @@
 """A finished run as what would be posted: comments on lines, and a body.
 
-Forge-agnostic on purpose. What a review of a merge request consists of — some
-remarks against lines, one piece of prose about the whole thing — is the same on
-every forge, and only the request that carries it differs. So this decides what
-is said and `github` decides how it is sent, which is also why the decision can
-be tested without a network and printed by a dry run.
+Forge-agnostic: every forge carries the same two things, and only the request
+differs.
 
-The split between the two is the whole point. A forge can only anchor a comment
-to a line its diff actually carries, but the scope gate keeps a finding within a
-few lines of a changed one — a finding naming the declaration just above the
-edit is a good finding with nowhere to hang. Those go into the body. Dropping
-them would make the tool quietly report less through a pull request than it
-writes to disk, and a finding the author cannot see is one that was never made.
+A forge anchors a comment only to a line its diff carries, while the scope gate
+keeps a finding within a few lines of a changed one. Findings outside the diff
+go into the body rather than being dropped.
 """
 
 from __future__ import annotations
@@ -38,9 +32,7 @@ class LineComment:
 class Draft:
     """What a forge is asked to post: the prose, and the remarks on lines.
 
-    `unanchored` is how many findings ended up in the body for want of a line —
-    counted rather than recomputed, because the console says it and the body
-    already says it too.
+    `unanchored` is how many findings ended up in the body for want of a line.
     """
 
     body: str
@@ -55,9 +47,8 @@ class Draft:
 def compose(run: ReviewRun, commentable: Mapping[str, Set[int]]) -> Draft:
     """A run and the lines a forge can hang a comment on → what to post.
 
-    Only what a report shows: a finding the judge threw out is a decision that
-    there is no defect, and one pointing outside the change is about code this
-    merge request never touched. Neither belongs in somebody's pull request.
+    Only what a report shows: findings the judge rejected and findings outside
+    the change are left out.
     """
     anchored: list[LineComment] = []
     loose: list[Finding] = []
@@ -132,8 +123,7 @@ def _entry(finding: Finding) -> str:
 def _footer(run: ReviewRun) -> str:
     """What left the remark and what it was looking at.
 
-    Not which model wrote it: a merge request is often public and the name of a
-    model can be somebody's corporate infrastructure, the same reason the job
-    that runs this keeps it a secret. Whoever wants it has the run on disk.
+    Not the model: a merge request is often public, and the job that posts one
+    holds the model name as a secret. It stays in the run on disk.
     """
     return f"<sub>{SIGNATURE} · {run.branch} into {run.target} · run {run.run_id}</sub>"

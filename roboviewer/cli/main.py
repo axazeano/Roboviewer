@@ -126,8 +126,7 @@ def _setup_command(args: argparse.Namespace) -> int | None:
     """The two commands about the tool itself rather than about a repository:
     one writes the configuration, the other probes the gateway with it.
 
-    Returns None when this run is neither, which is what lets `_execute` keep
-    one list of the commands that do look at a branch.
+    Returns None when this run is neither.
     """
     if args.command == "init":
         # Before the config is read, not after: the wizard is what somebody runs
@@ -148,9 +147,8 @@ def _setup_command(args: argparse.Namespace) -> int | None:
 def _comment_command(cfg: Config, root: Path, args: argparse.Namespace) -> int:
     """Post a run that is already on disk, and never run one.
 
-    The order is: what would be said, then who to say it to, then say it. The
-    composing step is what a dry run stops after, and it is also the only step
-    that can fail on something in the run rather than on the forge.
+    Composing comes before choosing a forge: it is where a dry run stops, and
+    the only step that can fail on the run rather than on the forge.
     """
     directory = _run_directory(cfg, root, args.run)
     run = _saved_run(directory)
@@ -216,9 +214,8 @@ def _saved_run(directory: Path) -> ReviewRun:
 def _commentable(root: Path, run: ReviewRun) -> dict[str, set[int]]:
     """The lines a forge can hang a comment on: the ones the diff added.
 
-    Read from git rather than from the run, because a run records which findings
-    were kept and not which lines they were kept against — the scope gate allows
-    a margin around a changed line, and a forge allows none.
+    Read from git, not from the run: a run records which findings were kept,
+    not which lines they were kept against.
     """
     try:
         changes = change_map(root, run.base_sha, run.head_sha, [f.file for f in run.files])

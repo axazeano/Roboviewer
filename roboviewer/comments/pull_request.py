@@ -1,17 +1,12 @@
 """Which merge request a job is running for, read out of its environment.
 
-A job already knows the repository, the pull request number and the address of
-its own API, and it holds a token for them. Retyping any of that into the job
-is one more place to get it wrong, so all of it is read from the variables the
-runner sets and only overridden when someone says so explicitly.
+The repository, the number and the API address come from the variables the
+runner sets; a flag overrides them.
 
-`cli.ci_env` reads the same environment for a different question — which branch
-is being merged into — and the two share no variable: the target branch comes
-from the merge-request variables, the coordinates below from the repository and
-ref ones. Kept apart because the review needs the first without any of this.
+`cli.ci_env` answers a different question from the same environment — which
+branch is merged into — and shares no variable with this.
 
-The token is deliberately not a field here: the coordinates are printed in the
-job log, and a secret that travels with them is a secret that leaks.
+The token is not a field here: the coordinates are printed in the job log.
 """
 
 from __future__ import annotations
@@ -38,8 +33,8 @@ class PullRequest:
     """The merge request a job is running for.
 
     `forge` is which forge to post through, `name` what the log line says.
-    `api_url` is read from the environment rather than fixed, so an Enterprise
-    installation works without a flag.
+    `api_url` comes from the environment, so an Enterprise installation needs
+    no flag.
     """
 
     forge: str
@@ -52,8 +47,8 @@ class PullRequest:
 def detect(environ: Mapping[str, str] | None = None) -> PullRequest | None:
     """The pull request this job is for, or None outside one.
 
-    None is an ordinary answer: a push build, a laptop, a tag pull. The
-    caller says what is missing; nothing here raises.
+    None is an ordinary answer — a push build, a laptop, a tag pipeline — so
+    nothing here raises; the caller says what is missing.
     """
     env = os.environ if environ is None else environ
     for read in _READERS:
@@ -64,11 +59,10 @@ def detect(environ: Mapping[str, str] | None = None) -> PullRequest | None:
 
 
 def on_github(slug: str, number: int, api_url: str = "") -> PullRequest:
-    """A pull request named by hand rather than found in a pull.
+    """A pull request named by hand rather than found in a pipeline.
 
-    GitHub because it is the forge that is implemented: naming a merge request
-    on the command line outside a job is a thing done from a laptop, and the day
-    a second forge is written this grows a way to say which one.
+    GitHub because it is the forge that is implemented; a second one would add
+    a way to say which.
     """
     return PullRequest(
         forge=GITHUB,
@@ -82,9 +76,8 @@ def on_github(slug: str, number: int, api_url: str = "") -> PullRequest:
 def token_for(forge: str, environ: Mapping[str, str] | None = None) -> str | None:
     """The token this forge is written to with, out of the environment.
 
-    Environment only, on purpose: this runs in a job that was handed a secret,
-    and a tool that goes looking for a login elsewhere on the machine is a tool
-    that posts as somebody who did not ask to be posting.
+    Environment only: a login found elsewhere on the machine would post as
+    somebody who never asked to.
     """
     env = os.environ if environ is None else environ
     for name in _TOKEN_VARS.get(forge, ()):
