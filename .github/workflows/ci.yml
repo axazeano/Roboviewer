@@ -42,3 +42,81 @@ jobs:
       - name: pytest
         if: always()
         run: pytest -q
+
+  # The tool reviewing this repository's own pull requests, and posting the
+  # result on them. Everything above is unit tests; this is the one job that
+  # finds out whether the setup docs/ci.md describes actually works — whether
+  # the gateway answers from a runner, whether GitHub accepts the review we
+  # build, and whether it accepts the lines we anchor it to. None of that can be
+  # learned from a test with a stubbed transport.
+  #
+  # Off until somebody sets the two repository variables; the pull request of a
+  # fork can reach neither them nor a token that may write, so it is skipped
+  # rather than failed red. This repository reviews every push to a pull
+  # request, unlike what docs/ci.md advises anyone else to do: here a second
+  # review on the same branch is the evidence, not the noise.
+  review:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && vars.ROBOVIEWER_BASE_URL != ''
+      && vars.ROBOVIEWER_MODEL != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write        # what `roboviewer comment` posts the review with
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the branch point has to exist locally
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: install
+        run: pip install -e .
+
+      # Written here rather than committed: the address of a gateway is
+      # somebody's infrastructure and this repository is public. The key never
+      # reaches either file — it arrives as ROBOVIEWER_API_KEY below.
+      - name: settings
+        env:                      # through the environment, so a quote in a value cannot rewrite the file
+          BASE_URL: ${{ vars.ROBOVIEWER_BASE_URL }}
+          MODEL: ${{ vars.ROBOVIEWER_MODEL }}
+        run: |
+          mkdir -p .roboviewer
+          printf 'base_url = "%s"\napi_key_env = "ROBOVIEWER_API_KEY"\n' "$BASE_URL" \
+            > .roboviewer/provider.toml
+          printf '[reviewer]\nmodel = "%s"\n' "$MODEL" > .roboviewer/config.toml
+
+      # No --fail-on: a finding about this pull request is something to read,
+      # not a reason to stop it merging. The target branch is not named either —
+      # it comes from GITHUB_BASE_REF, which is the path a user's job takes.
+      - name: review
+        run: |
+          code=0
+          roboviewer review --config .roboviewer/config.toml || code=$?
+          # 3 is "an item failed and its aspect went unreviewed": the run is on
+          # disk and worth posting. 2 is the tool not having run at all.
+          if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then exit "$code"; fi
+        env:
+          ROBOVIEWER_PROVIDER_CONFIG: .roboviewer/provider.toml
+          ROBOVIEWER_API_KEY: ${{ secrets.ROBOVIEWER_API_KEY }}
+
+      - name: comment
+        run: roboviewer comment --config .roboviewer/config.toml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Kept whichever way the two steps above went: when the review is wrong
+      # about something, the run is what says why.
+      - name: keep the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review
+          path: .roboviewer/runs/
+          if-no-files-found: ignore
