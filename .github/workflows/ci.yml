@@ -55,7 +55,7 @@ jobs:
       && github.event.pull_request.head.repo.full_name == github.repository
     # Holds the three secrets and waits for an approval before handing them
     # over. Nothing is spent on a pull request nobody asked to review.
-    environment: gateway
+    environment: model_provider
     runs-on: ubuntu-latest
     permissions:
       contents: read
