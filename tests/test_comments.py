@@ -462,6 +462,42 @@ def test_a_clone_that_cannot_diff_the_run_says_which_commits(
     assert "000000000000..111111111111" in err
 
 
+def test_naming_another_project_inside_a_pipeline_needs_a_number_too(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Taking the project from a flag and the number from the job would post to
+    whatever that number happens to mean in the other repository."""
+    run = make_run([finding("F1", 2)])
+    run.base_sha, run.head_sha = sha(repo, "main"), sha(repo, "feature/cart")
+    write_run(repo, run)
+    for name, value in ACTIONS.items():
+        monkeypatch.setenv(name, value)
+
+    code = main(["comment", "--repo", str(repo), "--project", "other/app", "--dry-run"])
+
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "--pull NUMBER" in err
+    assert "acme/app#42" in err
+
+
+def test_naming_both_inside_a_pipeline_is_allowed(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = make_run([finding("F1", 2)])
+    run.base_sha, run.head_sha = sha(repo, "main"), sha(repo, "feature/cart")
+    write_run(repo, run)
+    for name, value in ACTIONS.items():
+        monkeypatch.setenv(name, value)
+
+    code = main(
+        ["comment", "--repo", str(repo), "--project", "other/app", "--pull", "9", "--dry-run"]
+    )
+
+    assert code == 0
+    assert "other/app#9" in capsys.readouterr().out
+
+
 def test_a_run_that_is_not_there_says_where_it_looked(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

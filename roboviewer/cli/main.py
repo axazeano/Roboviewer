@@ -187,6 +187,14 @@ def _pull_request(args: argparse.Namespace) -> comments.PullRequest:
         )
     if found is None:
         return comments.on_github(slug, number)
+    if slug != found.slug and not args.pull:
+        # The number would still be the job's, so this would post to a number
+        # that means something else in the repository being named.
+        raise CLIError(
+            f"--project names {slug}, but the number would come from the job, "
+            f"which runs for {found.slug}#{found.number}.",
+            "Name the number too: --pull NUMBER.",
+        )
     return replace(found, slug=slug, number=number)
 
 
