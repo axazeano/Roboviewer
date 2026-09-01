@@ -88,7 +88,8 @@ Every finding is asked to name one line in the new version of its file, and the
 thing: where a prompt and a schema disagree the schema wins, because it is what
 function calling enforces, and a model that fills optional fields last leaves
 an optional line out — on one model, every finding of three benchmark runs came
-back without one.
+back without one. With the field required the same model named a real line on
+every finding; see [Findings with a line](measurements.md#findings-with-a-line).
 
 A run still does not refuse such a finding. `0`, an empty string and anything
 that is not a number arrive as no line at all, and the finding is kept: a claim
