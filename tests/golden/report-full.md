@@ -42,7 +42,7 @@
 
 ### 🔹 F3 · Нет теста на пустой reply
 
-**Where:** `Sources/UI/BubbleReplyBlock.swift`  
+**Where:** `Sources/UI/BubbleReplyBlock.swift (no line)`  
 **Severity:** Minor · **Category:** tests · **Confidence:** 45%  
 **Checklist items:** —
 

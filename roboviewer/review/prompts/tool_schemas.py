@@ -125,7 +125,11 @@ SUBMIT_FINDINGS_TOOL: dict[str, Any] = {
                             },
                             "line": {
                                 "type": "integer",
-                                "description": "Line number in the NEW version of the file",
+                                "description": (
+                                    "Line number in the NEW version of the file, read off "
+                                    "the left column of the attached files. Every finding "
+                                    "is anchored to one line."
+                                ),
                             },
                             "end_line": {"type": "integer"},
                             "severity": {
@@ -154,7 +158,8 @@ SUBMIT_FINDINGS_TOOL: dict[str, Any] = {
                             },
                         },
                         "required": [
-                            "file", "severity", "category", "title", "rationale", "confidence",
+                            "file", "line", "severity", "category", "title", "rationale",
+                            "confidence",
                         ],
                     },
                 },

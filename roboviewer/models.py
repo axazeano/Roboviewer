@@ -113,7 +113,11 @@ class Finding(BaseModel):
 
     @property
     def location(self) -> str:
-        return f"{self.file}:{self.line}" if self.line else self.file
+        """`file:line` — or the file and the word for what is missing. This is
+        the one string every surface prints for where a finding is, so a
+        finding with no line says so here rather than reading like one about
+        the file as a whole."""
+        return f"{self.file}:{self.line}" if self.line else f"{self.file} (no line)"
 
 
 # "truncated" is a result, not a failure: the agent submitted findings, but the

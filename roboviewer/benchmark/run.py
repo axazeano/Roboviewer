@@ -79,6 +79,11 @@ class Outcome:
         return len(self.run.out_of_scope) if self.run else 0
 
     @property
+    def with_line(self) -> int:
+        """Findings that name a line — the ones a forge can take as comments."""
+        return sum(1 for finding in self.run.findings if finding.line) if self.run else 0
+
+    @property
     def ok(self) -> bool:
         return self.status == "reviewed"
 
@@ -267,6 +272,7 @@ def _row(outcome: Outcome) -> dict[str, object]:
         "findings": outcome.findings,
         "confirmed": outcome.confirmed,
         "out_of_scope": outcome.out_of_scope,
+        "with_line": outcome.with_line,
         "items": len(run.items) if run else 0,
         "prompt_tokens": usage.prompt_tokens if usage else 0,
         "completion_tokens": usage.completion_tokens if usage else 0,
@@ -285,8 +291,9 @@ def _page(benchmark: Benchmark) -> str:
         lines.append(f"Repeats: {benchmark.repeats} per entry")
     lines += [
         "",
-        "| Entry | Status | Findings | Confirmed | Out of scope | Tokens | Time | Run |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Entry | Status | Findings | Confirmed | Out of scope | With line | Tokens | Time "
+        "| Run |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     for outcome in benchmark.outcomes:
         usage = outcome.run.total_usage if outcome.run else None
@@ -295,7 +302,7 @@ def _page(benchmark: Benchmark) -> str:
         entry = outcome.entry.id + (f" #{outcome.attempt}" if benchmark.repeats > 1 else "")
         lines.append(
             f"| {entry} | {status} | {outcome.findings} | {outcome.confirmed} | "
-            f"{outcome.out_of_scope} | {tokens} | {outcome.seconds:.0f}s | "
+            f"{outcome.out_of_scope} | {outcome.with_line} | {tokens} | {outcome.seconds:.0f}s | "
             f"{outcome.directory or '—'} |"
         )
     reviewed = [outcome for outcome in benchmark.outcomes if outcome.ok]
@@ -303,7 +310,8 @@ def _page(benchmark: Benchmark) -> str:
         "",
         f"{len(reviewed)} of {len(benchmark.outcomes)} reviewed, "
         f"{sum(o.findings for o in reviewed)} findings, "
-        f"{sum(o.confirmed for o in reviewed)} confirmed.",
+        f"{sum(o.confirmed for o in reviewed)} confirmed, "
+        f"{sum(o.with_line for o in reviewed)} with a line.",
     ]
     lines += _statistics_pages(benchmark)
     lines.append("")

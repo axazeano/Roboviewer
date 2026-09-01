@@ -226,6 +226,18 @@ def test_markdown_matches_golden(name: str) -> None:
     assert render_report(CASES[name]()) == expected
 
 
+def test_a_finding_without_a_line_says_so_wherever_it_is_printed() -> None:
+    """`location` is the one string every surface prints for where a finding
+    is, so a missing line is named there rather than left to look like a
+    finding about the whole file."""
+    located = Finding(file="src/a.py", line=7, title="t", rationale="r")
+    unlocated = Finding(file="src/a.py", line=0, title="t", rationale="r")
+    assert located.location == "src/a.py:7"
+    assert unlocated.line is None
+    assert unlocated.location == "src/a.py (no line)"
+    assert "`Sources/UI/BubbleReplyBlock.swift (no line)`" in render_report(full_run())
+
+
 def test_view_keeps_severity_order() -> None:
     view = build_view(full_run())
     assert [row.severity for row in view.stats.by_severity] == [

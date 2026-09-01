@@ -81,6 +81,32 @@ already reads as finished, it was not short of turns — it never stopped, and a
 bigger budget buys nothing. Measured on a 64-file MR: 15 → 25 turns left the
 same seven of eight agents cut off and cost 67% more tokens.
 
+## A finding with no line
+
+Every finding is asked to name one line in the new version of its file, and the
+`submit_findings` schema lists `line` as required. The two have to say the same
+thing: where a prompt and a schema disagree the schema wins, because it is what
+function calling enforces, and a model that fills optional fields last leaves
+an optional line out — on one model, every finding of three benchmark runs came
+back without one.
+
+A run still does not refuse such a finding. `0`, an empty string and anything
+that is not a number arrive as no line at all, and the finding is kept: a claim
+about a file is worth reading even when it is badly anchored. What it cannot do
+is pass for a located one. Its location reads `path/to/file (no line)`
+everywhere the run prints one — the report, the console, the judge's prompt,
+the comment body — and the rest of the run treats it as being about the file
+as a whole: the scope gate lets it through when the MR touched that file, SARIF
+attaches it to the file without a region, GitLab Code Quality puts it on line 1
+because the format has no other way, and `roboviewer comment` writes it into
+the body of the review instead of onto a line. The benchmark summary counts the
+findings with a line per review, so a model that stops naming them shows up in
+a column rather than in a report nobody reads closely.
+
+Many findings without a line in one run are worth a look in the trace: either
+the agents are racing the turn limit and submitting thin, or they never read
+the numbered column they were handed.
+
 ## Why so little of this is a flag
 
 Everything else here is a config setting rather than a flag, which is
